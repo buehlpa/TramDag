@@ -225,3 +225,30 @@ def get_binary_matrix_from_adjmatrix(adj_matrix):
     binary_matrix: 2D numpy array, binary matrix of the adjacency matrix
     """
     return (adj_matrix != "0").astype(int)
+
+
+def sort_dict_by_value_contains_i(model_dict):
+    """
+    Sorts a dictionary based on whether the values contain the letter 'i'.
+
+    Args:
+        model_dict (dict): Dictionary to sort (key-value pairs).
+
+    Returns:
+        dict: Sorted dictionary where values containing 'i' appear first.
+    """
+    return dict(sorted(model_dict.items(), key=lambda x: 'i' not in x[1]))
+
+
+def sort_second_dict_by_first_dict_keys(sort_by, to_sort):
+    """
+    Sorts the second dictionary based on the order of keys in the first dictionary.
+
+    Args:
+        sort_by (dict): The reference dictionary whose key order is used for sorting.
+        to_sort (dict): The dictionary to be sorted.
+
+    Returns:
+        dict: A sorted dictionary with keys appearing in the same order as in first_dict.
+    """
+    return {key: to_sort[key] for key in sort_by.keys() if key in to_sort}

@@ -56,12 +56,13 @@ class SimpleIntercept(nn.Module):
     Attributes:
         n_thetas (int): how many output thetas, for ordinal target this is the number of classes - 1
     """
-    def __init__(self, n_thetas):
+    def __init__(self, n_thetas=20):
         super(SimpleIntercept, self).__init__()  
         self.fc = nn.Linear(1,n_thetas, bias=False)
 
     def forward(self, x):
         return self.fc(x)
+    
     
 class LinearShift(nn.Module):
     """
@@ -69,7 +70,7 @@ class LinearShift(nn.Module):
     Attributes:
         n_features (int): number of features/predictors
     """
-    def __init__(self, n_features):
+    def __init__(self, n_features=1):
         super(LinearShift, self).__init__() 
         self.fc = nn.Linear(n_features, 1, bias=False)
 
@@ -91,7 +92,7 @@ class ComplexShiftDefaultTabular(nn.Module):
     Attributes:
         n_features (int): number of features/predictors
     """
-    def __init__(self, n_features):
+    def __init__(self, n_features=1):
         super(ComplexShiftDefaultTabular, self).__init__()
         
         # Define the layers
@@ -117,7 +118,7 @@ class ComplexInterceptDefaultTabular(nn.Module):
     Attributes:
         n_thetas (int): number of features/predictors
     """
-    def __init__(self, n_thetas):
+    def __init__(self, n_thetas=20):
         super(ComplexInterceptDefaultTabular, self).__init__()
         
         # Define the layers
@@ -148,8 +149,8 @@ class ComplexInterceptDefaultImage(nn.Module):
     input : eg  torch.randn(1, 3, 28, 28)
     output: n_thetas
     """
-    def __init__(self, n_thetas):
-        super(ComplexShiftDefaultImage, self).__init__()
+    def __init__(self, n_thetas=20):
+        super(ComplexInterceptDefaultImage, self).__init__()
         
         # Adjusted convolutional layers for 28x28 input images
         self.conv1 = nn.Conv2d(3, 6, kernel_size=3, padding=1)  # 28x28 -> 28x28
