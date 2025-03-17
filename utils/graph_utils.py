@@ -1,5 +1,6 @@
 
 import numpy as np
+import seaborn as sns
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -58,7 +59,26 @@ def plot_dag(adj_matrix, data_type, seed=42):
     plt.title("TRAM DAG")
     plt.show()
 
+def plot_nn_names_matrix(nn_names_matrix):
+    """
+    plots the nn_names_matrix more nicely in a matrix
+    """
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
 
+    nn_names_matrix = np.array(nn_names_matrix, dtype=object)
+    colors = np.vectorize(lambda x: 0 if x == 0 else 1)(nn_names_matrix)
+
+    sns.heatmap(colors, annot=nn_names_matrix, fmt="", cmap="Blues", cbar=False,
+                linewidths=0.5, linecolor='gray', annot_kws={"size": 10}, ax=ax)
+
+    ax.set_title("Neural Network Model Mapping", fontsize=14)
+    ax.set_xticks(np.arange(nn_names_matrix.shape[1]) + 0.5)
+    ax.set_yticks(np.arange(nn_names_matrix.shape[0]) + 0.5)
+    ax.set_xticklabels([f'X{j}' for j in range(nn_names_matrix.shape[1])], fontsize=12)
+    ax.set_yticklabels([f'X{i}' for i in range(nn_names_matrix.shape[0])], fontsize=12)
+
+    plt.show()
 
 def create_nx_graph(adj_matrix):
     
@@ -127,7 +147,7 @@ def create_nn_model_names(adj_matrix,data_type):
     
     
     if 'cs' in adj_matrix or 'ci' in adj_matrix:
-        print('**** \n Model has Complex intercepts and Coomplex shifts , please add your Model to the modelzoo \n****')
+        print('************* \n Model has Complex intercepts and Coomplex shifts , please add your Model to the modelzoo \n************')
     
     # Default class model mappings
     full_model_mappings = {
