@@ -227,6 +227,32 @@ def get_binary_matrix_from_adjmatrix(adj_matrix):
     return (adj_matrix != "0").astype(int)
 
 
+def merge_transformation_dicts(transformation_terms_in_h, transformation_term_nn_models_in_h):
+    """
+    Merges two dictionaries by key, creating a unified structure where each key maps to a dictionary 
+    containing both 'h' (from transformation_terms_in_h) and 'modelname' (from transformation_term_nn_models_in_h).
+
+    Args:
+        transformation_terms_in_h (dict): Dictionary with transformation terms.
+        transformation_term_nn_models_in_h (dict): Dictionary with corresponding model names.
+
+    Returns:
+        dict: A merged dictionary where each key maps to {'h': value from transformation_terms_in_h, 
+              'modelname': value from transformation_term_nn_models_in_h}.
+    """
+    merged_dict = {
+        key: {
+            "h_term": transformation_terms_in_h.get(key, None),  # Get value from first dict, default to None if missing
+            "class_name": transformation_term_nn_models_in_h.get(key, None)  # Get value from second dict
+        }
+        for key in transformation_terms_in_h.keys()  # Iterate over keys from the first dict
+    }
+    return merged_dict
+
+
+
+
+
 def sort_dict_by_value_contains_i(model_dict):
     """
     Sorts a dictionary based on whether the values contain the letter 'i'.
