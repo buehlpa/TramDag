@@ -7,7 +7,7 @@ from matplotlib.patches import Patch
 
 
 ### plot the DAG
-def plot_dag(adj_matrix, data_type, seed=42,node_labels=None):
+def plot_dag(adj_matrix, data_type, seed=42):
     """
     Plot the Directed Acyclic Graph (DAG) with Source and Sink nodes.
     params:
@@ -28,17 +28,8 @@ def plot_dag(adj_matrix, data_type, seed=42,node_labels=None):
     if len(data_type) != adj_matrix.shape[0]:
         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
     
-    if node_labels is not None:
-        if len(node_labels) != adj_matrix.shape[0]:
-            raise ValueError("Number of node labels should match the number of nodes in the adjacency matrix.")
-        if len(set(node_labels)) != len(node_labels):
-            raise ValueError("Node labels should be unique.")
-        if not all(isinstance(label, str) for label in node_labels):
-            raise ValueError("Node labels should be strings.")
-        if list(data_type.keys()) != node_labels:
-            print(data_type.keys())
-            print(node_labels)
-            raise ValueError("Node labels should match the keys in the data type dictionary.")
+    
+    node_labels=list(data_type.keys())
     
     #create a nx graph object
     G, edge_labels=create_nx_graph(adj_matrix,node_labels=node_labels)
@@ -71,7 +62,7 @@ def plot_dag(adj_matrix, data_type, seed=42,node_labels=None):
     plt.title("TRAM DAG")
     plt.show()
 
-def plot_nn_names_matrix(nn_names_matrix,node_labels=None):
+def plot_nn_names_matrix(nn_names_matrix,data_type):
     """
     plots the nn_names_matrix more nicely in a matrix
     """
@@ -87,6 +78,8 @@ def plot_nn_names_matrix(nn_names_matrix,node_labels=None):
     ax.set_title("Neural Network Model Mapping", fontsize=14)
     ax.set_xticks(np.arange(nn_names_matrix.shape[1]) + 0.5)
     ax.set_yticks(np.arange(nn_names_matrix.shape[0]) + 0.5)
+    
+    node_labels = list(data_type.keys())
     
     if node_labels is not None:
         ax.set_xticklabels(node_labels, fontsize=12)
