@@ -7,7 +7,7 @@ from matplotlib.patches import Patch
 
 
 ### plot the DAG
-def plot_dag(adj_matrix, data_type, seed=42):
+def plot_dag(adj_matrix, data_type, seed=42,node_labels=None):
     """
     Plot the Directed Acyclic Graph (DAG) with Source and Sink nodes.
     params:
@@ -28,8 +28,20 @@ def plot_dag(adj_matrix, data_type, seed=42):
     if len(data_type) != adj_matrix.shape[0]:
         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
     
+    if node_labels is not None:
+        if len(node_labels) != adj_matrix.shape[0]:
+            raise ValueError("Number of node labels should match the number of nodes in the adjacency matrix.")
+        if len(set(node_labels)) != len(node_labels):
+            raise ValueError("Node labels should be unique.")
+        if not all(isinstance(label, str) for label in node_labels):
+            raise ValueError("Node labels should be strings.")
+        if list(data_type.keys()) != node_labels:
+            print(data_type.keys())
+            print(node_labels)
+            raise ValueError("Node labels should match the keys in the data type dictionary.")
+    
     #create a nx graph object
-    G, edge_labels=create_nx_graph(adj_matrix)
+    G, edge_labels=create_nx_graph(adj_matrix,node_labels=node_labels)
     
     # sources and sinks
     sources = [node for node in G.nodes if G.in_degree(node) == 0]  # No incoming edges
@@ -59,7 +71,7 @@ def plot_dag(adj_matrix, data_type, seed=42):
     plt.title("TRAM DAG")
     plt.show()
 
-def plot_nn_names_matrix(nn_names_matrix):
+def plot_nn_names_matrix(nn_names_matrix,node_labels=None):
     """
     plots the nn_names_matrix more nicely in a matrix
     """
@@ -75,19 +87,31 @@ def plot_nn_names_matrix(nn_names_matrix):
     ax.set_title("Neural Network Model Mapping", fontsize=14)
     ax.set_xticks(np.arange(nn_names_matrix.shape[1]) + 0.5)
     ax.set_yticks(np.arange(nn_names_matrix.shape[0]) + 0.5)
-    ax.set_xticklabels([f'X{j}' for j in range(nn_names_matrix.shape[1])], fontsize=12)
-    ax.set_yticklabels([f'X{i}' for i in range(nn_names_matrix.shape[0])], fontsize=12)
+    
+    if node_labels is not None:
+        ax.set_xticklabels(node_labels, fontsize=12)
+        ax.set_yticklabels(node_labels, fontsize=12)
+    else:
+        ax.set_xticklabels([f'X{j}' for j in range(nn_names_matrix.shape[1])], fontsize=12)
+        ax.set_yticklabels([f'X{i}' for i in range(nn_names_matrix.shape[0])], fontsize=12)
 
     plt.show()
 
-def create_nx_graph(adj_matrix):
+def create_nx_graph(adj_matrix, node_labels=None):
     
     """
     This function takes an adjacency matrix and returns a networkx DiGraph object and a dictionary of edge labels.
     """
     
     # labels to the vars
-    node_labels = {i: f'X{i}' for i in range(adj_matrix.shape[0])}
+    if node_labels is None:
+        node_labels = {i: f'X{i}' for i in range(adj_matrix.shape[0])} # all with X_i
+    else:
+        node_labels = {i: node_labels[i] for i in range(len(node_labels))}
+        
+        if len(node_labels) != adj_matrix.shape[0]:
+            raise ValueError("Number of node labels should match the number of nodes in the adjacency matrix.")
+    
     G = nx.DiGraph()
     G.add_nodes_from(node_labels.values())
     
@@ -111,7 +135,7 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
     
     configuration_dict = {}
-    G, edge_labels = create_nx_graph(adj_matrix)
+    G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
     
     sources = [node for node in G.nodes if G.in_degree(node) == 0]
     sinks = [node for node in G.nodes if G.out_degree(node) == 0]
@@ -129,8 +153,9 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
         
         transformation_term_nn_models = {}
         for parent in parents:
-            parent_idx = int(parent[1:])  # Extract index from 'Xn'
-            child_idx = int(node[1:])  # Extract index from 'Xn'
+            parent_idx = list(data_type.keys()).index(parent)  
+            child_idx = list(data_type.keys()).index(node) 
+            
             if nn_names_matrix[parent_idx, child_idx] != "0":
                 transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
         configuration_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
@@ -169,7 +194,7 @@ def create_nn_model_names(adj_matrix,data_type):
     for i in range(adj_matrix.shape[0]):
         for j in range(adj_matrix.shape[1]):
             if adj_matrix[i, j] in ['cs', 'ci', 'ls', 'si']:
-                variable_type = data_type[f'X{i}']
+                variable_type = list(data_type.values())[i]
                 nn_names_matrix[i, j] = full_model_mappings[variable_type][adj_matrix[i, j]]
 
     return nn_names_matrix
