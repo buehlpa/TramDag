@@ -29,7 +29,7 @@ def plot_dag(adj_matrix, data_type, seed=42):
         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
     
     
-    node_labels= [data_type.keys()]
+    node_labels=list(data_type.keys())
     
     #create a nx graph object
     G, edge_labels=create_nx_graph(adj_matrix,node_labels=node_labels)
@@ -79,7 +79,7 @@ def plot_nn_names_matrix(nn_names_matrix,data_type):
     ax.set_xticks(np.arange(nn_names_matrix.shape[1]) + 0.5)
     ax.set_yticks(np.arange(nn_names_matrix.shape[0]) + 0.5)
     
-    node_labels = [data_type.keys()]
+    node_labels = list(data_type.keys())
     
     if node_labels is not None:
         ax.set_xticklabels(node_labels, fontsize=12)
@@ -128,13 +128,13 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
     
     configuration_dict = {}
-    G, edge_labels = create_nx_graph(adj_matrix, node_labels=[data_type.keys()])
+    G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
     
     sources = [node for node in G.nodes if G.in_degree(node) == 0]
     sinks = [node for node in G.nodes if G.out_degree(node) == 0]
     
     for i, node in enumerate(G.nodes):
-        parents = [G.predecessors(node)]
+        parents = list(G.predecessors(node))
         
         configuration_dict[node] = {}
         configuration_dict[node]['Modelnr'] = i
@@ -146,8 +146,8 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
         
         transformation_term_nn_models = {}
         for parent in parents:
-            parent_idx = [data_type.keys()].index(parent)  
-            child_idx = [data_type.keys()].index(node) 
+            parent_idx = list(data_type.keys()).index(parent)  
+            child_idx = list(data_type.keys()).index(node) 
             
             if nn_names_matrix[parent_idx, child_idx] != "0":
                 transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
@@ -187,7 +187,7 @@ def create_nn_model_names(adj_matrix,data_type):
     for i in range(adj_matrix.shape[0]):
         for j in range(adj_matrix.shape[1]):
             if adj_matrix[i, j] in ['cs', 'ci', 'ls', 'si']:
-                variable_type = [data_type.values()][i]
+                variable_type = list(data_type.values())[i]
                 nn_names_matrix[i, j] = full_model_mappings[variable_type][adj_matrix[i, j]]
 
     return nn_names_matrix
@@ -212,7 +212,7 @@ def validate_adj_matrix(adj_matrix):
     num_nodes = adj_matrix.shape[0]
 
     #1.  Check allowed elements
-    if not np.all(np.isin(adj_matrix, [allowed_values])):
+    if not np.all(np.isin(adj_matrix, list(allowed_values))):
         return False
 
     #2. Check upper triangular property
