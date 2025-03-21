@@ -4,9 +4,9 @@ import torch.nn.functional as F
 
 
 
-class OntramModel(nn.Module):
+class TramModel(nn.Module):
     def __init__(self, nn_int, nn_shift=None):
-        super(OntramModel, self).__init__()
+        super(TramModel, self).__init__()
         """
         Combine the intercept and shift models into a single model for ONTRAM
         
@@ -175,26 +175,26 @@ class ComplexInterceptDefaultImage(nn.Module):
 
 class ComplexShiftDefaultImage(nn.Module):
     """
-    input : eg  torch.randn(1, 3, 28, 28)
+    Accepts input of shape (batch_size, 3, 128, 128).
     """
     def __init__(self):
         super(ComplexShiftDefaultImage, self).__init__()
-        
-        # Adjusted convolutional layers for 28x28 input images
-        self.conv1 = nn.Conv2d(3, 6, kernel_size=3, padding=1)  # 28x28 -> 28x28
-        self.pool = nn.MaxPool2d(2, 2)  # 28x28 -> 14x14
-        self.conv2 = nn.Conv2d(6, 16, kernel_size=3, padding=1)  # 14x14 -> 14x14
-        self.pool2 = nn.MaxPool2d(2, 2)  # 14x14 -> 7x7
 
-        # Fully connected layers
-        self.fc1 = nn.Linear(16 * 7 * 7, 120)
+        # Adjusted convolutional layers for 128x128 input images
+        self.conv1 = nn.Conv2d(3, 6, kernel_size=3, padding=1)  # 128x128 -> 128x128
+        self.pool = nn.MaxPool2d(2, 2)  # 128x128 -> 64x64
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=3, padding=1)  # 64x64 -> 64x64
+        self.pool2 = nn.MaxPool2d(2, 2)  # 64x64 -> 32x32
+
+        # Fully connected layers (adjusted for 128x128 input size)
+        self.fc1 = nn.Linear(16 * 32 * 32, 120)  # Previously 16 * 7 * 7
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 1, bias=False)  # Output layer
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))  # Conv1 -> ReLU -> Pool
         x = self.pool2(F.relu(self.conv2(x)))  # Conv2 -> ReLU -> Pool
-        x = x.view(-1, 16 * 7 * 7)  # Flatten for fully connected layers
+        x = x.view(-1, 16 * 32 * 32)  # Flatten for fully connected layers
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)  # Output layer
