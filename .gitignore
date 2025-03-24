@@ -9,7 +9,7 @@
 *.log
 *.npz
 *.pth
-
+*.pt
 
 
 

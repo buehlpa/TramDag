@@ -22,27 +22,36 @@ def transform_intercepts(int_in):
     return int_out
 
 def ontram_nll(outputs, targets):
-    # intercepts and shift terms
     int_in = outputs['int_out']
     shift_in = outputs['shift_out']
     target_class_low = torch.argmax(targets, dim=1)
-    target_class_up = target_class_low+1
-    #print("target class: ", target_class_up)
-    # transform intercepts
-    int = transform_intercepts(int_in)
-    
-    # likelihood contribution for each batch sample
+    target_class_up = target_class_low + 1
+
+    int_trans = transform_intercepts(int_in)
+
     if shift_in is not None:
-        # sum up shift terms and flatten
         shift = torch.stack(shift_in, dim=1).sum(dim=1).view(-1)
-        # target_class+1 because we start with -inf when transforming tensors
-        # print("up: ", int[torch.arange(int.size(0)), target_class_up])
-        # print("low: ", int[torch.arange(int.size(0)), target_class_low])
-        # print("shift: ", shift)
-        # print("diff: ", int[torch.arange(int.size(0)), target_class_up]-shift)
-        # print("class prob: ", torch.sigmoid(int[torch.arange(int.size(0)), target_class_up]-shift))
-        lli = torch.sigmoid(int[torch.arange(int.size(0)), target_class_up]-shift) - torch.sigmoid(int[torch.arange(int.size(0)), target_class_low]-shift)
+        upper = int_trans[torch.arange(int_trans.size(0)), target_class_up] - shift
+        lower = int_trans[torch.arange(int_trans.size(0)), target_class_low] - shift
     else:
-        lli = torch.sigmoid(int[torch.arange(int.size(0)), target_class_up]) - torch.sigmoid(int[torch.arange(int.size(0)), target_class_low])
-    nll = -torch.mean(torch.log(lli + 1e-16))
+        upper = int_trans[torch.arange(int_trans.size(0)), target_class_up]
+        lower = int_trans[torch.arange(int_trans.size(0)), target_class_low]
+
+    p = torch.sigmoid(upper) - torch.sigmoid(lower)
+
+    if torch.any(torch.isnan(p)):
+        print(f"\n--- DEBUG ---")
+        print("int_in:\n", int_in)
+        print("int_trans:\n", int_trans)
+        print("shift:\n", shift if shift_in is not None else "None")
+        print("upper:\n", upper)
+        print("lower:\n", lower)
+        print("sigmoid(upper):\n", torch.sigmoid(upper))
+        print("sigmoid(lower):\n", torch.sigmoid(lower))
+        print("p (prob diff):\n", p)
+        print("targets:\n", targets)
+        print("Contains NaNs in p!", torch.isnan(p).any())
+        print("--- END DEBUG ---\n")
+
+    nll = -torch.mean(torch.log(p + 1e-16))  # tiny offset to prevent log(0)
     return nll
