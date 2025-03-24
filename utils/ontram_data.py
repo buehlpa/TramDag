@@ -28,7 +28,7 @@ class GenericDataset(Dataset):
         # if source node
         if self.data_type is None:
             y = torch.tensor(row[self.target_col], dtype=torch.float32)
-            x= None
+            x = torch.tensor(1.0) # dummy input
             return x , y
         
         # data loader if not source
