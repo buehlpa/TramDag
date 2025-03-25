@@ -1,7 +1,8 @@
-import torch
-from torch.utils.data import Dataset
 from PIL import Image
+import torch
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
+
 
 class GenericDataset(Dataset):
     def __init__(self, df, target_col, data_type=None, transform=None):
@@ -28,7 +29,7 @@ class GenericDataset(Dataset):
         # if source node
         if self.data_type is None:
             y = torch.tensor(row[self.target_col], dtype=torch.float32)
-            x = torch.tensor(1.0) # dummy input
+            x = (torch.tensor(1.0),) # dummy input
             return x , y
         
         # data loader if not source
@@ -51,3 +52,39 @@ class GenericDataset(Dataset):
         y = torch.tensor(row[self.target_col], dtype=torch.float32)
 
         return x, y
+    
+    
+def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=False):    
+    
+
+    # TODO move args to config file batchsize  etc.
+    
+    # TODO amove transforms to the config file  
+    transform = transforms.Compose([
+            transforms.Resize((128, 128)),
+            transforms.ToTensor()
+        ])
+    
+    
+    
+    if conf_dict[node]['node_type'] == 'source':
+        print('>>>>>>>>>>>>  source node --> x in dataloader contains just 1s ') if verbose else None
+        
+        train_dataset = GenericDataset(train_df, target_col=node, data_type=None, transform=transform)
+        validation_dataset = GenericDataset(train_df, target_col=node, data_type=None, transform=transform)
+        
+    
+    else:
+        # create a datatype dictionnary for the dataloader to read the datatype --->> TODO can be passed to a args 
+        parents_dict={x[0]:x[1] for x  in  zip(conf_dict[node]['parents'],conf_dict[node]['parents_datatype'])}
+        
+        train_dataset = GenericDataset(train_df, target_col=node, data_type=parents_dict, transform=transform)
+        validation_dataset = GenericDataset(val_df, target_col=node, data_type=parents_dict, transform=transform)
+     
+     
+    # TODO add args to the datloader via config file    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    val_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    
+    
+    return train_loader, val_loader
