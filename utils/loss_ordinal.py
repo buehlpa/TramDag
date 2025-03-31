@@ -10,7 +10,7 @@ def transform_intercepts(int_in):
     intK = torch.full((bs, 1), float('inf'), device=int_in.device)
 
     # Reshape to match the batch size
-    int1 = int_in[:, 0].reshape(bs, 1)j
+    int1 = int_in[:, 0].reshape(bs, 1)
 
     # Exponentiate and accumulate the values for the transformation
     intk = torch.cumsum(torch.exp(int_in[:, 1:]), dim=1)

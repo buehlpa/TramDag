@@ -11,24 +11,29 @@ def contram_nll(outputs, targets, min_max):
         scalar NLL
     """
     # Ensure min and max are not part of graph
-    min_val = torch.tensor(min_max[0], dtype=targets.dtype, device=targets.device)
-    max_val = torch.tensor(min_max[1], dtype=targets.dtype, device=targets.device)
+    min_val = min_max[0].clone().detach() if isinstance(min_max[0], torch.Tensor) else torch.tensor(min_max[0], dtype=targets.dtype, device=targets.device)
+    max_val = min_max[1].clone().detach() if isinstance(min_max[1], torch.Tensor) else torch.tensor(min_max[1], dtype=targets.dtype, device=targets.device)
+
 
     thetas_tilde = outputs['int_out']  # shape (n, b)
     thetas = transform_intercepts_continous(thetas_tilde)
 
-    shift_in = outputs['shift_out']  # shape (n,)
-    h_S = outputs.get('shift_term', 0.0)  # optional additive shift term
+    if outputs['shift_out'] is None:
+        # If no shift model is provided, set Shifts to zero
+        Shifts = torch.zeros_like(thetas[:, 0])
+    else:
+        Shifts = outputs['shift_out']  # shape (n,)
+    
 
     # Compute h
     h_I = h_extrapolated(thetas, targets, min_val, max_val)  # shape (n,)
-    h = h_I + h_S  # shape (n,)
+    h = h_I + torch.sum(Shifts)  # shape (n,)
 
     # Latent logistic density log-prob
     log_latent_density = -h - 2 * torch.nn.functional.softplus(-h)  # shape (n,)
 
     # Derivative term (log |h'| - log(scale))
-    h_dash = h_dash_extrapolated(shift_in, thetas)  # shape (n,)
+    h_dash = h_dash_extrapolated(thetas, targets, min_val, max_val)  # shape (n,)
     log_hdash = torch.log(torch.abs(h_dash)) - torch.log(max_val - min_val)  # shape (n,)
 
     # Final NLL

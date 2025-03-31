@@ -32,7 +32,7 @@ class TramModel(nn.Module):
         self.nn_int = self.nn_int.to(self.device)
         int_out = self.nn_int(int_input)
         
-        if self.nn_shift is None:
+        if self.nn_shift is None or shift_input is None:
             return {'int_out': int_out, 'shift_out': None}
         
         if len(self.nn_shift) != len(shift_input):
