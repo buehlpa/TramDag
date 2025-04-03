@@ -215,7 +215,11 @@ def is_valid_column(col, col_idx):
         elif item in ("si", "ls"):
             continue
         elif item == "ci":
-            has_ci = True
+            if has_ci:
+                print(f"Column {col_idx} invalid: 'ci' can only be used once in a column.")
+                return False
+            else:
+                has_ci = True
         elif m := ci_pattern.match(item):
             ci_numbered_ids.append(m.group(1))
         elif item == "cs":
@@ -223,27 +227,27 @@ def is_valid_column(col, col_idx):
         elif m := cs_pattern.match(item):
             cs_numbered_ids.append(m.group(1))
         else:
-            print(f"Column {col_idx} invalid: Unknown token '{item}' found. [Rule 4]")
+            print(f"Column {col_idx} invalid: Unknown token '{item}' found.")
             return False
 
     if has_ci and ci_numbered_ids:
-        print(f"Column {col_idx} invalid: Cannot mix 'ci' and 'ciXX' in same column. [Rule 1]")
+        print(f"Column {col_idx} invalid: Cannot mix 'ci' and 'ciXX' in same column. ")
         return False
 
     if len(ci_numbered_ids) == 1:
-        print(f"Column {col_idx} invalid: Only one 'ciXX' present. Need at least two. [Rule 2]")
+        print(f"Column {col_idx} invalid: Only one 'ciXX' present. Need at least two.")
         return False
 
     if len(ci_numbered_ids) != len(set(ci_numbered_ids)):
-        print(f"Column {col_idx} invalid: Duplicate 'ciXX' entries found. [Rule 3]")
+        print(f"Column {col_idx} invalid: Duplicate 'ciXX' entries found.")
         return False
 
     if len(cs_numbered_ids) == 1:
-        print(f"Column {col_idx} invalid: Only one 'csXX' present. Need at least two. [Rule 2]")
+        print(f"Column {col_idx} invalid: Only one 'csXX' present. Need at least two. ")
         return False
 
     if len(cs_numbered_ids) != len(set(cs_numbered_ids)):
-        print(f"Column {col_idx} invalid: Duplicate 'csXX' entries found. [Rule 3]")
+        print(f"Column {col_idx} invalid: Duplicate 'csXX' entries found. ")
         return False
 
     return True
