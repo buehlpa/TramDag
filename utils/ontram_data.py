@@ -6,6 +6,10 @@ from torchvision import transforms
 
 class GenericDataset(Dataset):
     def __init__(self, df, target_col, data_type=None, transform=None):
+        
+        
+        #TODO if intercept is si but shifts are ci , intercept should return 1s
+        
         """
         Args:
             df (pd.DataFrame): The dataframe containing data.

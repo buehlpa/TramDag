@@ -141,7 +141,7 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
         configuration_dict[node]['data_type'] = data_type[node]
         configuration_dict[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
         configuration_dict[node]['parents'] = parents
-        configuration_dict[node]['parents_datatype'] = [data_type[parent] for parent in parents]
+        configuration_dict[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
         configuration_dict[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
         
         transformation_term_nn_models = {}
@@ -195,6 +195,71 @@ def create_nn_model_names(adj_matrix,data_type):
 
 
 ## Adjcency matrix funcions
+import re
+
+
+
+def is_valid_column(col, col_idx):
+    ci_pattern = re.compile(r"^ci(\d+)$")
+    cs_pattern = re.compile(r"^cs(\d+)$")
+
+    has_ci = False
+    ci_numbered_ids = []
+
+    has_cs = False
+    cs_numbered_ids = []
+
+    for item in col:
+        if item == "0":
+            continue
+        elif item in ("si", "ls"):
+            continue
+        elif item == "ci":
+            has_ci = True
+        elif m := ci_pattern.match(item):
+            ci_numbered_ids.append(m.group(1))
+        elif item == "cs":
+            has_cs = True
+        elif m := cs_pattern.match(item):
+            cs_numbered_ids.append(m.group(1))
+        else:
+            print(f"Column {col_idx} invalid: Unknown token '{item}' found. [Rule 4]")
+            return False
+
+    if has_ci and ci_numbered_ids:
+        print(f"Column {col_idx} invalid: Cannot mix 'ci' and 'ciXX' in same column. [Rule 1]")
+        return False
+
+    if len(ci_numbered_ids) == 1:
+        print(f"Column {col_idx} invalid: Only one 'ciXX' present. Need at least two. [Rule 2]")
+        return False
+
+    if len(ci_numbered_ids) != len(set(ci_numbered_ids)):
+        print(f"Column {col_idx} invalid: Duplicate 'ciXX' entries found. [Rule 3]")
+        return False
+
+    if len(cs_numbered_ids) == 1:
+        print(f"Column {col_idx} invalid: Only one 'csXX' present. Need at least two. [Rule 2]")
+        return False
+
+    if len(cs_numbered_ids) != len(set(cs_numbered_ids)):
+        print(f"Column {col_idx} invalid: Duplicate 'csXX' entries found. [Rule 3]")
+        return False
+
+    return True
+
+
+def validate_matrix_columns(adj_matrix):
+    all_valid = True
+    for i in range(adj_matrix.shape[1]):
+        col = adj_matrix[:, i]
+        if not is_valid_column(col, i):
+            all_valid = False
+    return all_valid
+
+
+
+
 def validate_adj_matrix(adj_matrix):
     """
     Validate if the adjacency matrix follows the given criteria:
@@ -208,11 +273,11 @@ def validate_adj_matrix(adj_matrix):
     Returns:
     - bool: True if the adjacency matrix satisfies all conditions, False otherwise
     """
-    allowed_values = {"0", "ls", "cs", "ci"}
+
     num_nodes = adj_matrix.shape[0]
 
     #1.  Check allowed elements
-    if not np.all(np.isin(adj_matrix, list(allowed_values))):
+    if not validate_matrix_columns(adj_matrix):
         return False
 
     #2. Check upper triangular property

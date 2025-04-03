@@ -36,7 +36,7 @@ def get_fully_specified_tram_model(node,conf_dict,verbose=True):
         else:
             
             # intercept term -> model
-            nn_int_name = list(model_names_dict.items())[0][1]
+            nn_int_name = list(intercepts_dict.items())[0][1]['class_name'] # TODO this doesnt work for multi inpout CI's
             nn_int = globals()[nn_int_name]()
         
         # shift term -> lsit of models         
