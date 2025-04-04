@@ -2,7 +2,7 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-
+from utils.tram_model_utils import ordered_parents
 
 class GenericDataset(Dataset):
     def __init__(self, df, target_col, data_type=None, transform=None):
@@ -80,10 +80,13 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
     
     else:
         # create a datatype dictionnary for the dataloader to read the datatype --->> TODO can be passed to a args 
-        parents_dict={x[0]:x[1] for x  in  zip(conf_dict[node]['parents'],conf_dict[node]['parents_datatype'])}
+        # parents_dict={x[0]:x[1] for x  in  zip(conf_dict[node]['parents'],conf_dict[node]['parents_datatype'])}
         
-        train_dataset = GenericDataset(train_df, target_col=node, data_type=parents_dict, transform=transform)
-        validation_dataset = GenericDataset(val_df, target_col=node, data_type=parents_dict, transform=transform)
+        parents_dataype_dict,_,_=ordered_parents(node, conf_dict)
+        
+        
+        train_dataset = GenericDataset(train_df, target_col=node, data_type=parents_dataype_dict, transform=transform)
+        validation_dataset = GenericDataset(val_df, target_col=node, data_type=parents_dataype_dict, transform=transform)
      
      
     # TODO add args to the datloader via config file    
