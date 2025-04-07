@@ -232,3 +232,70 @@ def h_dash_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: floa
 
 
 
+
+def h_extrapolated_with_shift(
+    thetas: torch.Tensor,
+    targets: torch.Tensor,
+    shifts: torch.Tensor,
+    k_min: float,
+    k_max: float
+) -> torch.Tensor:
+    """
+    Args:
+        thetas: shape (n, b)
+        targets: shape (n,)
+        shifts: shape (n,)
+        k_min: float
+        k_max: float
+    Returns:
+        Tensor of shape (n,)fit and ffit and
+    """
+    # Use the device of targets as the reference
+    device = targets.device
+    dtype = targets.dtype
+
+    # Move inputs to the same device
+    thetas = thetas.to(device)
+    if shifts is None:
+        shifts = torch.zeros_like(targets, dtype=dtype, device=device)
+    else:
+        shifts = shifts.to(device)
+
+    # Constants and scaling
+    L_START = 0.0001
+    R_START = 1.0 - L_START
+
+    L_tensor = torch.tensor(L_START, dtype=dtype, device=device)
+    R_tensor = torch.tensor(R_START, dtype=dtype, device=device)
+    k_min_tensor = torch.tensor(k_min, dtype=dtype, device=device)
+    k_max_tensor = torch.tensor(k_max, dtype=dtype, device=device)
+
+    t_i = (targets - k_min_tensor) / (k_max_tensor - k_min_tensor)  # (n,)
+    t_i_exp = t_i.unsqueeze(-1)        # (n, 1)
+    shifts_exp = shifts.unsqueeze(-1)  # (n, 1)
+
+    # Left extrapolation
+    b0 = h_dag(L_tensor.expand_as(targets), thetas).unsqueeze(-1) + shifts_exp
+    slope0 = h_dag_dash(L_tensor.expand_as(targets), thetas).unsqueeze(-1)
+    h_left = slope0 * (t_i_exp - L_tensor) + b0
+
+    h = h_left.clone()
+    mask0 = t_i_exp < L_tensor
+    h = torch.where(mask0, h_left, t_i_exp)  # placeholder
+
+    # Right extrapolation
+    b1 = h_dag(R_tensor.expand_as(targets), thetas).unsqueeze(-1) + shifts_exp
+    slope1 = h_dag_dash(R_tensor.expand_as(targets), thetas).unsqueeze(-1)
+    h_right = slope1 * (t_i_exp - R_tensor) + b1
+
+    mask1 = t_i_exp > R_tensor
+    h = torch.where(mask1, h_right, h)
+
+    # In-domain
+    mask_mid = (t_i_exp >= L_tensor) & (t_i_exp <= R_tensor)
+    h_center = h_dag(t_i, thetas).unsqueeze(-1) + shifts_exp
+    h = torch.where(mask_mid, h_center, h)
+
+    return h.squeeze(-1)
+
+
