@@ -230,7 +230,7 @@ def h_dash_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: floa
 
     return h_dash.squeeze(-1)  # shape (n,)
 
-
+## sampling
 
 
 def h_extrapolated_with_shift(
@@ -299,3 +299,51 @@ def h_extrapolated_with_shift(
     return h.squeeze(-1)
 
 
+
+
+
+def vectorized_object_function( thetas: torch.Tensor,targets: torch.Tensor, shifts: torch.Tensor,
+                               latent_sample: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
+    # h(xj)-latent_sample=0 , solve for xj
+    return h_extrapolated_with_shift(thetas, targets, shifts, k_min, k_max) - latent_sample
+
+
+
+def bisection_root_finder(f, low, high, max_iter=1000, tol=1e-7):
+    """
+    Pure PyTorch scalar root-finder (element-wise bisection).
+    f: function that accepts tensor of shape (n,)
+    low, high: tensors of shape (n,)
+    Returns: tensor of shape (n,)
+    
+    e.g.:
+    
+    root = bisection_root_finder(
+    lambda targets: vectorized_object_function(
+        thetas_expanded,
+        targets,
+        shifts,
+        latent_sample,
+        k_min=min_max[0],
+        k_max=min_max[1]
+    ),
+    low,
+    high
+    )
+
+    
+    """
+    for _ in range(max_iter):
+        mid = (low + high) / 2.0
+        f_mid = f(mid)
+        f_low = f(low)
+
+        # Where sign changes, root is between low and mid; else mid and high
+        sign_change = f_low * f_mid < 0
+        high = torch.where(sign_change, mid, high)
+        low = torch.where(sign_change, low, mid)
+
+        if torch.max(torch.abs(high - low)) < tol:
+            break
+
+    return (low + high) / 2.0
