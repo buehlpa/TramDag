@@ -22,7 +22,7 @@ def contram_nll(outputs, targets, min_max):
         # If no shift model is provided, set Shifts to zero
         Shifts = torch.zeros_like(thetas[:, 0])
     else:
-        Shifts = outputs['shift_out']  # shape (n,)
+        Shifts = torch.stack(outputs['shift_out'])  # shape (n,)
     
 
     # Compute h
@@ -301,6 +301,13 @@ def h_extrapolated_with_shift(
 
 
 
+def sample_standard_logistic(shape, epsilon=1e-7, device=None):
+    uniform_samples = torch.rand(shape, device=device)
+    clipped = torch.clamp(uniform_samples, epsilon, 1 - epsilon)
+    logistic_samples = torch.log(clipped / (1 - clipped))
+    return logistic_samples
+
+
 
 def vectorized_object_function( thetas: torch.Tensor,targets: torch.Tensor, shifts: torch.Tensor,
                                latent_sample: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
@@ -315,6 +322,20 @@ def bisection_root_finder(f, low, high, max_iter=1000, tol=1e-7):
     f: function that accepts tensor of shape (n,)
     low, high: tensors of shape (n,)
     Returns: tensor of shape (n,)
+    
+    
+    https://en.wikipedia.org/wiki/Bisection_method
+    Iteration tasks
+    The input for the method is a continuous function f, an interval [a, b], and the function values f(a) and f(b). The function values are of opposite sign (there is at least one zero crossing within the interval). Each iteration performs these steps:
+
+    1.Calculate c, the midpoint of the interval, c = ⁠/a + b)/2
+    
+    2.Calculate the function value at the midpoint, f(c).
+    3. If convergence is satisfactory (that is, c - a is sufficiently small, or |f(c)| is sufficiently small), return c and stop iterating.
+    Examine the sign of f(c) and replace either (a, f(a)) or (b, f(b)) with (c, f(c)) so that there is a zero crossing within the new interval.
+        
+        
+        
     
     e.g.:
     

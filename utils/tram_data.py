@@ -29,15 +29,16 @@ class GenericDataset(Dataset):
     def __getitem__(self, idx):
         
         row = self.df.iloc[idx]
-        
+        x_data = []
         # if source node
         if self.data_type is None:
             y = torch.tensor(row[self.target_col], dtype=torch.float32)
-            x = (torch.tensor(1.0),) # dummy input
+            x = torch.tensor(1.0) # For SI on Sources CI also possible but not meaningful
+            x_data.append(x)
+            x = tuple(x_data)
             return x , y
         
         # data loader if not source
-        x_data = []
         for var in self.variables:
             if self.data_type[var] == "cont":
                 x_data.append(torch.tensor(row[var], dtype=torch.float32))
