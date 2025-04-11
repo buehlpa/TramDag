@@ -25,8 +25,6 @@ def get_fully_specified_tram_model(node,conf_dict,verbose=True):
         
         _,terms_dict,model_names_dict=ordered_parents(node, conf_dict)
         
-        
-        
         #old
         # terms_dict=conf_dict[node]['transformation_terms_in_h()']
         # model_names_dict=conf_dict[node]['transformation_term_nn_models_in_h()']
@@ -61,8 +59,12 @@ def get_fully_specified_tram_model(node,conf_dict,verbose=True):
     return tram_model
 
 
-# to order the modelinputs aswell as the dataloader input correctly
 def ordered_parents(node, conf_dict) -> dict:
+    
+    """
+    Orders the transformation terms and their corresponding data types and nn models used for the models and the dataloader
+    """
+    
     order = ['ci', 'ciXX', 'cs', 'csXX', 'ls']
 
     # Extract dictionaries
@@ -94,3 +96,23 @@ def ordered_parents(node, conf_dict) -> dict:
     ordered_transformation_term_nn_models_in_h = OrderedDict((k, nn_models_dict[k]) for k in sorted_keys)
 
     return ordered_parents_datatype, ordered_transformation_terms_in_h, ordered_transformation_term_nn_models_in_h
+
+
+def preprocess_inputs(x, device='cuda'):
+    """
+    Prepares model input by:
+    - Accepting a single tensor or a list of tensors
+    - Converting to 2D (unsqueeze if necessary)
+    - Moving to the correct device
+    - Returning a list of tensors
+    """
+    x = [xi.unsqueeze(1).to(device) for xi in x] # move to GPU or desired device
+    
+    
+    int_inputs = x[0]
+    
+    if len(x) != 1:
+        shift_list = x[1:]
+    else:
+        shift_list = None
+    return int_inputs,shift_list # ready for model(*x)
