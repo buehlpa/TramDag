@@ -6,8 +6,9 @@ Pytorch implementation of TRAM DAG by Beate Sick and Oliver Dürr
 Under Construction!
 
 
--allows for interactions in Complex models 
--allows for independent trainin gof NNs instead of MAF.
+-  allows for interactions in Complex models
+  
+- allows for independent training of NNs instead of MAF.
 
 
 https://arxiv.org/abs/2503.16206
