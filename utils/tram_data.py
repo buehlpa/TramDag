@@ -2,10 +2,10 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from utils.tram_model_utils import ordered_parents
+from utils.tram_model_helpers import ordered_parents
 
 class GenericDataset(Dataset):
-    def __init__(self, df, target_col, data_type=None, transform=None):
+    def __init__(self, df, target_col, conf_dict=None, transform=None):
         
         
         #TODO if intercept is si but shifts are ci , intercept should return 1s
@@ -13,13 +13,13 @@ class GenericDataset(Dataset):
         """
         Args:
             df (pd.DataFrame): The dataframe containing data.
-            data_type (dict): Dictionary mapping variable names to their type: "cont", "other", "ord".
+            conf_dict (dict): Dictionary mapping variable names to their type: "cont", "other", "ord".
             target_col (str): The name of the target column.
             transform (callable, optional): Transformations for images.
         """
         self.df = df
-        self.variables =None  if data_type== None else list(data_type.keys())
-        self.data_type = data_type
+        self.variables =None  if conf_dict== None else list(conf_dict.keys())
+        self.conf_dict = conf_dict
         self.target_col = target_col
         self.transform = transform
 
@@ -34,20 +34,20 @@ class GenericDataset(Dataset):
         row = self.df.iloc[idx]
         x_data = []
         # if source node
-        if self.data_type is None:
+        if self.conf_dict is None:
             y = torch.tensor(row[self.target_col], dtype=torch.float32)
             x = torch.tensor(1.0) # For SI on Sources CI also possible but not meaningful
-            x_data.append(x)
+            x_data.append(x)x1
             x = tuple(x_data)
             return x , y
         
         # data loader if not source
         for var in self.variables:
-            if self.data_type[var] == "cont":
+            if self.conf_dict[var] == "cont":
                 x_data.append(torch.tensor(row[var], dtype=torch.float32))
-            elif self.data_type[var] == "ord":
+            elif self.conf_dict[var] == "ord":
                 x_data.append(torch.tensor(row[var], dtype=torch.long))
-            elif self.data_type[var] == "other":  
+            elif self.conf_dict[var] == "other":  
                 img_path = row[var]
                 image = Image.open(img_path).convert("RGB")
 
@@ -78,8 +78,8 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
     if conf_dict[node]['node_type'] == 'source':
         print('>>>>>>>>>>>>  source node --> x in dataloader contains just 1s ') if verbose else None
         
-        train_dataset = GenericDataset(train_df, target_col=node, data_type=None, transform=transform)
-        validation_dataset = GenericDataset(train_df, target_col=node, data_type=None, transform=transform)
+        train_dataset = GenericDataset(train_df, target_col=node, conf_dict=None, transform=transform)
+        validation_dataset = GenericDataset(train_df, target_col=node, conf_dict=None, transform=transform)
         
     
     else:
@@ -89,8 +89,8 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
         parents_dataype_dict,_,_=ordered_parents(node, conf_dict)
         
         
-        train_dataset = GenericDataset(train_df, target_col=node, data_type=parents_dataype_dict, transform=transform)
-        validation_dataset = GenericDataset(val_df, target_col=node, data_type=parents_dataype_dict, transform=transform)
+        train_dataset = GenericDataset(train_df, target_col=node, conf_dict=parents_dataype_dict, transform=transform)
+        validation_dataset = GenericDataset(val_df, target_col=node, conf_dict=parents_dataype_dict, transform=transform)
      
      
     # TODO add args to the datloader via config file    
