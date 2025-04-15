@@ -37,7 +37,7 @@ class GenericDataset(Dataset):
         if self.conf_dict is None:
             y = torch.tensor(row[self.target_col], dtype=torch.float32)
             x = torch.tensor(1.0) # For SI on Sources CI also possible but not meaningful
-            x_data.append(x)x1
+            x_data.append(x)
             x = tuple(x_data)
             return x , y
         

@@ -1,5 +1,5 @@
 import torch
-
+import warnings
 
 def contram_nll(outputs, targets, min_max):
     """
@@ -267,8 +267,17 @@ def h_extrapolated_with_shift(
 
     L_tensor = torch.tensor(L_START, dtype=dtype, device=device)
     R_tensor = torch.tensor(R_START, dtype=dtype, device=device)
-    k_min_tensor = torch.tensor(k_min, dtype=dtype, device=device)
-    k_max_tensor = torch.tensor(k_max, dtype=dtype, device=device)
+    
+    if isinstance(k_min, torch.Tensor):
+        k_min_tensor = k_min.clone().detach().to(dtype=dtype, device=device)
+    else:
+        k_min_tensor = torch.tensor(k_min, dtype=dtype, device=device)
+
+    if isinstance(k_max, torch.Tensor):
+        k_max_tensor = k_max.clone().detach().to(dtype=dtype, device=device)
+    else:
+        k_max_tensor = torch.tensor(k_max, dtype=dtype, device=device)
+
 
     t_i = (targets - k_min_tensor) / (k_max_tensor - k_min_tensor)  # (n,)
     t_i_exp = t_i.unsqueeze(-1)        # (n, 1)
@@ -301,10 +310,29 @@ def h_extrapolated_with_shift(
 
 
 
+
+
 def sample_standard_logistic(shape, epsilon=1e-7, device=None):
+    """
+    Samples from a standard logistic distribution using inverse CDF.
+
+    Args:
+        shape (tuple or int): Shape of the output tensor.
+        epsilon (float): Clipping value to avoid log(0).
+        device (torch.device or str): Device for the tensor.
+
+    Returns:
+        torch.Tensor: Logistic-distributed samples with no NaNs.
+    """
     uniform_samples = torch.rand(shape, device=device)
     clipped = torch.clamp(uniform_samples, epsilon, 1 - epsilon)
     logistic_samples = torch.log(clipped / (1 - clipped))
+
+    if torch.isnan(logistic_samples).any():
+        n_nan = torch.isnan(logistic_samples).sum().item()
+        warnings.warn(f"{n_nan} NaNs found in logistic samples — removing them.")
+        logistic_samples = logistic_samples[~torch.isnan(logistic_samples)]
+
     return logistic_samples
 
 
