@@ -1,7 +1,6 @@
 from utils.tram_models import *
 from utils.graph import *
-
-
+import os
 import re
 from collections import OrderedDict
 
@@ -116,3 +115,5 @@ def preprocess_inputs(x, device='cuda'):
     else:
         shift_list = None
     return int_inputs,shift_list # ready for model(*x)
+
+
