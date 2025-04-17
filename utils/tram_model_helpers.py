@@ -3,7 +3,7 @@ from utils.graph import *
 import os
 import re
 from collections import OrderedDict
-
+import json
 
 def get_fully_specified_tram_model(node,conf_dict,verbose=True):
     
@@ -116,4 +116,17 @@ def preprocess_inputs(x, device='cuda'):
         shift_list = None
     return int_inputs,shift_list # ready for model(*x)
 
+# print training history
+def load_history(node, experiment_dir):
+    node_dir = os.path.join(experiment_dir, node)
+    train_hist_path = os.path.join(node_dir, "train_loss_hist.json")
+    val_hist_path = os.path.join(node_dir, "val_loss_hist.json")
 
+    if os.path.exists(train_hist_path) and os.path.exists(val_hist_path):
+        with open(train_hist_path, 'r') as f:
+            train_loss_hist = json.load(f)
+        with open(val_hist_path, 'r') as f:
+            val_loss_hist = json.load(f)
+        return train_loss_hist, val_loss_hist
+    else:
+        return None, None

@@ -1,5 +1,7 @@
 import torch
 import warnings
+from tqdm import trange
+
 
 def contram_nll(outputs, targets, min_max):
     """
@@ -382,7 +384,7 @@ def bisection_root_finder(f, low, high, max_iter=1000, tol=1e-7):
 
     
     """
-    for _ in range(max_iter):
+    for _ in trange(max_iter, desc="Bisection root finding", leave=True):
         mid = (low + high) / 2.0
         f_mid = f(mid)
         f_low = f(low)

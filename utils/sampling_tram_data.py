@@ -1,7 +1,8 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
-
+from tqdm import tqdm
+import warnings
 import os
 
 from utils.tram_model_helpers import ordered_parents
@@ -95,3 +96,37 @@ def load_roots_and_latents(NODE_DIR):
     root=load_roots(NODE_DIR)
     latents=load_latents(NODE_DIR)
     return root, latents
+
+
+
+
+def merge_outputs(dict_list, skip_nan=True):
+    int_outs = []
+    shift_outs = []
+    skipped_count = 0
+
+    for d in dict_list:
+        int_tensor = d['int_out']
+        if type(d['shift_out']) is list:
+            shift_tensor = d['shift_out'][0]
+        else:
+            shift_tensor = d['shift_out']
+
+        # Optionally skip entries with all NaNs in int_out
+        if skip_nan and torch.isnan(int_tensor).all():
+            skipped_count += 1
+            continue
+
+        int_outs.append(int_tensor)
+        if shift_tensor is not None:
+            shift_outs.append(shift_tensor)
+
+    if skipped_count > 0:
+        warnings.warn(f"{skipped_count} entries with all-NaN 'int_out' were skipped.")
+
+    merged = {
+        'int_out': torch.cat(int_outs, dim=0) if int_outs else None,
+        'shift_out': torch.cat(shift_outs, dim=0) if shift_outs else None
+    }
+
+    return merged
