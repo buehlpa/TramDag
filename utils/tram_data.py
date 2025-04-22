@@ -94,8 +94,8 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
      
      
     # TODO add args to the datloader via config file    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,pin_memory=True)
+    val_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=4,pin_memory=True)
     
     
     return train_loader, val_loader

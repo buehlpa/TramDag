@@ -4,6 +4,30 @@ import os
 import re
 from collections import OrderedDict
 import json
+import time
+from functools import wraps
+import shutil
+
+# Time decorator
+def timeit(name=None):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            label = f"{name or func.__name__}"
+            start = time.time()
+            result = func(*args, **kwargs)
+            duration = time.time() - start
+            print(f"[ {label}] completed in {duration:.4f} seconds")
+            return result
+        return wrapper
+    return decorator
+
+
+
+
+
+
+
 
 def get_fully_specified_tram_model(node,conf_dict,verbose=True):
     
@@ -100,21 +124,19 @@ def ordered_parents(node, conf_dict) -> dict:
 def preprocess_inputs(x, device='cuda'):
     """
     Prepares model input by:
-    - Accepting a single tensor or a list of tensors
-    - Converting to 2D (unsqueeze if necessary)
-    - Moving to the correct device
-    - Returning a list of tensors
+    - Accepting a tuple or list of tensors
+    - Adding channel dim (unsqueeze)
+    - Moving everything to the device once
+    - Returning int_inputs and shift_list
     """
-    x = [xi.unsqueeze(1).to(device) for xi in x] # move to GPU or desired device
-    
-    
+    # Unpack x if it's a tuple/list
+    x = [xi.unsqueeze(1) for xi in x]  # shape: (B, 1, ...)
+    x = [xi.to(device, non_blocking=True) for xi in x]  # single device transfer
+
     int_inputs = x[0]
-    
-    if len(x) != 1:
-        shift_list = x[1:]
-    else:
-        shift_list = None
-    return int_inputs,shift_list # ready for model(*x)
+    shift_list = x[1:] if len(x) > 1 else None
+
+    return int_inputs, shift_list
 
 # print training history
 def load_history(node, experiment_dir):
@@ -130,3 +152,5 @@ def load_history(node, experiment_dir):
         return train_loss_hist, val_loss_hist
     else:
         return None, None
+    
+

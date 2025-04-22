@@ -4,6 +4,7 @@ from PIL import Image
 from tqdm import tqdm
 import warnings
 import os
+import shutil
 
 from utils.tram_model_helpers import ordered_parents
 
@@ -130,3 +131,15 @@ def merge_outputs(dict_list, skip_nan=True):
     }
 
     return merged
+
+
+def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
+    for node in conf_dict:
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
+        # Delete the 'sampling' folder and its contents if it exists
+        if os.path.exists(SAMPLING_DIR):
+            shutil.rmtree(SAMPLING_DIR)
+            print(f'Deleted directory: {SAMPLING_DIR}')
+        else:
+            print(f'Directory does not exist: {SAMPLING_DIR}')
