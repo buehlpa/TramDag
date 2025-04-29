@@ -3,7 +3,7 @@ import warnings
 from tqdm import trange
 
 
-def contram_nll(outputs, targets, min_max):
+def contram_nll(outputs, targets, min_max,return_h=False):
     """
     Args:
         outputs: dict with keys 'int_out' and 'shift_out'
@@ -40,10 +40,11 @@ def contram_nll(outputs, targets, min_max):
 
     # Final NLL
     nll = -torch.mean(log_latent_density + log_hdash)
-
-    return nll
-
-
+    
+    if return_h:
+        return h,nll
+    else:
+        return nll
 
 def transform_intercepts_continous(theta_tilde:torch.Tensor) -> torch.Tensor:
     
@@ -139,6 +140,58 @@ def h_dag_dash(targets: torch.Tensor, thetas: torch.Tensor) -> torch.Tensor:
     B_dash = bernstein_basis(targets, b - 2)        # shape (n, b-1)
     return torch.sum(B_dash * dtheta, dim=1)
 
+# def h_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:  ## previous version 29.04.25
+#     """
+#     Args:
+#         thetas: shape (n, b)
+#         targets: shape (n,)
+#         k_min: float, lower bound of scaling (not tracked in graph)
+#         k_max: float, upper bound of scaling (not tracked in graph)
+#     Returns:
+#         Tensor of shape (n,)
+#     """
+#     # Constants (not part of the graph)
+#     L_START = 0.0001
+#     R_START = 1.0-L_START
+
+
+#     # Detach constants from graph
+#     L_tensor = torch.tensor(L_START, dtype=targets.dtype, device=targets.device)
+#     R_tensor = torch.tensor(R_START, dtype=targets.dtype, device=targets.device)
+
+#     # Scale targets
+#     t_i = (targets - k_min) / (k_max - k_min)  # shape (n,)
+#     t_i_exp = t_i.unsqueeze(-1)  # shape (n, 1)
+
+#     # Extrapolation at left (t_i < 0)
+#     b0 = h_dag(L_tensor.expand_as(targets), thetas).unsqueeze(-1)     # (n, 1)
+#     slope0 = h_dag_dash(L_tensor.expand_as(targets), thetas).unsqueeze(-1)  # (n, 1)
+#     h_left = slope0 * (t_i_exp - L_tensor) + b0
+
+#     # Start with placeholder
+#     h = h_left.clone()
+
+#     # Mask for left extrapolation
+#     mask0 = t_i_exp < L_tensor
+#     h = torch.where(mask0, h_left, t_i_exp)  # placeholder fill
+
+#     # Extrapolation at right (t_i > 1)
+#     b1 = h_dag(R_tensor.expand_as(targets), thetas).unsqueeze(-1)
+#     slope1 = h_dag_dash(R_tensor.expand_as(targets), thetas).unsqueeze(-1)
+#     h_right = slope1 * (t_i_exp - R_tensor) + b1
+
+#     mask1 = t_i_exp > R_tensor
+#     h = torch.where(mask1, h_right, h)
+
+#     # In-domain: t_i ∈ [0,1]
+#     mask_mid = (t_i_exp >= L_tensor) & (t_i_exp <= R_tensor)
+#     h_center = h_dag(t_i, thetas).unsqueeze(-1)
+#     h = torch.where(mask_mid, h_center, h)
+
+#     return h.squeeze(-1)
+
+# import torch
+
 def h_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
     """
     Args:
@@ -151,8 +204,7 @@ def h_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_
     """
     # Constants (not part of the graph)
     L_START = 0.0001
-    R_START = 1.0-L_START
-
+    R_START = 1.0 - L_START
 
     # Detach constants from graph
     L_tensor = torch.tensor(L_START, dtype=targets.dtype, device=targets.device)
@@ -162,33 +214,24 @@ def h_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_
     t_i = (targets - k_min) / (k_max - k_min)  # shape (n,)
     t_i_exp = t_i.unsqueeze(-1)  # shape (n, 1)
 
-    # Extrapolation at left (t_i < 0)
-    b0 = h_dag(L_tensor.expand_as(targets), thetas).unsqueeze(-1)     # (n, 1)
+    # Left extrapolation (t_i < L_START)
+    b0 = h_dag(L_tensor.expand_as(targets), thetas).unsqueeze(-1)  # (n, 1)
     slope0 = h_dag_dash(L_tensor.expand_as(targets), thetas).unsqueeze(-1)  # (n, 1)
     h_left = slope0 * (t_i_exp - L_tensor) + b0
 
-    # Start with placeholder
-    h = h_left.clone()
-
-    # Mask for left extrapolation
-    mask0 = t_i_exp < L_tensor
-    h = torch.where(mask0, h_left, t_i_exp)  # placeholder fill
-
-    # Extrapolation at right (t_i > 1)
-    b1 = h_dag(R_tensor.expand_as(targets), thetas).unsqueeze(-1)
-    slope1 = h_dag_dash(R_tensor.expand_as(targets), thetas).unsqueeze(-1)
+    # Right extrapolation (t_i > R_START)
+    b1 = h_dag(R_tensor.expand_as(targets), thetas).unsqueeze(-1)  # (n, 1)
+    slope1 = h_dag_dash(R_tensor.expand_as(targets), thetas).unsqueeze(-1)  # (n, 1)
     h_right = slope1 * (t_i_exp - R_tensor) + b1
 
-    mask1 = t_i_exp > R_tensor
-    h = torch.where(mask1, h_right, h)
-
-    # In-domain: t_i ∈ [0,1]
-    mask_mid = (t_i_exp >= L_tensor) & (t_i_exp <= R_tensor)
+    # In-domain interpolation (L_START <= t_i <= R_START)
     h_center = h_dag(t_i, thetas).unsqueeze(-1)
-    h = torch.where(mask_mid, h_center, h)
+
+    # Compose the output
+    h = torch.where(t_i_exp < L_tensor, h_left, h_center)
+    h = torch.where(t_i_exp > R_tensor, h_right, h)
 
     return h.squeeze(-1)
-
 
 def h_dash_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
     """
