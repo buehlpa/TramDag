@@ -364,6 +364,14 @@ def show_latent_sampling(EXPERIMENT_DIR,conf_dict):
         plt.show()
         
         
+def truncated_logistic_sample(n, low, high, device='cpu'):
+    samples = []
+    while len(samples) < n:
+        new_samples = logistic.rvs(size=n - len(samples))
+        valid = new_samples[(new_samples >= low) & (new_samples <= high)]
+        samples.extend(valid)
+    return torch.tensor(samples, dtype=torch.float32).to(device)
+        
         
 def sample_full_dag_chandru(conf_dict,
                             EXPERIMENT_DIR,
@@ -397,7 +405,16 @@ def sample_full_dag_chandru(conf_dict,
             print(f"Skipping {node} as parent {parent} is not sampled yet.")
             continue
 
+
+        
+        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+        
+        
         latent_sample = torch.tensor(logistic.rvs(size=n), dtype=torch.float32).to(device)
+        #latent_sample = truncated_logistic_sample(n=n, low=0, high=1, device=device)
+        
         if verbose:
             print("-- sampled latents")
 
@@ -439,9 +456,7 @@ def sample_full_dag_chandru(conf_dict,
 
         low = torch.full((n,), -1e5, device=device)
         high = torch.full((n,), 1e5, device=device)
-        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
-        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
-        min_max = torch.stack([min_vals, max_vals], dim=0)
+
 
         ## Root finder using Chandrupatla's method
         def f_vectorized(targets):
