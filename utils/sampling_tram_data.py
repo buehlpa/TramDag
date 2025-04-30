@@ -7,10 +7,12 @@ import os
 import shutil
 
 from utils.tram_model_helpers import ordered_parents
-
+from utils.tram_model_helpers import *           
+from utils.continous import *   
+from utils.tram_data import get_dataloader
 
 class SamplingDataset(Dataset):
-    def __init__(self, node,EXPERIMENT_DIR,number_of_samples=100, conf_dict=None, transform=None):
+    def __init__(self, node,EXPERIMENT_DIR,number_of_samples=100,rootfinder='bisection', conf_dict=None, transform=None):
         """
         Args:
             node (str): Name of the target node.
@@ -22,6 +24,7 @@ class SamplingDataset(Dataset):
         self.number_of_samples=number_of_samples
         self.conf_dict = conf_dict
         self.transform = transform
+        self.rootfinder=rootfinder
         self.variables = None if conf_dict is None else self._ordered_keys()
         self.datatensors = self._get_sampled_parent_tensors()# shape: (num_parents, num_samples, dim)
 
@@ -37,7 +40,7 @@ class SamplingDataset(Dataset):
         for parent_pair in parents_dataype_dict:
             # print(parent_pair)
             PARENT_DIR = os.path.join(self.EXPERIMENT_DIR, f'{parent_pair}')
-            tensor = load_roots(PARENT_DIR)  # expected shape: (num_samples, feature_dim)
+            tensor = load_roots(PARENT_DIR,rootfinder=self.rootfinder)  # expected shape: (num_samples, feature_dim)
             tensor_list.append(torch.tensor(tensor))  # ensure tensor type
             # print(tensor_list)
         return tensor_list  # list of tensors, each (num_samples, dim)
@@ -72,8 +75,8 @@ class SamplingDataset(Dataset):
     
     
 # helpers
-def check_roots_and_latents(NODE_DIR,verbose=True):
-    root_path = os.path.join(NODE_DIR, 'sampling',"roots.pt")
+def check_roots_and_latents(NODE_DIR,rootfinder='bisection',verbose=True):
+    root_path = os.path.join(NODE_DIR, 'sampling',f"roots_{rootfinder}.pt")
     latents_path=os.path.join(NODE_DIR, 'sampling', "latents.pt")
     if os.path.exists(root_path) and os.path.exists(latents_path):
         return True
@@ -83,8 +86,8 @@ def check_roots_and_latents(NODE_DIR,verbose=True):
         return False
     
 
-def load_roots(NODE_DIR):
-    root_path = os.path.join(NODE_DIR, 'sampling',"roots.pt")
+def load_roots(NODE_DIR,rootfinder='bisection'):
+    root_path = os.path.join(NODE_DIR, 'sampling',f"roots_{rootfinder}.pt")
     root=torch.load(root_path)
     return root
 
@@ -93,8 +96,8 @@ def load_latents(NODE_DIR):
     latents=torch.load(latents_path)
     return latents
 
-def load_roots_and_latents(NODE_DIR):
-    root=load_roots(NODE_DIR)
+def load_roots_and_latents(NODE_DIR,rootfinder='bisection'):
+    root=load_roots(NODE_DIR,whirootfinder=rootfinder)
     latents=load_latents(NODE_DIR)
     return root, latents
 
@@ -143,3 +146,328 @@ def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
             print(f'Deleted directory: {SAMPLING_DIR}')
         else:
             print(f'Directory does not exist: {SAMPLING_DIR}')
+            
+            
+
+def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device):
+    verbose=False
+    n=1000
+    for node in conf_dict:
+        print(f'\n----*----------*-------------*--------Inspect TRAFO Node: {node} ------------*-----------------*-------------------*--')
+        if (conf_dict[node]['node_type'] != 'source'):
+            print("skipped.. since h does depend on parents and is different for every instance")
+            continue
+        
+        #### 0.  paths
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        
+        ##### 1.  load model 
+        model_path = os.path.join(NODE_DIR, "best_model.pt")
+        tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose)
+        tram_model = tram_model.to(device)
+        tram_model.load_state_dict(torch.load(model_path))
+        
+        #### 2. Sampling Dataloader
+        dataset = SamplingDataset(node=node,EXPERIMENT_DIR=EXPERIMENT_DIR,number_of_samples=n, conf_dict=conf_dict, transform=None)
+        sample_loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
+        output_list = []
+        with torch.no_grad():
+            for x in tqdm(sample_loader, desc=f"h() for  {node}"):
+                x = [xi.to(device) for xi in x]
+                int_input, shift_list = preprocess_inputs(x, device=device)
+                model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+                output_list.append(model_outputs)
+                break
+        if verbose:
+            print("source node, Defaults to SI and 1 as inputs")
+            
+        theta_single =     output_list[0]['int_out'][0]  # Shape: (20,)
+        theta_single=transform_intercepts_continous(theta_single)
+        thetas_expanded = theta_single.repeat(n, 1).to(device)  # Shape: (n, 20)
+        
+        targets2 = torch.linspace(0, 1, steps=n).to(device)  # 1000 points from 0 to 1
+        
+        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+        min_val = min_max[0].clone().detach() if isinstance(min_max[0], torch.Tensor) else torch.tensor(min_max[0], dtype=targets2.dtype, device=targets2.device)
+        max_val = min_max[1].clone().detach() if isinstance(min_max[1], torch.Tensor) else torch.tensor(min_max[1], dtype=targets2.dtype, device=targets2.device) 
+
+        hdag_extra_values=h_extrapolated(thetas_expanded, targets2, k_min=min_val, k_max=max_val)
+        # Move to CPU for plotting
+        targets2_cpu = targets2.cpu().numpy()
+        hdag_extra_values_cpu = hdag_extra_values.cpu().detach().numpy()
+
+        # # Split masks
+        below_min_mask = targets2_cpu < min_val.item()
+        between_mask = (targets2_cpu >= min_val.item()) & (targets2_cpu <= max_val.item())
+        above_max_mask = targets2_cpu > max_val.item()
+
+        # Plot
+        plt.figure(figsize=(8, 6))
+        plt.plot(targets2_cpu[below_min_mask], hdag_extra_values_cpu[below_min_mask], color='red', label='x < min_val')
+        plt.plot(targets2_cpu[between_mask], hdag_extra_values_cpu[between_mask], color='blue', label='min_val <= x <= max_val')
+        plt.plot(targets2_cpu[above_max_mask], hdag_extra_values_cpu[above_max_mask], color='red', label='x > max_val')
+        plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
+        
+        
+        
+def inspect_trafo_standart_logistic(conf_dict,EXPERIMENT_DIR,train_df,val_df,device,verbose=False):
+    batch_size = 4112
+    for node in conf_dict:
+        print(f'\n----*----------*-------------*--------h(data) should be standard logistic: {node} ------------*-----------------*-------------------*--')
+
+        #### 0. Paths
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        
+        ##### 1. Load model 
+        model_path = os.path.join(NODE_DIR, "best_model.pt")
+        tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose)
+        tram_model = tram_model.to(device)
+        tram_model.load_state_dict(torch.load(model_path))
+        tram_model.eval()
+
+        ##### 2. Dataloader
+        train_loader, val_loader = get_dataloader(node, conf_dict, train_df, val_df, batch_size=batch_size, verbose=verbose)
+        
+        #### 3. Forward Pass
+        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+
+        h_train_list, h_val_list = [], []
+
+        with torch.no_grad():
+            print("\nProcessing training data...")
+            for x, y in tqdm(train_loader, desc=f"Train loader ({node})", total=len(train_loader)):
+                y = y.to(device)
+                int_input, shift_list = preprocess_inputs(x, device=device)
+                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                h_train, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
+                h_train_list.extend(h_train.cpu().numpy())
+
+            print("\nProcessing validation data...")
+            for x, y in tqdm(val_loader, desc=f"Val loader ({node})", total=len(val_loader)):
+                y = y.to(device)
+                int_input, shift_list = preprocess_inputs(x, device=device)
+                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                h_val, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
+                h_val_list.extend(h_val.cpu().numpy())
+
+        h_train_array = np.array(h_train_list)
+        h_val_array = np.array(h_val_list)
+
+        # Evaluate goodness-of-fit
+        train_metrics = evaluate_standard_logistic_fit(h_train_array)
+        val_metrics = evaluate_standard_logistic_fit(h_val_array)
+
+        # All four plots in one row
+        fig, axs = plt.subplots(1, 4, figsize=(22, 5))
+
+        # Histogram: Training
+        axs[0].hist(h_train_array, bins=50)
+        axs[0].set_title(f'Train Histogram ({node})')
+        axs[0].set_xlabel('h_train values')
+        axs[0].set_ylabel('Frequency')
+        axs[0].grid(True)
+
+        # QQ plot: Training
+        probplot(h_train_array, dist="logistic", plot=axs[1])
+        axs[1].set_title(f'Train QQ Plot ({node})')
+        axs[1].grid(True)
+        axs[1].text(0.05, -0.25, 
+                    f"RMSE: {train_metrics['quantile_rmse']:.3f}\n"
+                    f"MAE: {train_metrics['quantile_mae']:.3f}\n"
+                    f"KS stat: {train_metrics['ks_statistic']:.3f}\n"
+                    f"KS p: {train_metrics['ks_pvalue']:.3f}\n"
+                    f"AD stat: {train_metrics['ad_statistic']:.3f}", 
+                    transform=axs[1].transAxes, fontsize=9, verticalalignment='top')
+
+        # Histogram: Validation
+        axs[2].hist(h_val_array, bins=50)
+        axs[2].set_title(f'Val Histogram ({node})')
+        axs[2].set_xlabel('h_val values')
+        axs[2].set_ylabel('Frequency')
+        axs[2].grid(True)
+
+        # QQ plot: Validation
+        probplot(h_val_array, dist="logistic", plot=axs[3])
+        axs[3].set_title(f'Val QQ Plot ({node})')
+        axs[3].grid(True)
+        axs[3].text(0.05, -0.25, 
+                    f"RMSE: {val_metrics['quantile_rmse']:.3f}\n"
+                    f"MAE: {val_metrics['quantile_mae']:.3f}\n"
+                    f"KS stat: {val_metrics['ks_statistic']:.3f}\n"
+                    f"KS p: {val_metrics['ks_pvalue']:.3f}\n"
+                    f"AD stat: {val_metrics['ad_statistic']:.3f}", 
+                    transform=axs[3].transAxes, fontsize=9, verticalalignment='top')
+
+        plt.suptitle(f'Distribution Diagnostics for Node: {node}', fontsize=14)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        plt.show()
+        
+        
+def show_samples_vs_true(df,conf_dict,EXPERIMENT_DIR,rootfinder='chandrupatla'):
+    
+    for node in conf_dict.keys():
+        root_np = torch.load(os.path.join(EXPERIMENT_DIR,f'{node}/sampling/roots_{rootfinder}.pt')).cpu().numpy()
+        
+        true_values = df[node].dropna().values  # Drop NaNs for fair comparison
+        
+        # Sort both arrays for QQ plot
+        sorted_true = np.sort(true_values)
+        sorted_roots = np.sort(root_np)
+        
+        min_len = min(len(sorted_true), len(sorted_roots))
+        sorted_true = sorted_true[:min_len]
+        sorted_roots = sorted_roots[:min_len]
+
+        fig, axs = plt.subplots(1, 2, figsize=(14, 5))
+
+        # Histogram
+        axs[0].hist(true_values, bins=100, alpha=0.5, label=f'True Values {node}', color='blue', density=True)
+        axs[0].hist(root_np, bins=100, alpha=0.5, label='Estimated Roots', color='red', density=True)
+        axs[0].set_xlabel("Value")
+        axs[0].set_ylabel("Density")
+        axs[0].set_title(f"Overlay of True vs Estimated Values for {node}")
+        axs[0].legend()
+        axs[0].grid(True)
+
+        # QQ plot
+        axs[1].plot(sorted_true, sorted_true, color='blue', label='Observed Quantiles (True)')
+        axs[1].scatter(sorted_true, sorted_roots, color='red', s=10, alpha=0.6, label='Estimated Roots')
+        axs[1].set_xlabel("Observed Quantiles")
+        axs[1].set_ylabel("Estimated Quantiles")
+        axs[1].set_title(f"QQ Plot for {node}")
+        axs[1].grid(True)
+        axs[1].legend()
+
+        plt.tight_layout()
+        plt.show()
+
+def show_latent_sampling(EXPERIMENT_DIR,conf_dict):
+    for node in conf_dict.keys():
+        latents_path = os.path.join(EXPERIMENT_DIR,f'{node}/sampling/latents.pt')
+        latents = torch.load(latents_path).cpu().numpy()
+        fig, axs = plt.subplots(1, 2, figsize=(8, 3))
+        # Histogram
+        axs[0].hist(latents, bins=100)
+        axs[0].set_title(f"Histogram of Latents ({node})")
+        axs[0].set_xlabel("Latent values")
+        axs[0].set_ylabel("Frequency")
+        axs[0].grid(True)
+        # QQ Plot against standard logistic
+        probplot(latents, dist="logistic", plot=axs[1])
+        axs[1].set_title(f"QQ Plot (Logistic) - {node}")
+        axs[1].grid(True)
+        plt.tight_layout()
+        plt.show()
+        
+        
+        
+def sample_full_dag_chandru(conf_dict,
+                            EXPERIMENT_DIR,
+                            device,
+                            n= 10_000,
+                            batch_size = 32,
+                            delete_all_previously_sampled=True,
+                            verbose=True):
+    
+
+    if delete_all_previously_sampled:
+        delete_all_samplings(conf_dict, EXPERIMENT_DIR)
+
+    for node in conf_dict:
+        print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--')
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
+        os.makedirs(SAMPLING_DIR, exist_ok=True)
+
+        if check_roots_and_latents(NODE_DIR, rootfinder='chandrupatla', verbose=verbose):
+            continue
+
+        skipping_node = False
+        if conf_dict[node]['node_type'] != 'source':
+            for parent in conf_dict[node]['parents']:
+                if not check_roots_and_latents(os.path.join(EXPERIMENT_DIR, parent), rootfinder='chandrupatla', verbose=verbose):
+                    skipping_node = True
+                    break
+
+        if skipping_node:
+            print(f"Skipping {node} as parent {parent} is not sampled yet.")
+            continue
+
+        latent_sample = torch.tensor(logistic.rvs(size=n), dtype=torch.float32).to(device)
+        if verbose:
+            print("-- sampled latents")
+
+        model_path = os.path.join(NODE_DIR, "best_model.pt")
+        tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose).to(device)
+        tram_model.load_state_dict(torch.load(model_path))
+        if verbose:
+            print("-- loaded modelweights")
+
+        dataset = SamplingDataset(node=node, EXPERIMENT_DIR=EXPERIMENT_DIR, rootfinder='chandrupatla', number_of_samples=n, conf_dict=conf_dict, transform=None)
+        sample_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+
+        output_list = []
+        with torch.no_grad():
+            for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
+                x = [xi.to(device) for xi in x]
+                int_input, shift_list = preprocess_inputs(x, device=device)
+                model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+                output_list.append(model_outputs)
+
+        if conf_dict[node]['node_type'] == 'source':
+            if verbose:
+                print("source node, Defaults to SI and 1 as inputs")
+            theta_single = output_list[0]['int_out'][0]
+            theta_single = transform_intercepts_continous(theta_single)
+            thetas_expanded = theta_single.repeat(n, 1)
+            shifts = torch.zeros(n, device=device)
+        else:
+            if verbose:
+                print("node has parents, previously sampled data is loaded for each pa(node)")
+            y_pred = merge_outputs(output_list, skip_nan=True)
+            shifts = y_pred['shift_out']
+            if shifts is None:
+                print("shift_out was None; defaulting to zeros.")
+                shifts = torch.zeros(n, device=device)
+            thetas = y_pred['int_out']
+            thetas_expanded = transform_intercepts_continous(thetas).squeeze()
+            shifts = shifts.squeeze()
+
+        low = torch.full((n,), -1e5, device=device)
+        high = torch.full((n,), 1e5, device=device)
+        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+
+        ## Root finder using Chandrupatla's method
+        def f_vectorized(targets):
+            return vectorized_object_function(
+                thetas_expanded,
+                targets,
+                shifts,
+                latent_sample,
+                k_min=min_max[0],
+                k_max=min_max[1]
+            )
+
+        root = chandrupatla_root_finder(
+            f_vectorized,
+            low,
+            high,
+            max_iter=10_000,
+            tol=1e-9
+        )
+
+        ## Saving
+        root_path = os.path.join(SAMPLING_DIR, "roots_chandrupatla.pt")
+        latents_path = os.path.join(SAMPLING_DIR, "latents.pt")
+
+        if torch.isnan(root).any():
+            print(f'Caution! Sampling for {node} consists of NaNs')
+
+        torch.save(root, root_path)
+        torch.save(latent_sample, latents_path)

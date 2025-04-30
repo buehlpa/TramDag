@@ -8,6 +8,9 @@ import json
 import time
 from functools import wraps
 import shutil
+from scipy.stats import logistic, kstest, anderson,probplot
+
+
 
 # Time decorator
 def timeit(name=None):
@@ -148,7 +151,46 @@ def load_history(node, experiment_dir):
         return train_loss_hist, val_loss_hist
     else:
         return None, None
-    
+
+
+def show_training_history(conf_dict,EXPERIMENT_DIR):
+    plt.figure(figsize=(14, 12))
+    # --- Full history (top plot) ---
+    plt.subplot(2, 1, 1)
+    for node in conf_dict:
+        train_hist, val_hist = load_history(node, EXPERIMENT_DIR)
+        if train_hist is None or val_hist is None:
+            print(f"No history found for node: {node}")
+            continue
+        epochs = range(1, len(train_hist) + 1)
+        plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
+        plt.plot(epochs, val_hist, label=f"{node} - val")
+    plt.title("Training and Validation Loss Across Nodes - Full History")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid(True)
+
+    # --- Last 10% of epochs (bottom plot) ---
+    plt.subplot(2, 1, 2)
+    for node in conf_dict:
+        train_hist, val_hist = load_history(node, EXPERIMENT_DIR)
+        if train_hist is None or val_hist is None:
+            continue
+        total_epochs = len(train_hist)
+        start_idx = int(total_epochs * 0.9)
+        epochs = range(start_idx + 1, total_epochs + 1)
+        plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
+        plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
+    plt.title("Training and Validation Loss - Last 10% of Epochs")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
 
 def model_train_val_paths(NODE_DIR):
     MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
@@ -267,3 +309,40 @@ def train_val_loop(start_epoch,
             ##### Epoch Summary #####
             print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
             print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
+
+
+
+
+def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
+    """
+    Evaluate how well the input data fits a standard logistic distribution.
+
+    Parameters:
+    - data: np.ndarray of raw sample values
+    - num_quantiles: Number of quantiles used in quantile-based metrics
+
+    Returns:
+    - dict with RMSE, MAE, KS test result, and Anderson-Darling statistic
+    """
+    data = np.asarray(data)
+    probs = np.linspace(0, 1, num_quantiles + 2)[1:-1]  # exclude 0 and 1
+    empirical_q = np.quantile(data, probs)
+    theoretical_q = logistic.ppf(probs)  # standard logistic: loc=0, scale=1
+
+    rmse = np.sqrt(np.mean((empirical_q - theoretical_q) ** 2))
+    mae = np.mean(np.abs(empirical_q - theoretical_q))
+
+    ks_stat, ks_pval = kstest(data, 'logistic')  # against standard logistic
+    ad_result = anderson(data, dist='logistic')
+    ad_stat = ad_result.statistic
+
+    return {
+        'quantile_rmse': rmse,
+        'quantile_mae': mae,
+        'ks_statistic': ks_stat,
+        'ks_pvalue': ks_pval,
+        'ad_statistic': ad_stat
+    }
+    
+
+

@@ -425,6 +425,54 @@ def sample_standard_logistic(shape, epsilon=1e-7, device=None):
 
     return logistic_samples
 
+def chandrupatla_root_finder(f, low, high, max_iter=10_000, tol=1e-8):
+    """
+    Fully vectorized PyTorch implementation of Chandrupatla's method.
+    Works on batched inputs (low/high shape: (n,))
+    """
+    a = low.clone()
+    b = high.clone()
+    c = a.clone()
+
+    fa = f(a)
+    fb = f(b)
+    fc = fa.clone()
+
+    for _ in trange(max_iter, desc="Chandrupatla root finding", leave=True):
+        cond = (fb != fc) & (fa != fc)
+        s_iqi = (
+            (a * fb * fc) / ((fa - fb) * (fa - fc)) +
+            (b * fa * fc) / ((fb - fa) * (fb - fc)) +
+            (c * fa * fb) / ((fc - fa) * (fc - fb))
+        )
+        s_secant = b - fb * (b - a) / (fb - fa)
+        s_bisect = (a + b) / 2
+
+        s = torch.where(cond, s_iqi, s_secant)
+
+        # Conditions to fall back to bisection
+        fallback = (
+            (s < torch.minimum(a, b)) |
+            (s > torch.maximum(a, b)) |
+            (torch.abs(s - b) >= torch.abs(b - c) / 2) |
+            (torch.abs(b - c) < tol)
+        )
+        s = torch.where(fallback, s_bisect, s)
+
+        fs = f(s)
+        c, fc = b.clone(), fb.clone()
+
+        use_lower = (fa * fs < 0)
+        b = torch.where(use_lower, s, b)
+        fb = torch.where(use_lower, fs, fb)
+        a = torch.where(use_lower, a, s)
+        fa = torch.where(use_lower, fa, fs)
+
+        converged = (torch.abs(b - a) < tol) | (torch.abs(fs) < tol)
+        if converged.all():
+            break
+
+    return (a + b) / 2
 
 
 def vectorized_object_function( thetas: torch.Tensor,targets: torch.Tensor, shifts: torch.Tensor,
