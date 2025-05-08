@@ -384,28 +384,26 @@ def sample_full_dag_chandru(conf_dict,
 
     if delete_all_previously_sampled:
         delete_all_samplings(conf_dict, EXPERIMENT_DIR)
-
+        
     for node in conf_dict:
         print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--')
         NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
         SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
         os.makedirs(SAMPLING_DIR, exist_ok=True)
-
+        
         if check_roots_and_latents(NODE_DIR, rootfinder='chandrupatla', verbose=verbose):
             continue
-
+        
         skipping_node = False
         if conf_dict[node]['node_type'] != 'source':
             for parent in conf_dict[node]['parents']:
                 if not check_roots_and_latents(os.path.join(EXPERIMENT_DIR, parent), rootfinder='chandrupatla', verbose=verbose):
                     skipping_node = True
                     break
-
+                
         if skipping_node:
             print(f"Skipping {node} as parent {parent} is not sampled yet.")
             continue
-
-
         
         min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
         max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
@@ -417,24 +415,41 @@ def sample_full_dag_chandru(conf_dict,
         
         if verbose:
             print("-- sampled latents")
-
+            
         model_path = os.path.join(NODE_DIR, "best_model.pt")
         tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose).to(device)
         tram_model.load_state_dict(torch.load(model_path))
+        
+
+            
         if verbose:
             print("-- loaded modelweights")
-
+            
         dataset = SamplingDataset(node=node, EXPERIMENT_DIR=EXPERIMENT_DIR, rootfinder='chandrupatla', number_of_samples=n, conf_dict=conf_dict, transform=None)
         sample_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-
+        
         output_list = []
         with torch.no_grad():
             for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
                 x = [xi.to(device) for xi in x]
                 int_input, shift_list = preprocess_inputs(x, device=device)
+                
+                
+                sm = tram_model.nn_shift[0]
+                print("shift_input[0].shape →", shift_list[0].shape)
+                print("fc1.out_features    →", sm.fc1.out_features)
+                print("bn1.num_features    →", sm.bn1.num_features)
+                
+                im = tram_model.nn_int
+                print("int_input.shape     →", int_input.shape)
+                print("int fc1.out_features→", im.fc1.out_features)
+                print("int bn1.num_features→", im.bn1.num_features)
+                
+                
+                
                 model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
                 output_list.append(model_outputs)
-
+                
         if conf_dict[node]['node_type'] == 'source':
             if verbose:
                 print("source node, Defaults to SI and 1 as inputs")
@@ -453,11 +468,10 @@ def sample_full_dag_chandru(conf_dict,
             thetas = y_pred['int_out']
             thetas_expanded = transform_intercepts_continous(thetas).squeeze()
             shifts = shifts.squeeze()
-
+            
         low = torch.full((n,), -1e5, device=device)
         high = torch.full((n,), 1e5, device=device)
-
-
+        
         ## Root finder using Chandrupatla's method
         def f_vectorized(targets):
             return vectorized_object_function(
@@ -468,7 +482,7 @@ def sample_full_dag_chandru(conf_dict,
                 k_min=min_max[0],
                 k_max=min_max[1]
             )
-
+            
         root = chandrupatla_root_finder(
             f_vectorized,
             low,
@@ -476,13 +490,13 @@ def sample_full_dag_chandru(conf_dict,
             max_iter=10_000,
             tol=1e-9
         )
-
+        
         ## Saving
         root_path = os.path.join(SAMPLING_DIR, "roots_chandrupatla.pt")
         latents_path = os.path.join(SAMPLING_DIR, "latents.pt")
-
+        
         if torch.isnan(root).any():
             print(f'Caution! Sampling for {node} consists of NaNs')
-
+            
         torch.save(root, root_path)
         torch.save(latent_sample, latents_path)
