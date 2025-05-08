@@ -46,8 +46,8 @@
             "x2": "cs"
         },
         "transformation_term_nn_models_in_h()": {
-            "x1": "ComplexInterceptDefaultTabular",
-            "x2": "ComplexShiftDefaultTabular"
+            "x1": "ComplexInterceptCustomTabular",
+            "x2": "ComplexShiftCustomTabular"
         },
         "min": -7.234604358673096,
         "max": 5.698736190795898

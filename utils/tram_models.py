@@ -80,12 +80,12 @@ class LinearShift(nn.Module):
 
 
 
-#################
+######################################################################################################
 #Tabular
-#################
+######################################################################################################
 
 
-# Default neural network for complex shift term 
+############################################### Default neural network for complex shift term and intercept
 class ComplexShiftDefaultTabular(nn.Module):
     """
     Complex shift term for tabular data. Can be any neural network architecture
@@ -137,12 +137,79 @@ class ComplexInterceptDefaultTabular(nn.Module):
         x = self.fc3(x)
         return x
     
+############################################### Deeper networks
+
+class ComplexShiftCustomTabular(nn.Module):
+    def __init__(self, n_features=1):
+        super().__init__()
+        # Block 1
+        self.fc1   = nn.Linear(n_features, 64)
+        self.bn1   = nn.BatchNorm1d(self.fc1.out_features)
+        self.relu1 = nn.ReLU()
+        # Block 2
+        self.fc2   = nn.Linear(64, 64)
+        self.bn2   = nn.BatchNorm1d(self.fc2.out_features)
+        self.relu2 = nn.ReLU()
+        # Block 3
+        self.fc3   = nn.Linear(64, 32)
+        self.bn3   = nn.BatchNorm1d(self.fc3.out_features)
+        self.relu3 = nn.ReLU()
+        # Block 4
+        self.fc4   = nn.Linear(32, 8)
+        self.bn4   = nn.BatchNorm1d(self.fc4.out_features)
+        self.relu4 = nn.ReLU()
+        # Output
+        self.fc5   = nn.Linear(8, 1, bias=False)
+    def forward(self, x):
+        x = self.relu1(self.bn1(self.fc1(x)))
+        x = self.relu2(self.bn2(self.fc2(x)))
+        x = self.relu3(self.bn3(self.fc3(x)))
+        x = self.relu4(self.bn4(self.fc4(x)))
+        return self.fc5(x)
 
 
-#################
+
+class ComplexInterceptCustomTabular(nn.Module):
+    """
+    Complex intercept term for tabular data.
+    Deeper architecture with Batch Normalization after each hidden layer.
+
+    Attributes:
+        n_thetas (int): number of output features/predictors
+    """
+    def __init__(self, n_thetas: int = 20):
+        super().__init__()
+        # First hidden block (1 → 64)
+        self.fc1   = nn.Linear(1, 64)
+        self.bn1   = nn.BatchNorm1d(self.fc1.out_features)
+        self.relu1 = nn.ReLU()
+        # Second hidden block (64 → 64)
+        self.fc2   = nn.Linear(64, 64)
+        self.bn2   = nn.BatchNorm1d(self.fc2.out_features)
+        self.relu2 = nn.ReLU()
+        # Third hidden block (64 → 32)
+        self.fc3   = nn.Linear(64, 32)
+        self.bn3   = nn.BatchNorm1d(self.fc3.out_features)
+        self.relu3 = nn.ReLU()
+        # Fourth hidden block (32 → 8)
+        self.fc4   = nn.Linear(32, 8)
+        self.bn4   = nn.BatchNorm1d(self.fc4.out_features)
+        self.relu4 = nn.ReLU()
+        # Output layer (8 → n_thetas, no bias)
+        self.fc5   = nn.Linear(8, n_thetas, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.relu1(self.bn1(self.fc1(x)))
+        x = self.relu2(self.bn2(self.fc2(x)))
+        x = self.relu3(self.bn3(self.fc3(x)))
+        x = self.relu4(self.bn4(self.fc4(x)))
+        return self.fc5(x)
+
+
+
+######################################################################################################
 #Iamges
-#################
-
+######################################################################################################
 
 class ComplexInterceptDefaultImage(nn.Module):
     """
