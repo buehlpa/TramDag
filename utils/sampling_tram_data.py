@@ -212,7 +212,7 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device):
         
         
         
-def inspect_trafo_standart_logistic(conf_dict,EXPERIMENT_DIR,train_df,val_df,device,verbose=False):
+def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
     batch_size = 4112
     for node in conf_dict:
         print(f'\n----*----------*-------------*--------h(data) should be standard logistic: {node} ------------*-----------------*-------------------*--')
@@ -229,7 +229,7 @@ def inspect_trafo_standart_logistic(conf_dict,EXPERIMENT_DIR,train_df,val_df,dev
 
         ##### 2. Dataloader
         train_loader, val_loader = get_dataloader(node, conf_dict, train_df, val_df, batch_size=batch_size, verbose=verbose)
-        
+
         #### 3. Forward Pass
         min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
         max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
@@ -238,7 +238,6 @@ def inspect_trafo_standart_logistic(conf_dict,EXPERIMENT_DIR,train_df,val_df,dev
         h_train_list, h_val_list = [], []
 
         with torch.no_grad():
-            print("\nProcessing training data...")
             for x, y in tqdm(train_loader, desc=f"Train loader ({node})", total=len(train_loader)):
                 y = y.to(device)
                 int_input, shift_list = preprocess_inputs(x, device=device)
@@ -246,7 +245,6 @@ def inspect_trafo_standart_logistic(conf_dict,EXPERIMENT_DIR,train_df,val_df,dev
                 h_train, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
                 h_train_list.extend(h_train.cpu().numpy())
 
-            print("\nProcessing validation data...")
             for x, y in tqdm(val_loader, desc=f"Val loader ({node})", total=len(val_loader)):
                 y = y.to(device)
                 int_input, shift_list = preprocess_inputs(x, device=device)
@@ -257,54 +255,45 @@ def inspect_trafo_standart_logistic(conf_dict,EXPERIMENT_DIR,train_df,val_df,dev
         h_train_array = np.array(h_train_list)
         h_val_array = np.array(h_val_list)
 
-        # Evaluate goodness-of-fit
-        train_metrics = evaluate_standard_logistic_fit(h_train_array)
-        val_metrics = evaluate_standard_logistic_fit(h_val_array)
-
-        # All four plots in one row
+        # Plotting
         fig, axs = plt.subplots(1, 4, figsize=(22, 5))
 
-        # Histogram: Training
+        # Train Histogram
         axs[0].hist(h_train_array, bins=50)
         axs[0].set_title(f'Train Histogram ({node})')
-        axs[0].set_xlabel('h_train values')
-        axs[0].set_ylabel('Frequency')
-        axs[0].grid(True)
 
-        # QQ plot: Training
+        # Train QQ Plot with R-style Confidence Bands
         probplot(h_train_array, dist="logistic", plot=axs[1])
-        axs[1].set_title(f'Train QQ Plot ({node})')
-        axs[1].grid(True)
-        axs[1].text(0.05, -0.25, 
-                    f"RMSE: {train_metrics['quantile_rmse']:.3f}\n"
-                    f"MAE: {train_metrics['quantile_mae']:.3f}\n"
-                    f"KS stat: {train_metrics['ks_statistic']:.3f}\n"
-                    f"KS p: {train_metrics['ks_pvalue']:.3f}\n"
-                    f"AD stat: {train_metrics['ad_statistic']:.3f}", 
-                    transform=axs[1].transAxes, fontsize=9, verticalalignment='top')
+        add_r_style_confidence_bands(axs[1], h_train_array)
 
-        # Histogram: Validation
+        # Validation Histogram
         axs[2].hist(h_val_array, bins=50)
         axs[2].set_title(f'Val Histogram ({node})')
-        axs[2].set_xlabel('h_val values')
-        axs[2].set_ylabel('Frequency')
-        axs[2].grid(True)
 
-        # QQ plot: Validation
+        # Validation QQ Plot with R-style Confidence Bands
         probplot(h_val_array, dist="logistic", plot=axs[3])
-        axs[3].set_title(f'Val QQ Plot ({node})')
-        axs[3].grid(True)
-        axs[3].text(0.05, -0.25, 
-                    f"RMSE: {val_metrics['quantile_rmse']:.3f}\n"
-                    f"MAE: {val_metrics['quantile_mae']:.3f}\n"
-                    f"KS stat: {val_metrics['ks_statistic']:.3f}\n"
-                    f"KS p: {val_metrics['ks_pvalue']:.3f}\n"
-                    f"AD stat: {val_metrics['ad_statistic']:.3f}", 
-                    transform=axs[3].transAxes, fontsize=9, verticalalignment='top')
+        add_r_style_confidence_bands(axs[3], h_val_array)
 
         plt.suptitle(f'Distribution Diagnostics for Node: {node}', fontsize=14)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
+
+
+def add_r_style_confidence_bands(ax, data):
+    sorted_data = np.sort(data)
+    n = len(sorted_data)
+    quantiles = np.linspace(0.5 / n, 1 - 0.5 / n, n)
+
+    theoretical_quantiles = logistic.ppf(quantiles)
+    se = (theoretical_quantiles * (1 - theoretical_quantiles)) / np.sqrt(n)    # 
+
+    lower_band = theoretical_quantiles - 1.96 * se
+    upper_band = theoretical_quantiles + 1.96 * se
+
+    ax.plot(theoretical_quantiles, lower_band, linestyle='--', color='red', label='95% Confidence Band')
+    ax.plot(theoretical_quantiles, upper_band, linestyle='--', color='red')
+    ax.legend()
+
         
         
 def show_samples_vs_true(df,conf_dict,EXPERIMENT_DIR,rootfinder='chandrupatla'):
