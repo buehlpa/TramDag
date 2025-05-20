@@ -149,7 +149,7 @@ def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
             
             
 
-def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device):
+def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
     verbose=False
     n=1000
     for node in conf_dict:
@@ -185,7 +185,7 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device):
         theta_single=transform_intercepts_continous(theta_single)
         thetas_expanded = theta_single.repeat(n, 1).to(device)  # Shape: (n, 20)
         
-        targets2 = torch.linspace(0, 1, steps=n).to(device)  # 1000 points from 0 to 1
+        targets2 = torch.linspace(xmin_plot, xmax_plot, steps=n).to(device)  # 1000 points from 0 to 1
         
         min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
         max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
