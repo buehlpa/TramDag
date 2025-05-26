@@ -35,7 +35,7 @@ from utils.sampling_tram_data import *
 
 # 1. Experiments and Paths
 
-experiment_name = "reproduce_vaca"   ## <--- set experiment name
+experiment_name = "reproduce_vaca_CI"   ## <--- set experiment name
 seed=42
 np.random.seed(seed)
 
@@ -122,7 +122,7 @@ print(f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: 
 # Example 1 dgp tramdag paper  3x3: 
 data_type={'x1':'cont','x2':'cont','x3':'cont'}  # continous , images , ordinal
 adj_matrix = np.array([
-    [ "0", "ls", "ci"],  # A -> B (cs), A -> C (ls)
+    [ "0", "ci", "ci"],  # A -> B (cs), A -> C (ls)
     [ "0", "0", "cs"],  # B -> D (ls)
     [ "0", "0", "0"],  # C -> D (cs)
 ], object)
