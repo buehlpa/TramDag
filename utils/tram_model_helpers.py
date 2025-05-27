@@ -199,6 +199,119 @@ def model_train_val_paths(NODE_DIR):
     VAL_HIST_PATH = os.path.join(NODE_DIR, "val_loss_hist.json")
     return MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH
 
+# def train_val_loop(start_epoch,
+#                    epochs,
+#                    tram_model,
+#                    train_loader,
+#                    val_loader,
+#                    train_loss_hist,
+#                    val_loss_hist,
+#                    best_val_loss,
+#                    device,
+#                    optimizer,
+#                    use_scheduler,
+#                    scheduler,
+#                    min_max,
+#                    NODE_DIR):
+    
+#         """
+#         Executes the training and validation loop for the specified model.
+
+#         Args:
+#             start_epoch (int): The starting epoch number, useful for resuming training.
+#             epochs (int): Total number of epochs to train the model.
+#             tram_model (torch.nn.Module): The model to be trained and validated.
+#             train_loader (torch.utils.data.DataLoader): DataLoader for training data.
+#             val_loader (torch.utils.data.DataLoader): DataLoader for validation data.
+#             train_loss_hist (list): A list to store training loss values per epoch.
+#             val_loss_hist (list): A list to store validation loss values per epoch.
+#             best_val_loss (float): The current best validation loss; used for saving the best model.
+#             device (torch.device): The device to run the computations on (CPU or GPU).
+#             optimizer (torch.optim.Optimizer): Optimizer used to update model weights.
+#             use_scheduler (bool): Whether to use a learning rate scheduler.
+#             scheduler (torch.optim.lr_scheduler._LRScheduler): Scheduler to adjust learning rate.
+#             min_max (tuple): Tuple of (min, max) values for normalization used in the loss function.
+#             NODE_DIR (str): Directory path where model and training history should be saved.
+
+#         Saves:
+#             - Best model (with lowest validation loss) to a predefined path.
+#             - Last model of current epoch.
+#             - Training and validation loss histories as JSON files.
+
+#         Prints:
+#             - Training and validation losses per epoch.
+#             - Time taken for training, validation, and saving for each epoch.
+#         """
+    
+#         MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH=model_train_val_paths(NODE_DIR)
+#         for epoch in range(start_epoch, epochs):
+#             epoch_start = time.time()
+
+#             #####  Training #####
+#             train_start = time.time()
+#             train_loss = 0.0
+#             tram_model.train()
+#             for x, y in train_loader:
+#                 optimizer.zero_grad()
+#                 y = y.to(device)
+
+#                 int_input, shift_list = preprocess_inputs(x, device=device)
+
+#                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+#                 loss = contram_nll(y_pred, y, min_max=min_max)
+#                 loss.backward()
+#                 optimizer.step()
+
+
+#                 if use_scheduler:
+#                     scheduler.step()
+
+#                 train_loss += loss.item()
+#             train_time = time.time() - train_start
+
+#             avg_train_loss = train_loss / len(train_loader)
+#             train_loss_hist.append(avg_train_loss)
+
+#             ##### Validation #####
+#             val_start = time.time()
+#             val_loss = 0.0
+#             tram_model.eval()
+            
+#             with torch.no_grad():
+#                 for x, y in val_loader:
+#                     y = y.to(device)
+#                     int_input, shift_list = preprocess_inputs(x, device=device)
+#                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+#                     loss = contram_nll(y_pred, y, min_max=min_max)
+#                     val_loss += loss.item()
+#             val_time = time.time() - val_start
+
+#             avg_val_loss = val_loss / len(val_loader)
+#             val_loss_hist.append(avg_val_loss)
+
+#             ##### Saving #####
+#             save_start = time.time()
+#             if avg_val_loss < best_val_loss:
+#                 best_val_loss = avg_val_loss
+#                 torch.save(tram_model.state_dict(), MODEL_PATH)
+#                 print("Saved new best model.")
+
+#             torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
+
+#             with open(TRAIN_HIST_PATH, 'w') as f:
+#                 json.dump(train_loss_hist, f)
+#             with open(VAL_HIST_PATH, 'w') as f:
+#                 json.dump(val_loss_hist, f)
+#             save_time = time.time() - save_start
+
+#             epoch_total = time.time() - epoch_start
+
+#             ##### Epoch Summary #####
+#             print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+#             print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
+
+from torch.cuda.amp import autocast, GradScaler
+
 def train_val_loop(start_epoch,
                    epochs,
                    tram_model,
@@ -213,104 +326,110 @@ def train_val_loop(start_epoch,
                    scheduler,
                    min_max,
                    NODE_DIR):
-    
-        """
-        Executes the training and validation loop for the specified model.
 
-        Args:
-            start_epoch (int): The starting epoch number, useful for resuming training.
-            epochs (int): Total number of epochs to train the model.
-            tram_model (torch.nn.Module): The model to be trained and validated.
-            train_loader (torch.utils.data.DataLoader): DataLoader for training data.
-            val_loader (torch.utils.data.DataLoader): DataLoader for validation data.
-            train_loss_hist (list): A list to store training loss values per epoch.
-            val_loss_hist (list): A list to store validation loss values per epoch.
-            best_val_loss (float): The current best validation loss; used for saving the best model.
-            device (torch.device): The device to run the computations on (CPU or GPU).
-            optimizer (torch.optim.Optimizer): Optimizer used to update model weights.
-            use_scheduler (bool): Whether to use a learning rate scheduler.
-            scheduler (torch.optim.lr_scheduler._LRScheduler): Scheduler to adjust learning rate.
-            min_max (tuple): Tuple of (min, max) values for normalization used in the loss function.
-            NODE_DIR (str): Directory path where model and training history should be saved.
+    """
+    Executes the training and validation loop for the specified model using AMP.
 
-        Saves:
-            - Best model (with lowest validation loss) to a predefined path.
-            - Last model of current epoch.
-            - Training and validation loss histories as JSON files.
+    Args:
+        start_epoch (int): The starting epoch number, useful for resuming training.
+        epochs (int): Total number of epochs to train the model.
+        tram_model (torch.nn.Module): The model to be trained and validated.
+        train_loader (torch.utils.data.DataLoader): DataLoader for training data.
+        val_loader (torch.utils.data.DataLoader): DataLoader for validation data.
+        train_loss_hist (list): A list to store training loss values per epoch.
+        val_loss_hist (list): A list to store validation loss values per epoch.
+        best_val_loss (float): The current best validation loss; used for saving the best model.
+        device (torch.device): The device to run the computations on (CPU or GPU).
+        optimizer (torch.optim.Optimizer): Optimizer used to update model weights.
+        use_scheduler (bool): Whether to use a learning rate scheduler.
+        scheduler (torch.optim.lr_scheduler._LRScheduler): Scheduler to adjust learning rate.
+        min_max (tuple): Tuple of (min, max) values for normalization used in the loss function.
+        NODE_DIR (str): Directory path where model and training history should be saved.
 
-        Prints:
-            - Training and validation losses per epoch.
-            - Time taken for training, validation, and saving for each epoch.
-        """
-    
-        MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH=model_train_val_paths(NODE_DIR)
-        for epoch in range(start_epoch, epochs):
-            epoch_start = time.time()
+    Saves:
+        - Best model (with lowest validation loss) to a predefined path.
+        - Last model of current epoch.
+        - Training and validation loss histories as JSON files.
 
-            #####  Training #####
-            train_start = time.time()
-            train_loss = 0.0
-            tram_model.train()
-            for x, y in train_loader:
-                optimizer.zero_grad()
-                y = y.to(device)
+    Prints:
+        - Training and validation losses per epoch.
+        - Time taken for training, validation, and saving for each epoch.
+    """
 
-                int_input, shift_list = preprocess_inputs(x, device=device)
+    MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
+    scaler = GradScaler()
 
+    for epoch in range(start_epoch, epochs):
+        epoch_start = time.time()
+
+        ##### Training #####
+        train_start = time.time()
+        train_loss = 0.0
+        tram_model.train()
+
+        for x, y in train_loader:
+            optimizer.zero_grad()
+            y = y.to(device)
+
+            int_input, shift_list = preprocess_inputs(x, device=device)
+
+            with autocast():
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 loss = contram_nll(y_pred, y, min_max=min_max)
-                loss.backward()
-                optimizer.step()
 
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
-                if use_scheduler:
-                    scheduler.step()
+            if use_scheduler:
+                scheduler.step()
 
-                train_loss += loss.item()
-            train_time = time.time() - train_start
+            train_loss += loss.item()
 
-            avg_train_loss = train_loss / len(train_loader)
-            train_loss_hist.append(avg_train_loss)
+        train_time = time.time() - train_start
+        avg_train_loss = train_loss / len(train_loader)
+        train_loss_hist.append(avg_train_loss)
 
-            ##### Validation #####
-            val_start = time.time()
-            val_loss = 0.0
-            tram_model.eval()
-            
-            with torch.no_grad():
-                for x, y in val_loader:
-                    y = y.to(device)
-                    int_input, shift_list = preprocess_inputs(x, device=device)
+        ##### Validation #####
+        val_start = time.time()
+        val_loss = 0.0
+        tram_model.eval()
+
+        with torch.no_grad():
+            for x, y in val_loader:
+                y = y.to(device)
+                int_input, shift_list = preprocess_inputs(x, device=device)
+
+                with autocast():
                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                     loss = contram_nll(y_pred, y, min_max=min_max)
-                    val_loss += loss.item()
-            val_time = time.time() - val_start
 
-            avg_val_loss = val_loss / len(val_loader)
-            val_loss_hist.append(avg_val_loss)
+                val_loss += loss.item()
 
-            ##### Saving #####
-            save_start = time.time()
-            if avg_val_loss < best_val_loss:
-                best_val_loss = avg_val_loss
-                torch.save(tram_model.state_dict(), MODEL_PATH)
-                print("Saved new best model.")
+        val_time = time.time() - val_start
+        avg_val_loss = val_loss / len(val_loader)
+        val_loss_hist.append(avg_val_loss)
 
-            torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
+        ##### Saving #####
+        save_start = time.time()
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            torch.save(tram_model.state_dict(), MODEL_PATH)
+            print("Saved new best model.")
 
-            with open(TRAIN_HIST_PATH, 'w') as f:
-                json.dump(train_loss_hist, f)
-            with open(VAL_HIST_PATH, 'w') as f:
-                json.dump(val_loss_hist, f)
-            save_time = time.time() - save_start
+        torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
 
-            epoch_total = time.time() - epoch_start
+        with open(TRAIN_HIST_PATH, 'w') as f:
+            json.dump(train_loss_hist, f)
+        with open(VAL_HIST_PATH, 'w') as f:
+            json.dump(val_loss_hist, f)
 
-            ##### Epoch Summary #####
-            print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-            print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
+        save_time = time.time() - save_start
+        epoch_total = time.time() - epoch_start
 
-
+        ##### Epoch Summary #####
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+        print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
 
 
 def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
