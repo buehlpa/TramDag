@@ -199,6 +199,8 @@ def model_train_val_paths(NODE_DIR):
     VAL_HIST_PATH = os.path.join(NODE_DIR, "val_loss_hist.json")
     return MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH
 
+
+# old test val loop 27.5
 # def train_val_loop(start_epoch,
 #                    epochs,
 #                    tram_model,
