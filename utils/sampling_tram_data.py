@@ -27,6 +27,7 @@ class SamplingDataset(Dataset):
         self.rootfinder=rootfinder
         self.variables = None if conf_dict is None else self._ordered_keys()
         self.datatensors = self._get_sampled_parent_tensors()# shape: (num_parents, num_samples, dim)
+        _,self.transformation_terms_in_h, _ = ordered_parents(self.node, self.conf_dict)
 
     def _get_sampled_parent_tensors(self):
         ## loads parent roots if they are available 
@@ -54,9 +55,13 @@ class SamplingDataset(Dataset):
 
     def __getitem__(self, idx):
         x_data = []
-
+        
         if self.conf_dict is None or self.conf_dict[self.node]['node_type'] == 'source':
             return (torch.tensor([1.0], dtype=torch.float32),)
+
+        if all('i' not in str(value) for value in self.transformation_terms_in_h.values()):
+            x = torch.tensor(1.0) 
+            x_data.append(x)
 
         for i, var in enumerate(self.variables):
             if self.conf_dict[var]['data_type'] == "cont":
@@ -279,24 +284,34 @@ def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df,
         plt.show()
 
 
-def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95):
+
+def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95, simulations=1000):
     """
-    Adds confidence bands to a QQ plot around the theoretical quantiles.
-    These are based on order statistics and the binomial distribution.
+    Adds accurate confidence bands to a QQ plot using simulation under the null hypothesis.
     """
     n = len(sample)
-    quantiles = np.linspace(0.001, 0.999, n)
+    quantiles = np.linspace(0, 1, n, endpoint=False) + 0.5 / n
     theo_q = dist.ppf(quantiles)
+
+    # Simulate order statistics from the theoretical distribution
+    sim_data = dist.rvs(size=(simulations, n))
+    sim_order_stats = np.sort(sim_data, axis=1)
+
+    # Compute confidence bands for each order statistic
+    lower = np.percentile(sim_order_stats, 100 * (1 - confidence) / 2, axis=0)
+    upper = np.percentile(sim_order_stats, 100 * (1 + confidence) / 2, axis=0)
+
+    # Sort the empirical sample
     sample_sorted = np.sort(sample)
 
-    # Compute confidence interval for each order statistic
-    alpha = 1 - confidence
-    lower_ci = dist.ppf(np.maximum(quantiles - 1.96 * np.sqrt(quantiles * (1 - quantiles) / n), 0.001))
-    upper_ci = dist.ppf(np.minimum(quantiles + 1.96 * np.sqrt(quantiles * (1 - quantiles) / n), 0.999))
+    # Plot the empirical Q-Q line
+    ax.plot(theo_q, sample_sorted, 'o', markersize=3, alpha=0.6)
+    ax.plot(theo_q, theo_q, 'r--', label='y = x')
 
-    # Plot the confidence band
-    ax.fill_between(theo_q, lower_ci, upper_ci, color='gray', alpha=0.3, label='95% CI')
+    # Confidence band
+    ax.fill_between(theo_q, lower, upper, color='gray', alpha=0.3, label=f'{int(confidence*100)}% CI')
     ax.legend()
+
 
         
         
