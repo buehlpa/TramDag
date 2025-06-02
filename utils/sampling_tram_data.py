@@ -279,19 +279,23 @@ def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df,
         plt.show()
 
 
-def add_r_style_confidence_bands(ax, data):
-    sorted_data = np.sort(data)
-    n = len(sorted_data)
-    quantiles = np.linspace(0.5 / n, 1 - 0.5 / n, n)
+def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95):
+    """
+    Adds confidence bands to a QQ plot around the theoretical quantiles.
+    These are based on order statistics and the binomial distribution.
+    """
+    n = len(sample)
+    quantiles = np.linspace(0.001, 0.999, n)
+    theo_q = dist.ppf(quantiles)
+    sample_sorted = np.sort(sample)
 
-    theoretical_quantiles = logistic.ppf(quantiles)
-    se = (theoretical_quantiles * (1 - theoretical_quantiles)) / np.sqrt(n)    # 
+    # Compute confidence interval for each order statistic
+    alpha = 1 - confidence
+    lower_ci = dist.ppf(np.maximum(quantiles - 1.96 * np.sqrt(quantiles * (1 - quantiles) / n), 0.001))
+    upper_ci = dist.ppf(np.minimum(quantiles + 1.96 * np.sqrt(quantiles * (1 - quantiles) / n), 0.999))
 
-    lower_band = theoretical_quantiles - 1.96 * se
-    upper_band = theoretical_quantiles + 1.96 * se
-
-    ax.plot(theoretical_quantiles, lower_band, linestyle='--', color='red', label='95% Confidence Band')
-    ax.plot(theoretical_quantiles, upper_band, linestyle='--', color='red')
+    # Plot the confidence band
+    ax.fill_between(theo_q, lower_ci, upper_ci, color='gray', alpha=0.3, label='95% CI')
     ax.legend()
 
         
