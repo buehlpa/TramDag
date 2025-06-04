@@ -305,8 +305,8 @@ def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95, sim
     sample_sorted = np.sort(sample)
 
     # Plot the empirical Q-Q line
-    ax.plot(theo_q, sample_sorted, 'o', markersize=3, alpha=0.6)
-    ax.plot(theo_q, theo_q, 'r--', label='y = x')
+    ax.plot(theo_q, sample_sorted, linestyle='None', marker='o', markersize=3, alpha=0.6)
+    ax.plot(theo_q, theo_q, 'b--', label='y = x')
 
     # Confidence band
     ax.fill_between(theo_q, lower, upper, color='gray', alpha=0.3, label=f'{int(confidence*100)}% CI')
@@ -434,6 +434,10 @@ def sample_full_dag_chandru(conf_dict,
             print("-- loaded modelweights")
             
         dataset = SamplingDataset(node=node, EXPERIMENT_DIR=EXPERIMENT_DIR, rootfinder='chandrupatla', number_of_samples=n, conf_dict=conf_dict, transform=None)
+        
+        
+        
+        
         sample_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
         
         output_list = []
@@ -441,20 +445,6 @@ def sample_full_dag_chandru(conf_dict,
             for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
                 x = [xi.to(device) for xi in x]
                 int_input, shift_list = preprocess_inputs(x, device=device)
-                
-                
-                sm = tram_model.nn_shift[0]
-                print("shift_input[0].shape →", shift_list[0].shape)
-                print("fc1.out_features    →", sm.fc1.out_features)
-                print("bn1.num_features    →", sm.bn1.num_features)
-                
-                im = tram_model.nn_int
-                print("int_input.shape     →", int_input.shape)
-                print("int fc1.out_features→", im.fc1.out_features)
-                print("int bn1.num_features→", im.bn1.num_features)
-                
-                
-                
                 model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
                 output_list.append(model_outputs)
                 

@@ -309,7 +309,12 @@ def train_val_loop(start_epoch,
                 # Prepare current epoch's shift weights
                 epoch_weights = {}
                 for i in range(len(tram_model.nn_shift)):
-                    epoch_weights[f"shift_{i}"] = tram_model.nn_shift[i].fc.weight.detach().cpu().tolist()
+                    shift_layer = tram_model.nn_shift[i]
+                    
+                    if hasattr(shift_layer, 'fc') and hasattr(shift_layer.fc, 'weight'):
+                        epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
+                    else:
+                        print(f"shift_{i}: 'fc' or 'weight' layer does not exist.")
                 
                 # Add to the dictionary under current epoch
                 all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
