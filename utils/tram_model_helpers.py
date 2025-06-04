@@ -214,7 +214,8 @@ def train_val_loop(start_epoch,
                    use_scheduler,
                    scheduler,
                    min_max,
-                   NODE_DIR):
+                   NODE_DIR,
+                   save_linear_shifts=False):
     
         """
         Executes the training and validation loop for the specified model.
@@ -284,12 +285,40 @@ def train_val_loop(start_epoch,
                     y = y.to(device)
                     int_input, shift_list = preprocess_inputs(x, device=device)
                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+
                     loss = contram_nll(y_pred, y, min_max=min_max)
                     val_loss += loss.item()
             val_time = time.time() - val_start
 
             avg_val_loss = val_loss / len(val_loader)
             val_loss_hist.append(avg_val_loss)
+
+            ##### Save linear shift weights #####
+
+            if save_linear_shifts and tram_model.nn_shift is not None:
+                # Define the path for the cumulative JSON file
+                shift_path = os.path.join(NODE_DIR, "linear_shifts_all_epochs.json")
+
+                # Load existing data if the file exists
+                if os.path.exists(shift_path):
+                    with open(shift_path, 'r') as f:
+                        all_shift_weights = json.load(f)
+                else:
+                    all_shift_weights = {}
+
+                # Prepare current epoch's shift weights
+                epoch_weights = {}
+                for i in range(len(tram_model.nn_shift)):
+                    epoch_weights[f"shift_{i}"] = tram_model.nn_shift[i].fc.weight.detach().cpu().tolist()
+                
+                # Add to the dictionary under current epoch
+                all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
+
+                # Write back the updated dictionary
+                with open(shift_path, 'w') as f:
+                    json.dump(all_shift_weights, f)
+
+                print(f"Appended linear shift weights for epoch {epoch+1} to: {shift_path}")
 
             ##### Saving #####
             save_start = time.time()
