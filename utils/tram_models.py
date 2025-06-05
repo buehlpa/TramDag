@@ -54,7 +54,7 @@ class SimpleIntercept(nn.Module):
     """
     Intercept term , hI()
     Attributes:
-        n_thetas (int): how many output thetas, for ordinal target this is the number of classes - 1
+        n_thetas (int): how many output thetas, for ordinal target this is the number of classes - 1, thetas are order of bernsteinpol() in continous case
     """
     def __init__(self, n_thetas=20):
         super(SimpleIntercept, self).__init__()  

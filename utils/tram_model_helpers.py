@@ -132,7 +132,7 @@ def preprocess_inputs(x, device='cuda'):
     x = [xi.unsqueeze(1) for xi in x]  # shape: (B, 1, ...)
     x = [xi.to(device, non_blocking=True) for xi in x]  # single device transfer
 
-    int_inputs = x[0]
+    int_inputs = x[0]  # TODO remove hardcoded stuff   use tuple as input 
     shift_list = x[1:] if len(x) > 1 else None
 
     return int_inputs, shift_list

@@ -34,7 +34,7 @@ from utils.continous import *
 from utils.sampling_tram_data import *
 
 
-experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_1_std"   ## <--- set experiment name
+experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std"   ## <--- set experiment name
 seed=42
 np.random.seed(seed)
 
@@ -133,19 +133,18 @@ else:
 train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42)
 val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
 
-# 2. Normalize each split individually (per feature)
-def normalize_df(df):
-    return (df - df.min()) / (df.max() - df.min())
+# 2. Compute quantiles from training data
+quantiles = train_df.quantile([0.025, 0.975])
+min_vals = quantiles.loc[0.025]
+max_vals = quantiles.loc[0.975]
 
-train_norm = normalize_df(train_df)
-val_norm = normalize_df(val_df)
-test_norm = normalize_df(test_df)
+# 3. Normalize all sets using training quantiles
+def normalize_with_quantiles(df, min_vals, max_vals):
+    return (df - min_vals) / (max_vals - min_vals)
 
-# 3. Compute quantiles from normalized training data
-quantiles = train_norm.quantile([0.025, 0.975])
-min_vals = quantiles.loc[0.025].values.astype(np.float32)
-max_vals = quantiles.loc[0.975].values.astype(np.float32)
-
+train_norm = normalize_with_quantiles(train_df, min_vals, max_vals)
+val_norm = normalize_with_quantiles(val_df, min_vals, max_vals)
+test_norm = normalize_with_quantiles(test_df, min_vals, max_vals)
 
 
 print(f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}")
