@@ -24,13 +24,18 @@ def contram_nll(outputs, targets, min_max,return_h=False):
         # If no shift model is provided, set Shifts to zero
         Shifts = torch.zeros_like(thetas[:, 0])
     else:
-        Shifts = torch.stack(outputs['shift_out'])  # shape (n,)
-    
+        # Shifts = torch.stack(outputs['shift_out'])  # shape (n,) old
+        Shifts = torch.stack(outputs['shift_out'], dim=0)        # (n_shifts, B, 1)
+
 
     # Compute h
     h_I = h_extrapolated(thetas, targets, min_val, max_val)  # shape (n,)
-    h = h_I + torch.sum(Shifts)  # shape (n,)
-
+    
+    #h = h_I + torch.sum(Shifts)  # shape (n,) old
+    
+    Shifts = torch.sum(Shifts, dim=0).squeeze(-1)            # (B,)
+    h = h_I + Shifts 
+    
     # Latent logistic density log-prob
     log_latent_density = -h - 2 * torch.nn.functional.softplus(-h)  # shape (n,)
 

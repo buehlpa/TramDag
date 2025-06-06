@@ -185,7 +185,7 @@ DEV_TRAINING=True
 train_list=['x1','x2','x3']#['x1']#['x1','x2','x3']#,#,['x1','x2','x3'] # <-  set the nodes which have to be trained , useful if further training is required else lsit all vars
 
 batch_size = 256
-epochs = 200  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
+epochs = 2000  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
 use_scheduler = True
 
 
