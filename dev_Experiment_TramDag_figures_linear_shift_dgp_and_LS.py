@@ -34,8 +34,8 @@ from utils.continous import *
 from utils.sampling_tram_data import *
 
 
-experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std3"   ## <--- set experiment name
-n_obs=10_000                                                ## <--- set number of samples
+experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std8"   ## <--- set experiment name
+n_obs=40_000                                                ## <--- set number of samples
 
 seed=42
 np.random.seed(seed)
@@ -48,7 +48,7 @@ os.makedirs(EXPERIMENT_DIR,exist_ok=True)
 
 # 1. Linear-shift DGP and linear-shift model 
 def f(x):
-    return 0.3*x  
+    return -0.3*x  
 
 def dgp(n_obs, doX=[None, None, None], seed=-1):
     if seed > 0:
@@ -84,25 +84,25 @@ def dgp(n_obs, doX=[None, None, None], seed=-1):
     
     if doX[1] is None:
         u2 = np.random.uniform(size=n_obs)
-        x2_dash = logit(u2)
-        x2 = (x2_dash - 2 * x1) / 0.42 
+        z2 = logit(u2)
+        x2 = (z2 - 2 * x1) / 5#   0.42  in the trainagle strucutred cont last line is 5 for SI
     else:
         x2 = np.full(n_obs, doX[1])
 
     # Generate x3
     
-    # h(x3|x2,x1)= Bernsteinpol(x3) + beta3 * x1 + f(X2)        | bernsteinpol is just linearized assumed with a constant factor say 0.63
-    # h(x3|x2,x1)= 0.63*x3 + beta3 * x1          + f(X2)        | replace h(x2|x1) with z
-    # z          = 0.63*x3 + beta3 * x1          + f(X2)        | reformulate to x2
-    # x3         = (z-beta3 * x1 -f(X2))/0.63                   | sample z from standart logistic via uniform and logit(np.random.uniform(size=n_obs))
-    # x3         = (z-beta3 * x1 -f(X2))/0.63                   | set beta = -0.2 (on the edge of the graph)
-    # x3         = (z+0.2 * x1   -f(X2))/0.63                   | 
+    # h(x3|x2,x1)= Bernsteinpol(x3) + beta3 * x1 -f(X2)        | bernsteinpol is just linearized assumed with a constant factor say 0.63
+    # h(x3|x2,x1)= 0.63*x3 + beta3 * x1          - f(X2)        | replace h(x2|x1) with z
+    # z3          = 0.63*x3 + beta3 * x1          - f(X2)        | reformulate to x2
+    # x3         = (z3-beta3 * x1 +f(X2))/0.63                   | sample z from standart logistic via uniform and logit(np.random.uniform(size=n_obs))
+    # x3         = (z3-beta3 * x1 +f(X2))/0.63                   | set beta = -0.2 (on the edge of the graph)
+    # x3         = (z3+0.2 * x1   +f(X2))/0.63                   | 
 
     
     if doX[2] is None:
         u3 = np.random.uniform(size=n_obs)
-        x3_dash = logit(u3)
-        x3 = (x3_dash + 0.2 * x1 - f(x2)) / 0.63
+        z3 = logit(u3)
+        x3 = (z3 + 0.2 * x1 + f(x2)) / 0.63
     else:
         x3 = np.full(n_obs, doX[2])
 
@@ -145,9 +145,9 @@ max_vals = quantiles.loc[0.975]
 def normalize_with_quantiles(df, min_vals, max_vals):
     return (df - min_vals) / (max_vals - min_vals)
 
-train_df = normalize_with_quantiles(train_df, min_vals, max_vals)
-val_df = normalize_with_quantiles(val_df, min_vals, max_vals)
-test_df = normalize_with_quantiles(test_df, min_vals, max_vals)
+# train_df = normalize_with_quantiles(train_df, min_vals, max_vals)
+# val_df = normalize_with_quantiles(val_df, min_vals, max_vals)
+# test_df = normalize_with_quantiles(test_df, min_vals, max_vals)
 
 print(f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}")
 
@@ -184,7 +184,7 @@ print(f"Configuration saved to {CONF_DICT_PATH}")
 DEV_TRAINING=True
 train_list=['x1','x2','x3']#['x1']#['x1','x2','x3']#,#,['x1','x2','x3'] # <-  set the nodes which have to be trained , useful if further training is required else lsit all vars
 
-batch_size = 256
+batch_size = 32
 epochs = 2000  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
 use_scheduler = True
 
