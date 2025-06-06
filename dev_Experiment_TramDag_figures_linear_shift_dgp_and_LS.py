@@ -34,7 +34,7 @@ from utils.continous import *
 from utils.sampling_tram_data import *
 
 
-experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std"   ## <--- set experiment name
+experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std2"   ## <--- set experiment name
 seed=42
 np.random.seed(seed)
 
@@ -108,13 +108,13 @@ def dgp(n_obs, doX=[None, None, None], seed=-1):
     return df
 
 
-df = dgp(n_obs=10_000, seed=42)
+df = dgp(n_obs=100_000, seed=42)
 
 EXP_DATA_PATH=os.path.join(EXPERIMENT_DIR, f"{experiment_name}.csv")
 
 
 if not os.path.exists(EXP_DATA_PATH):
-    df = dgp(n_obs=10_000)
+    df = dgp(n_obs=100_000)
 
     print(df.head())
     df.to_csv(EXP_DATA_PATH, index=False)
@@ -142,10 +142,9 @@ max_vals = quantiles.loc[0.975]
 def normalize_with_quantiles(df, min_vals, max_vals):
     return (df - min_vals) / (max_vals - min_vals)
 
-train_norm = normalize_with_quantiles(train_df, min_vals, max_vals)
-val_norm = normalize_with_quantiles(val_df, min_vals, max_vals)
-test_norm = normalize_with_quantiles(test_df, min_vals, max_vals)
-
+train_df = normalize_with_quantiles(train_df, min_vals, max_vals)
+val_df = normalize_with_quantiles(val_df, min_vals, max_vals)
+test_df = normalize_with_quantiles(test_df, min_vals, max_vals)
 
 print(f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}")
 
@@ -163,8 +162,6 @@ adj_matrix = np.array([
 plot_seed=5
 
 nn_names_matrix= create_nn_model_names(adj_matrix,data_type)
-
-
 
 conf_dict=get_configuration_dict(adj_matrix,nn_names_matrix, data_type)
 # write min max to conf dict
@@ -184,8 +181,8 @@ print(f"Configuration saved to {CONF_DICT_PATH}")
 DEV_TRAINING=True
 train_list=['x1','x2','x3']#['x1']#['x1','x2','x3']#,#,['x1','x2','x3'] # <-  set the nodes which have to be trained , useful if further training is required else lsit all vars
 
-batch_size = 512
-epochs = 1000  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
+batch_size = 256
+epochs = 2000  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
 use_scheduler = True
 
 
@@ -238,12 +235,17 @@ for node in conf_dict:
         continue
 
     ########################## 5. Optimizer & Scheduler ######################
-    optimizer = torch.optim.AdamW(tram_model.parameters(), lr=0.1, eps=1e-8, weight_decay=1e-2)
+    # optimizer = torch.optim.AdamW(tram_model.parameters(), lr=0.1, eps=1e-8, weight_decay=1e-2)
     
-    if use_scheduler:
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
-    else:
-        scheduler = None
+    # if use_scheduler:
+    #     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+    # else:
+    #     scheduler = None
+
+    ########################## 5. Optimizer & Scheduler ######################
+    optimizer = torch.optim.Adam(tram_model.parameters(), lr=1e-4)
+
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     ########################## 6. Min/Max Tensor #############################
     min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
