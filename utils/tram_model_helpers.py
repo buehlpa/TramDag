@@ -266,10 +266,13 @@ def train_val_loop(start_epoch,
                 optimizer.step()
 
 
-                if use_scheduler:
-                    scheduler.step()
+
 
                 train_loss += loss.item()
+                
+            if use_scheduler:
+                scheduler.step()
+                
             train_time = time.time() - train_start
 
             avg_train_loss = train_loss / len(train_loader)
