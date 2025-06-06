@@ -34,7 +34,9 @@ from utils.continous import *
 from utils.sampling_tram_data import *
 
 
-experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std2"   ## <--- set experiment name
+experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std3"   ## <--- set experiment name
+n_obs=10_000                                                ## <--- set number of samples
+
 seed=42
 np.random.seed(seed)
 
@@ -108,13 +110,14 @@ def dgp(n_obs, doX=[None, None, None], seed=-1):
     return df
 
 
-df = dgp(n_obs=100_000, seed=42)
+
+df = dgp(n_obs=n_obs, seed=42)
 
 EXP_DATA_PATH=os.path.join(EXPERIMENT_DIR, f"{experiment_name}.csv")
 
 
 if not os.path.exists(EXP_DATA_PATH):
-    df = dgp(n_obs=100_000)
+    df = dgp(n_obs=n_obs)
 
     print(df.head())
     df.to_csv(EXP_DATA_PATH, index=False)
@@ -182,7 +185,7 @@ DEV_TRAINING=True
 train_list=['x1','x2','x3']#['x1']#['x1','x2','x3']#,#,['x1','x2','x3'] # <-  set the nodes which have to be trained , useful if further training is required else lsit all vars
 
 batch_size = 256
-epochs = 2000  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
+epochs = 200  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
 use_scheduler = True
 
 
@@ -235,17 +238,17 @@ for node in conf_dict:
         continue
 
     ########################## 5. Optimizer & Scheduler ######################
-    # optimizer = torch.optim.AdamW(tram_model.parameters(), lr=0.1, eps=1e-8, weight_decay=1e-2)
+    optimizer = torch.optim.AdamW(tram_model.parameters(), lr=0.1, eps=1e-8, weight_decay=1e-2)
     
-    # if use_scheduler:
-    #     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
-    # else:
-    #     scheduler = None
+    if use_scheduler:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+    else:
+        scheduler = None
+    
+    # optimizer = torch.optim.Adam(tram_model.parameters(), lr=1e-4)
 
-    ########################## 5. Optimizer & Scheduler ######################
-    optimizer = torch.optim.Adam(tram_model.parameters(), lr=1e-4)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     ########################## 6. Min/Max Tensor #############################
     min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)

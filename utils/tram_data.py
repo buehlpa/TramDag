@@ -75,7 +75,7 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
         print('>>>>>>>>>>>>  source node --> x in dataloader contains just 1s ') if verbose else None
         
         train_dataset = GenericDataset(train_df, target_col=node, conf_dict=None, transform=transform)
-        validation_dataset = GenericDataset(train_df, target_col=node, conf_dict=None, transform=transform)
+        validation_dataset = GenericDataset(val_df, target_col=node, conf_dict=None, transform=transform)
     
     else:
         # create a datatype dictionnary for the dataloader to read the datatype --->> TODO can be passed to a args 
