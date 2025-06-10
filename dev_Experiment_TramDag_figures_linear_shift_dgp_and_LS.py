@@ -34,8 +34,8 @@ from utils.continous import *
 from utils.sampling_tram_data import *
 
 
-experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_std8"   ## <--- set experiment name
-n_obs=40_000                                                ## <--- set number of samples
+experiment_name = "tramdagpaper_exp6_1_linearDGP_ls_9"   ## <--- set experiment name
+n_obs=10_000                                                ## <--- set number of samples
 
 seed=42
 np.random.seed(seed)
@@ -184,8 +184,8 @@ print(f"Configuration saved to {CONF_DICT_PATH}")
 DEV_TRAINING=True
 train_list=['x1','x2','x3']#['x1']#['x1','x2','x3']#,#,['x1','x2','x3'] # <-  set the nodes which have to be trained , useful if further training is required else lsit all vars
 
-batch_size = 32
-epochs = 2000  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
+batch_size = 128
+epochs = 500  # <- if you want a higher numbe rof epochs, set the number higher and it loads the old model and starts from there
 use_scheduler = True
 
 
