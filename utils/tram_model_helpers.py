@@ -28,7 +28,8 @@ def timeit(name=None):
 
 
 
-def get_fully_specified_tram_model(node,conf_dict,verbose=True):
+def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version 11/06/25
+
     
 
     ### iF node is a source -> no deep nn is needed
@@ -80,6 +81,60 @@ def get_fully_specified_tram_model(node,conf_dict,verbose=True):
         print('>>> TRAM MODEL:\n',tram_model) if verbose else None
     return tram_model
 
+## jsut for SI experiments
+def get_fully_specified_tram_model_hardcoded_init_weights_for_si(node, conf_dict, verbose=True):
+    # hardcoded coefficients per node
+    true_coeffs = {
+        'x2': [2],
+        'x3': [-0.2, 0.3]
+    }
+
+    # source node shortcut
+    if conf_dict[node]['node_type'] == 'source':
+        nn_int = SimpleIntercept()
+        tram_model = TramModel(nn_int, None)  
+        if verbose:
+            print('>>>>>>>>>>>>  source node --> only  modelled only  by si')
+            print(tram_model)
+        return tram_model
+
+    # internal or sink node
+    _, terms_dict, model_names_dict = ordered_parents(node, conf_dict)
+
+    model_dict = merge_transformation_dicts(terms_dict, model_names_dict)
+    intercepts_dict = {k: v for k, v in model_dict.items() if "ci" in v['h_term'] or 'si' in v['h_term']}
+    shifts_dict = {k: v for k, v in model_dict.items() if "ci" not in v['h_term'] and 'si' not in v['h_term']}
+
+    nn_int, nn_shifts_list = None, None
+
+    # intercept term
+    if not any('ci' in d['h_term'] for d in intercepts_dict.values()):
+        if verbose: print('>>>>>>>>>>>> No ci detected --> intercept defaults to si')
+        nn_int = SimpleIntercept()
+    else:
+        nn_int_name = list(intercepts_dict.items())[0][1]['class_name']
+        nn_int = globals()[nn_int_name]()
+
+    # shift terms
+    nn_shifts_list = []
+    coeffs = true_coeffs.get(node, None)
+
+    for i, (parent, model_info) in enumerate(shifts_dict.items()):
+        class_name = model_info["class_name"]
+        if class_name == "LinearShift":
+            init_weight = coeffs[i] if coeffs is not None else None
+            model = LinearShift(n_features=1, init_weight=init_weight)
+        else:
+            model = globals()[class_name]()  # fallback
+        nn_shifts_list.append(model)
+
+    tram_model = TramModel(nn_int, nn_shifts_list)
+    if verbose:
+        print('>>> TRAM MODEL:\n', tram_model)
+
+    return tram_model
+
+
 
 def ordered_parents(node, conf_dict) -> dict:
     
@@ -93,6 +148,7 @@ def ordered_parents(node, conf_dict) -> dict:
     transformation_terms = conf_dict[node]['transformation_terms_in_h()']
     datatype_dict = conf_dict[node]['parents_datatype']
     nn_models_dict = conf_dict[node]['transformation_term_nn_models_in_h()']
+    
 
     def get_sort_key(val):
         """Map each transformation value to a sorting index."""

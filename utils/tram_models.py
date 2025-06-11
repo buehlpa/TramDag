@@ -96,6 +96,8 @@ class LinearShift(nn.Module):
         super(LinearShift, self).__init__()
         self.fc = nn.Linear(n_features, 1, bias=False)
 
+
+        # if weight is initalized set weights to init weight
         if init_weight is not None:
             if isinstance(init_weight, (float, int)):  # scalar
                 if n_features != 1:
