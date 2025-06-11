@@ -64,19 +64,57 @@ class SimpleIntercept(nn.Module):
         return self.fc(x)
     
     
+# class LinearShift(nn.Module):
+#     """
+#     Linear shift term,  hS()
+#     Attributes:
+#         n_features (int): number of features/predictors
+#     """
+#     def __init__(self, n_features=1):
+#         super(LinearShift, self).__init__() 
+#         self.fc = nn.Linear(n_features, 1, bias=False)
+
+#     def forward(self, x):
+#         return self.fc(x)
+
+
 class LinearShift(nn.Module):
     """
-    Linear shift term,  hS()
-    Attributes:
-        n_features (int): number of features/predictors
+    Linear shift term, hS()
+
+    Args:
+        n_features (int): Number of input features
+        init_weight (float or list or 1D torch.Tensor, optional): 
+            Initial weight(s) for the linear layer. 
+            - If n_features=1, must be a float or tensor/list of shape (1,)
+            - If n_features>1, must be a list or 1D tensor of shape (n_features,)
+
+    Raises:
+        ValueError: if init_weight shape/type does not match n_features
     """
-    def __init__(self, n_features=1):
-        super(LinearShift, self).__init__() 
+    def __init__(self, n_features=1, init_weight=None):
+        super(LinearShift, self).__init__()
         self.fc = nn.Linear(n_features, 1, bias=False)
+
+        if init_weight is not None:
+            if isinstance(init_weight, (float, int)):  # scalar
+                if n_features != 1:
+                    raise ValueError("Scalar init_weight only allowed if n_features=1.")
+                weight_tensor = torch.tensor([[float(init_weight)]], dtype=torch.float32)
+
+            elif isinstance(init_weight, (list, torch.Tensor)):
+                weight_tensor = torch.tensor(init_weight, dtype=torch.float32).view(1, -1)
+                if weight_tensor.shape != (1, n_features):
+                    raise ValueError(f"init_weight must have shape (1, {n_features}) but got {weight_tensor.shape}.")
+
+            else:
+                raise TypeError("init_weight must be a float, list, or 1D torch.Tensor.")
+
+            with torch.no_grad():
+                self.fc.weight.copy_(weight_tensor)
 
     def forward(self, x):
         return self.fc(x)
-
 
 
 
