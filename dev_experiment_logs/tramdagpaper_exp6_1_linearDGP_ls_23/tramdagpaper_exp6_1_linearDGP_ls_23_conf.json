@@ -7,8 +7,8 @@
         "parents_datatype": {},
         "transformation_terms_in_h()": {},
         "transformation_term_nn_models_in_h()": {},
-        "min": 0.12077244005177949,
-        "max": 0.7947506084442139
+        "min": 0.12053222464687426,
+        "max": 0.794692622870355
     },
     "x2": {
         "Modelnr": 1,
@@ -26,8 +26,8 @@
         "transformation_term_nn_models_in_h()": {
             "x1": "LinearShift"
         },
-        "min": -0.8021566639469419,
-        "max": 0.4148385359368519
+        "min": -0.8142888901184293,
+        "max": 0.4238437120810543
     },
     "x3": {
         "Modelnr": 2,
@@ -49,7 +49,7 @@
             "x1": "LinearShift",
             "x2": "LinearShift"
         },
-        "min": -4.473140938333291,
-        "max": 4.900267163202901
+        "min": -4.421199142423371,
+        "max": 4.916709870336174
     }
 }

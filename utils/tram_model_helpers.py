@@ -377,7 +377,7 @@ def train_val_loop(start_epoch,
                 
                 # Add to the dictionary under current epoch
                 all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
-
+                print(epoch_weights)
                 # Write back the updated dictionary
                 with open(shift_path, 'w') as f:
                     json.dump(all_shift_weights, f)
