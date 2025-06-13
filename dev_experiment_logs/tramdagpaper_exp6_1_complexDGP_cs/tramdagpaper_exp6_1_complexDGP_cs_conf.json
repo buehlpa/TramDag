@@ -7,7 +7,7 @@
         "parents_datatype": {},
         "transformation_terms_in_h()": {},
         "transformation_term_nn_models_in_h()": {},
-        "min": 0.12053222464687426,
+        "min": 0.1205322246468743,
         "max": 0.794692622870355
     },
     "x2": {
@@ -42,14 +42,14 @@
             "x2": "cont"
         },
         "transformation_terms_in_h()": {
-            "x1": "ls",
+            "x1": "cs",
             "x2": "ls"
         },
         "transformation_term_nn_models_in_h()": {
-            "x1": "LinearShift",
+            "x1": "ComplexShiftDefaultTabular",
             "x2": "LinearShift"
         },
-        "min": -4.421199142423371,
-        "max": 4.916709870336174
+        "min": -5.064947514999738,
+        "max": 4.864295579713656
     }
 }

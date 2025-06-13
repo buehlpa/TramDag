@@ -40,13 +40,11 @@ class SamplingDataset(Dataset):
             return tensor_list 
         else:        
             parents_dataype_dict, _, _ = ordered_parents(self.node, self.conf_dict)
-        
         for parent_pair in parents_dataype_dict:
             # print(parent_pair)
             PARENT_DIR = os.path.join(self.EXPERIMENT_DIR, f'{parent_pair}')
             tensor = load_roots(PARENT_DIR,rootfinder=self.rootfinder)  # expected shape: (num_samples, feature_dim)
             tensor_list.append(torch.tensor(tensor))  # ensure tensor type
-            # print(tensor_list)
         return tensor_list  # list of tensors, each (num_samples, dim)
 
     def _ordered_keys(self):
@@ -105,7 +103,7 @@ def load_latents(NODE_DIR):
     return latents
 
 def load_roots_and_latents(NODE_DIR,rootfinder='bisection'):
-    root=load_roots(NODE_DIR,whirootfinder=rootfinder)
+    root=load_roots(NODE_DIR,rootfinder=rootfinder)
     latents=load_latents(NODE_DIR)
     return root, latents
 
