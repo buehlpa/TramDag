@@ -221,9 +221,9 @@ def show_training_history(conf_dict,EXPERIMENT_DIR):
         epochs = range(1, len(train_hist) + 1)
         plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
         plt.plot(epochs, val_hist, label=f"{node} - val")
-    plt.title("Training and Validation Loss Across Nodes - Full History")
+    plt.title("Training and Validation NLL Across Nodes - Full History")
     plt.xlabel("Epoch")
-    plt.ylabel("Loss")
+    plt.ylabel("NLL")
     plt.legend()
     plt.grid(True)
 
@@ -238,9 +238,9 @@ def show_training_history(conf_dict,EXPERIMENT_DIR):
         epochs = range(start_idx + 1, total_epochs + 1)
         plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
         plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
-    plt.title("Training and Validation Loss - Last 10% of Epochs")
+    plt.title("Training and Validation NLL - Last 10% of Epochs")
     plt.xlabel("Epoch")
-    plt.ylabel("Loss")
+    plt.ylabel("NLL")
     plt.legend()
     plt.grid(True)
 
