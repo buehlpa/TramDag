@@ -271,7 +271,8 @@ def train_val_loop(start_epoch,
                    scheduler,
                    min_max,
                    NODE_DIR,
-                   save_linear_shifts=False):
+                   save_linear_shifts=False,
+                   verbose=1):
     
         """
         Executes the training and validation loop for the specified model.
@@ -291,6 +292,8 @@ def train_val_loop(start_epoch,
             scheduler (torch.optim.lr_scheduler._LRScheduler): Scheduler to adjust learning rate.
             min_max (tuple): Tuple of (min, max) values for normalization used in the loss function.
             NODE_DIR (str): Directory path where model and training history should be saved.
+            save_linear_shifts (bool): save the linear shift parameters for 
+            verbose (int): 0,1,2  : print statements during training 0 = no output , 1 trainnig loops
 
         Saves:
             - Best model (with lowest validation loss) to a predefined path.
@@ -377,19 +380,21 @@ def train_val_loop(start_epoch,
                 
                 # Add to the dictionary under current epoch
                 all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
-                print(epoch_weights)
+                
                 # Write back the updated dictionary
                 with open(shift_path, 'w') as f:
                     json.dump(all_shift_weights, f)
-
-                print(f"Appended linear shift weights for epoch {epoch+1} to: {shift_path}")
+                if verbose > 1:
+                    print(f'shift weights: {epoch_weights}')
+                    print(f"Appended linear shift weights for epoch {epoch+1} to: {shift_path}")
 
             ##### Saving #####
             save_start = time.time()
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 torch.save(tram_model.state_dict(), MODEL_PATH)
-                print("Saved new best model.")
+                if verbose > 0:
+                    print("Saved new best model.")
 
             torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
 
@@ -402,8 +407,9 @@ def train_val_loop(start_epoch,
             epoch_total = time.time() - epoch_start
 
             ##### Epoch Summary #####
-            print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-            print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
+            if verbose>0:
+                print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+                print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
 
 # from torch.cuda.amp import autocast, GradScaler
 
