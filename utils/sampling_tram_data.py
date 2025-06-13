@@ -484,10 +484,7 @@ def sample_full_dag_chandru(conf_dict,
             print("-- loaded modelweights")
             
         dataset = SamplingDataset(node=node, EXPERIMENT_DIR=EXPERIMENT_DIR, rootfinder='chandrupatla', number_of_samples=n, conf_dict=conf_dict, transform=None)
-        
-        
-        
-        
+
         sample_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
         
         output_list = []
