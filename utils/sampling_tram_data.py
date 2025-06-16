@@ -91,9 +91,18 @@ def check_roots_and_latents(NODE_DIR,rootfinder='bisection',verbose=True):
             print(f'Root or latent files not found in {os.path.join(NODE_DIR,"sampling")}')
         return False
     
+def check_sampled_and_latents(NODE_DIR,rootfinder='bisection',verbose=True):
+    root_path = os.path.join(NODE_DIR, 'sampling',f"sampled_{rootfinder}.pt")
+    latents_path=os.path.join(NODE_DIR, 'sampling', "latents.pt")
+    if os.path.exists(root_path) and os.path.exists(latents_path):
+        return True
+    else:
+        if verbose:
+            print(f'Root or latent files not found in {os.path.join(NODE_DIR,"sampling")}')
+        return False
 
 def load_roots(NODE_DIR,rootfinder='bisection'):
-    root_path = os.path.join(NODE_DIR, 'sampling',f"roots_{rootfinder}.pt")
+    root_path = os.path.join(NODE_DIR, 'sampling',f"sampled_{rootfinder}.pt")
     root=torch.load(root_path)
     return root
 
@@ -351,7 +360,7 @@ def show_samples_vs_true(
     for node in conf_dict:
         # -------- Load data --------------------------------------------------
         root_path = os.path.join(
-            experiment_dir, f"{node}/sampling/roots_{rootfinder}.pt"
+            experiment_dir, f"{node}/sampling/sampled_{rootfinder}.pt"
         )
         if not os.path.isfile(root_path):
             print(f"[skip] {node}: {root_path} not found.")
@@ -383,7 +392,7 @@ def show_samples_vs_true(
             density=True,
             alpha=0.6,
             color=hist_est_color,
-            label="Estimated roots",
+            label="Sampled",
         )
         axs[0].set_xlabel("Value")
         axs[0].set_ylabel("Density")
