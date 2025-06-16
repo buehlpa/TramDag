@@ -441,114 +441,194 @@ def truncated_logistic_sample(n, low, high, device='cpu'):
 def sample_full_dag_chandru(conf_dict,
                             EXPERIMENT_DIR,
                             device,
+                            do_interventions={},
                             n= 10_000,
                             batch_size = 32,
                             delete_all_previously_sampled=True,
                             verbose=True):
-    
+    """
+    Samples data for all nodes in a DAG defined by `conf_dict`, ensuring that each node's
+    parents are sampled before the node itself. Supports interventions on any subset of nodes.
 
+    Parameters
+    ----------
+    conf_dict : dict
+        Dictionary defining the DAG. Each key is a node name, and each value is a config
+        dict that includes at least:
+            - 'node_type': str, either 'source' or other
+            - 'parents': list of parent node names
+            - 'min': float, minimum allowed value for the node
+            - 'max': float, maximum allowed value for the node
+
+    EXPERIMENT_DIR : str
+        Base directory where all per-node directories are located.
+
+    device : torch.device
+        The device to run computations on (e.g., 'cuda' or 'cpu').
+
+    do_interventions : dict, optional
+        A dictionary specifying interventions for some nodes. Keys are node names (str),
+        values are floats. For each intervened node, the specified value is used as the
+        sampled value for all samples, and the model is bypassed. e.g. {'x1':1.0}
+
+    n : int, optional
+        Number of samples to draw for each node (default is 10_000).
+
+    batch_size : int, optional
+        Batch size for model evaluation during sampling (default is 32).
+
+    delete_all_previously_sampled : bool, optional
+        If True, removes previously sampled data before starting (default is True).
+
+    verbose : bool, optional
+        If True, prints debug/status information (default is True).
+
+    Notes
+    -----
+    - The function ensures that nodes are only sampled after their parents.
+    - Nodes with `node_type='source'` are treated as having no parents.
+    - If a node is in `do_interventions`, `sampled_chandrupatla.pt` and a dummy `latents.pt`
+      are created, enabling downstream nodes to proceed.
+    - Sampling is done using a vectorized root-finding method (Chandrupatla's algorithm).
+    """
+
+
+    # delete the previolusly sampled data
     if delete_all_previously_sampled:
         delete_all_samplings(conf_dict, EXPERIMENT_DIR)
-        
-    for node in conf_dict:
-        print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--')
-        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
-        SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
-        os.makedirs(SAMPLING_DIR, exist_ok=True)
-        
-        if check_roots_and_latents(NODE_DIR, rootfinder='chandrupatla', verbose=verbose):
-            continue
-        
-        skipping_node = False
-        if conf_dict[node]['node_type'] != 'source':
-            for parent in conf_dict[node]['parents']:
-                if not check_roots_and_latents(os.path.join(EXPERIMENT_DIR, parent), rootfinder='chandrupatla', verbose=verbose):
-                    skipping_node = True
-                    break
+    
+    
+    # repeat process until all nodes are sampled
+    processed_nodes=[] # stack
+    while set(processed_nodes) != set(conf_dict.keys()): 
+        for node in conf_dict: # for each node in the conf dict
+            if node in processed_nodes:
+                if verbose :
+                    print('node is already  in sampled list')
+                continue
+            
+            print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--') 
+            
+            ## 1. Paths 
+            NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+            SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
+            os.makedirs(SAMPLING_DIR, exist_ok=True)
+            
+            
+            ## 2. Check if sampled and latents already exist 
+            if check_sampled_and_latents(NODE_DIR, rootfinder='chandrupatla', verbose=verbose):
+                processed_nodes.append(node)
+                continue
+            
+            ## 3. logic to make sure parents are always sampled first
+            skipping_node = False
+            if conf_dict[node]['node_type'] != 'source':
+                for parent in conf_dict[node]['parents']:
+                    if not check_sampled_and_latents(os.path.join(EXPERIMENT_DIR, parent), rootfinder='chandrupatla', verbose=verbose):
+                        skipping_node = True
+                        break
+                    
+            if skipping_node:
+                print(f"Skipping {node} as parent {parent} is not sampled yet.")
+                continue
+            
+            
+            
+            ## INTERVENTION, if node is to be intervened on , data is just saved
+            if node in do_interventions.keys():
+                intervention_value = do_interventions[node]
+                intervention_vals = torch.full((n,), intervention_value)
+                sampled_path = os.path.join(SAMPLING_DIR, "sampled_chandrupatla.pt")
+                torch.save(intervention_vals, sampled_path)
+                ### dummy latents jsut for the check , not needed
+                dummy_latents = torch.full((n,), float('nan'))  
+                latents_path = os.path.join(SAMPLING_DIR, "latents.pt")
+                torch.save(dummy_latents, latents_path)
+                processed_nodes.append(node)
                 
-        if skipping_node:
-            print(f"Skipping {node} as parent {parent} is not sampled yet.")
-            continue
-        
-        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
-        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
-        min_max = torch.stack([min_vals, max_vals], dim=0)
-        
-        
-        latent_sample = torch.tensor(logistic.rvs(size=n), dtype=torch.float32).to(device)
-        #latent_sample = truncated_logistic_sample(n=n, low=0, high=1, device=device)
-        
-        if verbose:
-            print("-- sampled latents")
-            
-        model_path = os.path.join(NODE_DIR, "best_model.pt")
-        tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose).to(device)
-        tram_model.load_state_dict(torch.load(model_path))
-        
-
-            
-        if verbose:
-            print("-- loaded modelweights")
-            
-        dataset = SamplingDataset(node=node, EXPERIMENT_DIR=EXPERIMENT_DIR, rootfinder='chandrupatla', number_of_samples=n, conf_dict=conf_dict, transform=None)
-
-        sample_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-        
-        output_list = []
-        with torch.no_grad():
-            for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
-                x = [xi.to(device) for xi in x]
-                int_input, shift_list = preprocess_inputs(x, device=device)
-                model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
-                output_list.append(model_outputs)
+            ## no intervention, based on the sampled data from the parents though the latents for each node the observational distribution is generated    
+            else:
+                ### sampling latents
+                latent_sample = torch.tensor(logistic.rvs(size=n), dtype=torch.float32).to(device)
+                #latent_sample = truncated_logistic_sample(n=n, low=0, high=1, device=device)
                 
-        if conf_dict[node]['node_type'] == 'source':
-            if verbose:
-                print("source node, Defaults to SI and 1 as inputs")
-            theta_single = output_list[0]['int_out'][0]
-            theta_single = transform_intercepts_continous(theta_single)
-            thetas_expanded = theta_single.repeat(n, 1)
-            shifts = torch.zeros(n, device=device)
-        else:
-            if verbose:
-                print("node has parents, previously sampled data is loaded for each pa(node)")
-            y_pred = merge_outputs(output_list, skip_nan=True)
-            shifts = y_pred['shift_out']
-            if shifts is None:
-                print("shift_out was None; defaulting to zeros.")
-                shifts = torch.zeros(n, device=device)
-            thetas = y_pred['int_out']
-            thetas_expanded = transform_intercepts_continous(thetas).squeeze()
-            shifts = shifts.squeeze()
-            
-        low = torch.full((n,), -1e5, device=device)
-        high = torch.full((n,), 1e5, device=device)
+                if verbose:
+                    print("-- sampled latents")
+                
+                ### load modelweights
+                model_path = os.path.join(NODE_DIR, "best_model.pt")
+                tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose).to(device)
+                tram_model.load_state_dict(torch.load(model_path))
+                
+                if verbose:
+                    print("-- loaded modelweights")
+                    
+                dataset = SamplingDataset(node=node, EXPERIMENT_DIR=EXPERIMENT_DIR, rootfinder='chandrupatla', number_of_samples=n, conf_dict=conf_dict, transform=None)
+                sample_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+                
+                output_list = []
+                with torch.no_grad():
+                    for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
+                        x = [xi.to(device) for xi in x]
+                        int_input, shift_list = preprocess_inputs(x, device=device)
+                        model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+                        output_list.append(model_outputs)
+                        
+                if conf_dict[node]['node_type'] == 'source':
+                    if verbose:
+                        print("source node, Defaults to SI and 1 as inputs")
+                    theta_single = output_list[0]['int_out'][0]
+                    theta_single = transform_intercepts_continous(theta_single)
+                    thetas_expanded = theta_single.repeat(n, 1)
+                    shifts = torch.zeros(n, device=device)
+                else:
+                    if verbose:
+                        print("node has parents, previously sampled data is loaded for each pa(node)")
+                    y_pred = merge_outputs(output_list, skip_nan=True)
+                    shifts = y_pred['shift_out']
+                    if shifts is None:
+                        print("shift_out was None; defaulting to zeros.")
+                        shifts = torch.zeros(n, device=device)
+                    thetas = y_pred['int_out']
+                    thetas_expanded = transform_intercepts_continous(thetas).squeeze()
+                    shifts = shifts.squeeze()
+                
+                
+                
+                low = torch.full((n,), -1e5, device=device)
+                high = torch.full((n,), 1e5, device=device)
+                min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
+                max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
+                min_max = torch.stack([min_vals, max_vals], dim=0)
+                
+                ## Root finder using Chandrupatla's method
+                def f_vectorized(targets):
+                    return vectorized_object_function(
+                        thetas_expanded,
+                        targets,
+                        shifts,
+                        latent_sample,
+                        k_min=min_max[0],
+                        k_max=min_max[1]
+                    )
+                    
+                root = chandrupatla_root_finder(
+                    f_vectorized,
+                    low,
+                    high,
+                    max_iter=10_000,
+                    tol=1e-9
+                )
+                
+                ## Saving
+                sampled_path = os.path.join(SAMPLING_DIR, "sampled_chandrupatla.pt")
+                latents_path = os.path.join(SAMPLING_DIR, "latents.pt")
+                
+                if torch.isnan(root).any():
+                    print(f'Caution! Sampling for {node} consists of NaNs')
+                    
+                torch.save(root, sampled_path)
+                torch.save(latent_sample, latents_path)
+                
+                processed_nodes.append(node)
         
-        ## Root finder using Chandrupatla's method
-        def f_vectorized(targets):
-            return vectorized_object_function(
-                thetas_expanded,
-                targets,
-                shifts,
-                latent_sample,
-                k_min=min_max[0],
-                k_max=min_max[1]
-            )
-            
-        root = chandrupatla_root_finder(
-            f_vectorized,
-            low,
-            high,
-            max_iter=10_000,
-            tol=1e-9
-        )
-        
-        ## Saving
-        root_path = os.path.join(SAMPLING_DIR, "roots_chandrupatla.pt")
-        latents_path = os.path.join(SAMPLING_DIR, "latents.pt")
-        
-        if torch.isnan(root).any():
-            print(f'Caution! Sampling for {node} consists of NaNs')
-            
-        torch.save(root, root_path)
-        torch.save(latent_sample, latents_path)
