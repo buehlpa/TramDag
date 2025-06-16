@@ -136,11 +136,11 @@ class ComplexShiftDefaultTabular(nn.Module):
         super(ComplexShiftDefaultTabular, self).__init__()
         
         # Define the layers
-        self.fc1 = nn.Linear(n_features, 8)  # First hidden layer (n_features -> 8)
+        self.fc1 = nn.Linear(n_features, 16)  # First hidden layer (n_features -> 8)
         self.relu1 = nn.ReLU()               # ReLU activation
-        self.fc2 = nn.Linear(8, 8)           # Second hidden layer (8 -> 8)
+        self.fc2 = nn.Linear(16, 16)           # Second hidden layer (8 -> 8)
         self.relu2 = nn.ReLU()               # ReLU activation
-        self.fc3 = nn.Linear(8, 1, bias=False)  # Output layer (8 -> 1, no bias)
+        self.fc3 = nn.Linear(16, 1, bias=False)  # Output layer (8 -> 1, no bias)
         
     def forward(self, x):
         # Forward pass through the network

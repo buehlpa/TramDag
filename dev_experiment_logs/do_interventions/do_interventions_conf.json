@@ -7,7 +7,7 @@
         "parents_datatype": {},
         "transformation_terms_in_h()": {},
         "transformation_term_nn_models_in_h()": {},
-        "min": 0.11328144104347274,
+        "min": 0.11328144104347268,
         "max": 0.7896745501534419
     },
     "x2": {
@@ -27,7 +27,7 @@
             "x1": "LinearShift"
         },
         "min": -0.8359509892028653,
-        "max": 0.3951227039032903
+        "max": 0.39512270390329024
     },
     "x3": {
         "Modelnr": 2,

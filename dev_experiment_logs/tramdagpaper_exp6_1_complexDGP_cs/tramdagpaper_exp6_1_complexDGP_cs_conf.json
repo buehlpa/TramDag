@@ -42,12 +42,12 @@
             "x2": "cont"
         },
         "transformation_terms_in_h()": {
-            "x1": "cs",
-            "x2": "ls"
+            "x1": "ls",
+            "x2": "cs"
         },
         "transformation_term_nn_models_in_h()": {
-            "x1": "ComplexShiftDefaultTabular",
-            "x2": "LinearShift"
+            "x1": "LinearShift",
+            "x2": "ComplexShiftDefaultTabular"
         },
         "min": -5.064947514999738,
         "max": 4.864295579713656
