@@ -227,10 +227,8 @@ def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./",
             output
         ]))
 
-    def get_matrix():
-        return adj_matrix_return
+    return adj_matrix_return
 
-    return get_matrix
 
 
 
