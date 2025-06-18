@@ -136,11 +136,11 @@ class ComplexShiftDefaultTabular(nn.Module):
         super(ComplexShiftDefaultTabular, self).__init__()
         
         # Define the layers
-        self.fc1 = nn.Linear(n_features, 16)  # First hidden layer (n_features -> 8)
+        self.fc1 = nn.Linear(n_features, 32)  # First hidden layer (n_features -> 8)
         self.relu1 = nn.ReLU()               # ReLU activation
-        self.fc2 = nn.Linear(16, 16)           # Second hidden layer (8 -> 8)
+        self.fc2 = nn.Linear(32, 32)           # Second hidden layer (8 -> 8)
         self.relu2 = nn.ReLU()               # ReLU activation
-        self.fc3 = nn.Linear(16, 1, bias=False)  # Output layer (8 -> 1, no bias)
+        self.fc3 = nn.Linear(32, 1, bias=False)  # Output layer (8 -> 1, no bias)
         
     def forward(self, x):
         # Forward pass through the network
@@ -187,17 +187,17 @@ class ComplexShiftCustomTabular(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(n_features, 128),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(128, 128),
-            nn.ReLU(),
+            nn.Tanh(),
+            nn.Linear(128, 128),
+            nn.Tanh(),
             nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(64, 32),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(32, 16),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(16, 1, bias=False)
         )
     def forward(self, x: torch.Tensor) -> torch.Tensor:
