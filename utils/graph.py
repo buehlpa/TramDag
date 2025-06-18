@@ -5,6 +5,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+import os
 
 ### plot the DAG
 def plot_dag(adj_matrix, data_type, seed=42):
@@ -115,6 +118,121 @@ def create_nx_graph(adj_matrix, node_labels=None):
                 G.add_edge(node_labels[i], node_labels[j])
                 edge_labels[(node_labels[i], node_labels[j])] = adj_matrix[i, j]
     return G, edge_labels
+
+
+
+def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./", filename="adj_matrix.npy"):
+    n = len(variable_names)
+    FILENAME = os.path.join(experiment_dir, filename)
+    adj_matrix_previous = None
+    adj_matrix_return = None
+    cells = {}
+
+    output = widgets.Output()
+    save_checkbox = widgets.Checkbox(value=False, description='Save matrix to file')
+    filename_text = widgets.Text(value=filename, layout=widgets.Layout(width='200px'))
+
+    def create_grid(initial_values=None):
+        input_grid = []
+        header_widgets = [widgets.Label(value='')] + [widgets.Label(value=name) for name in variable_names]
+        input_grid.extend(header_widgets)
+
+        for i in range(n):
+            input_grid.append(widgets.Label(value=variable_names[i]))
+            for j in range(n):
+                if i >= j:
+                    cell = widgets.Label(value="0")
+                else:
+                    val = ""
+                    if initial_values is not None:
+                        val = initial_values[i, j]
+                    cell = widgets.Text(value=val if val != "0" else "", layout=widgets.Layout(width='70px'))
+                cells[(i, j)] = cell
+                input_grid.append(cell)
+
+        return widgets.GridBox(
+            children=input_grid,
+            layout=widgets.Layout(
+                grid_template_columns=("80px " * (n + 1)).strip(),
+                overflow='auto'
+            )
+        )
+
+    def on_generate_clicked(b):
+        nonlocal adj_matrix_previous, adj_matrix_return
+        with output:
+            clear_output()
+            adj_matrix = np.empty((n, n), dtype=object)
+            for i in range(n):
+                for j in range(n):
+                    if i >= j:
+                        adj_matrix[i, j] = "0"
+                    else:
+                        val = cells[(i, j)].value.strip() or "0"
+                        adj_matrix[i, j] = val
+
+            adj_matrix_previous = adj_matrix.copy()
+            adj_matrix_return = adj_matrix.copy()
+            print("Adjacency Matrix stored internally.")
+
+            try:
+                plot_dag(adj_matrix, data_type, seed=seed)
+            except Exception as e:
+                print(f"Error plotting DAG: {e}")
+
+            if save_checkbox.value:
+                fname = os.path.join(experiment_dir, filename_text.value.strip())
+                if fname.endswith('.npy'):
+                    np.save(fname, adj_matrix)
+                    print(f"Saved to {fname}")
+                elif fname.endswith('.csv'):
+                    np.savetxt(fname, adj_matrix, fmt="%s", delimiter=",")
+                    print(f"Saved to {fname}")
+                else:
+                    print("Unsupported file type. Use .npy or .csv.")
+
+    generate_btn = widgets.Button(description="Generate Matrix + Plot DAG", button_style='success')
+    generate_btn.on_click(on_generate_clicked)
+
+    if os.path.exists(FILENAME):
+        print(f"Found existing matrix at {FILENAME}. Loading...")
+        try:
+            adj_matrix_previous = np.load(FILENAME, allow_pickle=True)
+            adj_matrix_return = adj_matrix_previous.copy()
+            gridbox = create_grid(initial_values=adj_matrix_previous)
+
+            display(widgets.VBox([
+                widgets.Label("Loaded existing matrix. You can edit or regenerate it."),
+                gridbox,
+                widgets.HBox([save_checkbox, filename_text]),
+                generate_btn,
+                output
+            ]))
+
+            with output:
+                try:
+                    plot_dag(adj_matrix_previous, data_type, seed=seed)
+                except Exception as e:
+                    print(f"Error plotting DAG: {e}")
+        except Exception as e:
+            print(f"Error loading matrix: {e}")
+    else:
+        print(f"No matrix found in {FILENAME}. Please create one.")
+        gridbox = create_grid()
+        display(widgets.VBox([
+            widgets.Label("Fill in the adjacency matrix (upper triangle only). Use 'ls', 'cs', etc."),
+            gridbox,
+            widgets.HBox([save_checkbox, filename_text]),
+            generate_btn,
+            output
+        ]))
+
+    def get_matrix():
+        return adj_matrix_return
+
+    return get_matrix
+
+
 
 def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
     """
