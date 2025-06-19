@@ -176,6 +176,8 @@ def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./",
                             adj_matrix[i, j] = cells[(i, j)].value.strip() or "0"
 
                 try:
+                    if not validate_adj_matrix(adj_matrix):
+                        raise ValueError("Invalid adjacency matrix. Please check the criteria.")
                     np.save(filepath, adj_matrix)
                     print(f"Saved matrix to {filepath}")
                     plot_dag(adj_matrix, data_type, seed=seed)
