@@ -73,18 +73,18 @@
             "x5": "cont"
         },
         "transformation_terms_in_h()": {
-            "x1": "ci",
-            "x2": "cs",
-            "x3": "cs",
-            "x4": "cs",
-            "x5": "ls"
+            "x1": "ci11",
+            "x2": "ci12",
+            "x3": "cs11",
+            "x4": "cs12",
+            "x5": "cs"
         },
         "transformation_term_nn_models_in_h()": {
-            "x1": "ComplexInterceptDefaultTabular",
-            "x2": "ComplexShiftDefaultTabular",
-            "x3": "ComplexShiftDefaultTabular",
-            "x4": "ComplexShiftDefaultTabular",
-            "x5": "LinearShift"
+            "x1": "ci11",
+            "x2": "ci12",
+            "x3": "cs11",
+            "x4": "cs12",
+            "x5": "ComplexShiftDefaultTabular"
         },
         "min": -1.848191891637851,
         "max": 3.451621930052542
