@@ -243,39 +243,57 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
     return configuration_dict
 
 
+def create_nn_model_names(adj_matrix, data_type):
+    """
+    Returns the model names for the NN models based on the adj_matrix and data_type.
+    Supports extended codes like ci11, cs21 etc.
+    """
 
-def create_nn_model_names(adj_matrix,data_type):
-    
-    """
-    retunrns the model names for the nn models based on the adj_matrix and data_type
-    """
-    
-    
-    if 'cs' in adj_matrix or 'ci' in adj_matrix:
-        print('************* \n Model has Complex intercepts and Coomplex shifts , please add your Model to the modelzoo \n************')
-    
-    # Default class model mappings
+    # Warn if cs or ci appear anywhere
+    if np.any(np.char.startswith(adj_matrix.astype(str), 'cs')) or \
+       np.any(np.char.startswith(adj_matrix.astype(str), 'ci')):
+        print('*************\n Model has Complex intercepts and Complex shifts, please add your Model to the modelzoo \n*************')
+
+    # Base model name mappings
     full_model_mappings = {
-        'cont': {'cs': 'ComplexShiftDefaultTabular',
-                'ci': 'ComplexInterceptDefaultTabular', 
-                'ls': 'LinearShift',
-                'si': 'SimpleIntercept'},
-        'ord': {'cs': 'ComplexShiftDefaultTabular',
-                'ci': 'ComplexInterceptDefaultTabular', 
-                'ls': 'LinearShift',
-                'si': 'SimpleIntercept'},
-        'other': {'cs': 'ComplexShiftDefaultImage',
-                'ci': 'ComplexInterceptDefaultImage', 
-                'ls': 'LinearShift',
-                'si': 'SimpleIntercept'}
+        'cont': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'ord': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'other': {
+            'cs': 'ComplexShiftDefaultImage',
+            'ci': 'ComplexInterceptDefaultImage',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        }
     }
 
-    nn_names_matrix = adj_matrix.copy()
+    # Create new matrix to store names
+    nn_names_matrix = np.empty_like(adj_matrix, dtype=object)
+    var_types = list(data_type.values())
+
     for i in range(adj_matrix.shape[0]):
+        variable_type = var_types[i]
         for j in range(adj_matrix.shape[1]):
-            if adj_matrix[i, j] in ['cs', 'ci', 'ls', 'si']:
-                variable_type = list(data_type.values())[i]
-                nn_names_matrix[i, j] = full_model_mappings[variable_type][adj_matrix[i, j]]
+            code = str(adj_matrix[i, j])
+            if code == '0':
+                nn_names_matrix[i, j] = '0'
+                continue
+            match = re.fullmatch(r'(cs|ci|ls|si)(\d*)', code)
+            if match:
+                base_code, suffix = match.groups()
+                base_name = full_model_mappings[variable_type][base_code]
+                nn_names_matrix[i, j] = base_name + suffix
+            else:
+                nn_names_matrix[i, j] = code  # Leave unrecognized codes unchanged
 
     return nn_names_matrix
 

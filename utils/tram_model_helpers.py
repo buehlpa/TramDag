@@ -119,7 +119,7 @@ def get_fully_specified_tram_model_hardcoded_init_weights_for_si(node, conf_dict
     nn_shifts_list = []
     coeffs = true_coeffs.get(node, None)
 
-    for i, (parent, model_info) in enumerate(shifts_dict.items()):
+    for i, (_, model_info) in enumerate(shifts_dict.items()):
         class_name = model_info["class_name"]
         if class_name == "LinearShift":
             init_weight = coeffs[i] if coeffs is not None else None
