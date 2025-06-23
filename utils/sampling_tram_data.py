@@ -181,6 +181,7 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax
         tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose)
         tram_model = tram_model.to(device)
         tram_model.load_state_dict(torch.load(model_path))
+        _, ordered_transformation_terms_in_h, _=ordered_parents(node, conf_dict)
         
         #### 2. Sampling Dataloader
         dataset = SamplingDataset(node=node,EXPERIMENT_DIR=EXPERIMENT_DIR,number_of_samples=n, conf_dict=conf_dict, transform=None)
@@ -189,7 +190,7 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax
         with torch.no_grad():
             for x in tqdm(sample_loader, desc=f"h() for  {node}"):
                 x = [xi.to(device) for xi in x]
-                int_input, shift_list = preprocess_inputs(x, device=device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
                 model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
                 output_list.append(model_outputs)
                 break
@@ -244,7 +245,7 @@ def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df,
 
         ##### 2. Dataloader
         train_loader, val_loader = get_dataloader(node, conf_dict, train_df, val_df, batch_size=batch_size, verbose=verbose)
-
+        _, ordered_transformation_terms_in_h, _=ordered_parents(node, conf_dict)
         #### 3. Forward Pass
         min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
         max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
@@ -255,14 +256,14 @@ def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df,
         with torch.no_grad():
             for x, y in tqdm(train_loader, desc=f"Train loader ({node})", total=len(train_loader)):
                 y = y.to(device)
-                int_input, shift_list = preprocess_inputs(x, device=device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 h_train, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
                 h_train_list.extend(h_train.cpu().numpy())
 
             for x, y in tqdm(val_loader, desc=f"Val loader ({node})", total=len(val_loader)):
                 y = y.to(device)
-                int_input, shift_list = preprocess_inputs(x, device=device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 h_val, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
                 h_val_list.extend(h_val.cpu().numpy())
@@ -507,6 +508,9 @@ def sample_full_dag_chandru(conf_dict,
                     print('node is already  in sampled list')
                 continue
             
+            _, ordered_transformation_terms_in_h, _=ordered_parents(node, conf_dict)
+
+            
             print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--') 
             
             ## 1. Paths 
@@ -570,7 +574,7 @@ def sample_full_dag_chandru(conf_dict,
                 with torch.no_grad():
                     for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
                         x = [xi.to(device) for xi in x]
-                        int_input, shift_list = preprocess_inputs(x, device=device)
+                        int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
                         model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
                         output_list.append(model_outputs)
                         

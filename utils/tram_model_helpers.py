@@ -324,22 +324,22 @@ def ordered_parents(node, conf_dict) -> dict:
     return ordered_parents_datatype, ordered_transformation_terms_in_h, ordered_transformation_term_nn_models_in_h
 
 
-def preprocess_inputs(x, device='cuda'):
-    """
-    Prepares model input by:
-    - Accepting a tuple or list of tensors
-    - Adding channel dim (unsqueeze)
-    - Moving everything to the device once
-    - Returning int_inputs and shift_list
-    """
-    # Unpack x if it's a tuple/list
-    x = [xi.unsqueeze(1) for xi in x]  # shape: (B, 1, ...)
-    x = [xi.to(device, non_blocking=True) for xi in x]  # single device transfer
+# def preprocess_inputs(x, device='cuda'): # old hardcoded version
+#     """
+#     Prepares model input by:
+#     - Accepting a tuple or list of tensors
+#     - Adding channel dim (unsqueeze)
+#     - Moving everything to the device once
+#     - Returning int_inputs and shift_list
+#     """
+#     # Unpack x if it's a tuple/list
+#     x = [xi.unsqueeze(1) for xi in x]  # shape: (B, 1, ...)
+#     x = [xi.to(device, non_blocking=True) for xi in x]  # single device transfer
 
-    int_inputs = x[0]  # TODO remove hardcoded stuff   use tuple as input 
-    shift_list = x[1:] if len(x) > 1 else None
+#     int_inputs = x[0]  # TODO remove hardcoded stuff   use tuple as input 
+#     shift_list = x[1:] if len(x) > 1 else None
 
-    return int_inputs, shift_list
+#     return int_inputs, shift_list
 
 # print training history
 def load_history(node, experiment_dir):
