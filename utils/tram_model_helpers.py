@@ -419,6 +419,7 @@ def train_val_loop(start_epoch,
                    scheduler,
                    min_max,
                    NODE_DIR,
+                   ordered_transformation_terms_in_h,
                    save_linear_shifts=False,
                    verbose=1):
     
@@ -440,6 +441,7 @@ def train_val_loop(start_epoch,
             scheduler (torch.optim.lr_scheduler._LRScheduler): Scheduler to adjust learning rate.
             min_max (tuple): Tuple of (min, max) values for normalization used in the loss function.
             NODE_DIR (str): Directory path where model and training history should be saved.
+            ordered_transformation_terms_in_h(dict): transforamtion terms , ordered accordingly
             save_linear_shifts (bool): save the linear shift parameters for 
             verbose (int): 0,1,2  : print statements during training 0 = no output , 1 trainnig loops
 
@@ -465,7 +467,7 @@ def train_val_loop(start_epoch,
                 optimizer.zero_grad()
                 y = y.to(device)
 
-                int_input, shift_list = preprocess_inputs(x, device=device)
+                int_input, shift_list = preprocess_inputs(x, ordered_transformation_terms_in_h.values(), device=device)
 
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 loss = contram_nll(y_pred, y, min_max=min_max)
@@ -493,7 +495,7 @@ def train_val_loop(start_epoch,
             with torch.no_grad():
                 for x, y in val_loader:
                     y = y.to(device)
-                    int_input, shift_list = preprocess_inputs(x, device=device)
+                    int_input, shift_list = preprocess_inputs(x, ordered_transformation_terms_in_h.values(), device=device)
                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
 
                     loss = contram_nll(y_pred, y, min_max=min_max)
