@@ -3,7 +3,7 @@ from utils.continous import contram_nll
 from utils.graph import *
 import os
 import re
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import json
 import time
 from functools import wraps
@@ -26,23 +26,103 @@ def timeit(name=None):
         return wrapper
     return decorator
 
+def preprocess_inputs(x, transformation_terms, device='cuda'):
+    """
+    Prepares model input by grouping features by transformation term base:
+      - ci11, ci12 → 'ci1' (intercept)
+      - cs11, cs12 → 'cs1' (shift)
+      - cs21 → 'cs2' (another shift group)
+      - cs, ls → treated as full group keys
+    Returns:
+      - int_inputs: Tensor of shape (B, n_features) for intercept model
+      - shift_list: List of tensors for each shift model, shape (B, group_features)
+    """
+    #assert len(x) == len(transformation_terms), "Mismatch in inputs and term list length"
+    
+    x = [xi.to(device, non_blocking=True) for xi in x]
+    
+    if len(transformation_terms)== 0:
+        x = [xi.unsqueeze(1) for xi in x] 
+        int_inputs= x[0]
+        return int_inputs, None
+    
+    grouped_inputs = defaultdict(list)
+
+    for tensor, term in zip(x, transformation_terms):
+        # Handle terms like ci11, cs22, ls etc.
+        if term.startswith(('ci', 'cs', 'ls')):
+            if len(term) > 2 and term[2].isdigit():
+                key = term[:3]  # ci11 → ci1, cs22 → cs2
+            else:
+                key = term      # cs, ls → remain as-is
+            grouped_inputs[key].append(tensor)
+        else:
+            raise ValueError(f"Unknown transformation term: {term}")
+
+    # Separate intercept and shift groups
+    int_keys = sorted([k for k in grouped_inputs if k.startswith('ci')])
+    shift_keys = sorted([k for k in grouped_inputs if k.startswith(('cs', 'ls'))])
+    
+    
+    if len(int_keys) != 1:
+        raise ValueError(f"Expected exactly one intercept group, got: {int_keys}")
+
+    # Process intercept inputs
+    int_inputs = torch.cat(
+        [t.unsqueeze(1).to(device, non_blocking=True) for t in grouped_inputs[int_keys[0]]],
+        dim=1
+    )  # Shape: (B, n_int_features)
+
+    # Process shift groups
+    shift_list = []
+    for k in shift_keys:
+        shift_tensor = torch.cat(
+            [t.unsqueeze(1).to(device, non_blocking=True) for t in grouped_inputs[k]],
+            dim=1
+        )  # Shape: (B, n_features_for_this_shift_model)
+        shift_list.append(shift_tensor)
+
+    return int_inputs, shift_list if shift_list else None
+
+# --------- Extract base model class ---------
+def get_base_model_class(class_name: str):
+    # Strip digits to get the base class name
+    for i, c in enumerate(class_name):
+        if c.isdigit():
+            return class_name[:i]
+    return class_name
+
+# --------- Group features by h_term base ---------
+def group_by_base(term_dict, prefixes):
+    if isinstance(prefixes, str):
+        prefixes = (prefixes,)
+    groups = defaultdict(list)
+    for feat, conf in term_dict.items():
+        h_term = conf['h_term']
+        for prefix in prefixes:
+            if h_term.startswith(prefix):
+                if len(h_term) > len(prefix) and h_term[len(prefix)].isdigit():
+                    key = h_term[:len(prefix)+1]
+                else:
+                    key = h_term
+                groups[key].append((feat, conf))
+                break
+    return groups
+
+
 
 
 def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version 11/06/25
-
-    
 
     ### iF node is a source -> no deep nn is needed
     if conf_dict[node]['node_type'] == 'source':
         nn_int = SimpleIntercept()
         tram_model = TramModel(nn_int, None)  
         if verbose:
-            print('>>>>>>>>>>>>  source node --> only  modelled only  by si')
+            print('>>>>>>>>>>>>  source node --> only  modelled only  by si') if verbose else None
             print(tram_model)
         return tram_model
     
-    
-    ### if node is not a source node 
     else:
         # read terms and model names form the config
         
@@ -58,28 +138,96 @@ def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version
         shifts_dict = {k: v for k, v in model_dict.items() if "ci" not in v['h_term'] and  'si' not in v['h_term']}        
         
         # make sure that nns are correctly defined afterwards
-        nn_int, nn_shifts_list = None, None
-        
-        # intercept term
-        if not np.any(np.array([True for diction in intercepts_dict.values() if 'ci' in diction['h_term']]) == True):
+        nn_int, nn_shifts_list = None, []
+        # --------- INTERCEPT TERM ---------
+        intercept_groups = group_by_base(intercepts_dict, 'ci')
+
+        if not intercept_groups:
             print('>>>>>>>>>>>> No ci detected --> intercept defaults to si') if verbose else None
             nn_int = SimpleIntercept()
-        
         else:
-            
-            # intercept term -> model
-            nn_int_name = list(intercepts_dict.items())[0][1]['class_name'] # TODO this doesnt work for multi inpout CI's
-            nn_int = globals()[nn_int_name]()
-        
-        # shift term -> lsit of models         
-        nn_shift_names=[v["class_name"] for v in shifts_dict.values() if "class_name" in v]
-        nn_shifts_list = [globals()[name]() for name in nn_shift_names]
-        
-        # ontram model
-        tram_model = TramModel(nn_int, nn_shifts_list)    
-        
+            if len(intercept_groups) > 1:
+                raise ValueError("Multiple intercept models detected; only one is currently supported.")
+
+            group = list(intercept_groups.values())[0]
+            any_class_name = group[0][1]['class_name']
+            base_class_name = get_base_model_class(any_class_name)
+
+            model_cls = globals()[base_class_name]
+            n_features = len(group)
+            nn_int = model_cls(n_features=n_features)
+
+        # --------- SHIFT TERMS ---------
+        shift_groups = group_by_base(shifts_dict, prefixes=('cs', 'ls'))
+
+        for group in shift_groups.values():
+            any_class_name = group[0][1]['class_name']
+            base_class_name = get_base_model_class(any_class_name)
+
+            model_cls = globals()[base_class_name]
+            n_features = len(group)
+            model = model_cls(n_features=n_features)
+            nn_shifts_list.append(model)
+
+        # --------- COMBINE ---------
+        tram_model = TramModel(nn_int, nn_shifts_list)
         print('>>> TRAM MODEL:\n',tram_model) if verbose else None
-    return tram_model
+        return tram_model
+
+
+
+# def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version 11/06/25
+
+    
+
+#     ### iF node is a source -> no deep nn is needed
+#     if conf_dict[node]['node_type'] == 'source':
+#         nn_int = SimpleIntercept()
+#         tram_model = TramModel(nn_int, None)  
+#         if verbose:
+#             print('>>>>>>>>>>>>  source node --> only  modelled only  by si')
+#             print(tram_model)
+#         return tram_model
+    
+    
+#     ### if node is not a source node 
+#     else:
+#         # read terms and model names form the config
+        
+#         _,terms_dict,model_names_dict=ordered_parents(node, conf_dict)
+        
+#         #old
+#         # terms_dict=conf_dict[node]['transformation_terms_in_h()']
+#         # model_names_dict=conf_dict[node]['transformation_term_nn_models_in_h()']
+        
+#         # Combine terms and model names and divide in intercept and shift terms
+#         model_dict=merge_transformation_dicts(terms_dict, model_names_dict)
+#         intercepts_dict = {k: v for k, v in model_dict.items() if "ci" in v['h_term'] or 'si' in v['h_term']}        
+#         shifts_dict = {k: v for k, v in model_dict.items() if "ci" not in v['h_term'] and  'si' not in v['h_term']}        
+        
+#         # make sure that nns are correctly defined afterwards
+#         nn_int, nn_shifts_list = None, None
+        
+#         # intercept term
+#         if not np.any(np.array([True for diction in intercepts_dict.values() if 'ci' in diction['h_term']]) == True):
+#             print('>>>>>>>>>>>> No ci detected --> intercept defaults to si') if verbose else None
+#             nn_int = SimpleIntercept()
+        
+#         else:
+            
+#             # intercept term -> model
+#             nn_int_name = list(intercepts_dict.items())[0][1]['class_name'] # TODO this doesnt work for multi inpout CI's
+#             nn_int = globals()[nn_int_name]()
+        
+#         # shift term -> lsit of models         
+#         nn_shift_names=[v["class_name"] for v in shifts_dict.values() if "class_name" in v]
+#         nn_shifts_list = [globals()[name]() for name in nn_shift_names]
+        
+#         # ontram model
+#         tram_model = TramModel(nn_int, nn_shifts_list)    
+        
+#         print('>>> TRAM MODEL:\n',tram_model) if verbose else None
+#     return tram_model
 
 ## jsut for SI experiments
 def get_fully_specified_tram_model_hardcoded_init_weights_for_si(node, conf_dict, verbose=True):

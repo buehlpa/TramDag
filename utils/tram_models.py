@@ -158,11 +158,11 @@ class ComplexInterceptDefaultTabular(nn.Module):
     Attributes:
         n_thetas (int): number of features/predictors
     """
-    def __init__(self, n_thetas=20):
+    def __init__(self, n_features=1,n_thetas=20):
         super(ComplexInterceptDefaultTabular, self).__init__()
         
         # Define the layers
-        self.fc1 = nn.Linear(1, 8)  # First hidden layer (X_i -> 8)
+        self.fc1 = nn.Linear(n_features, 8)  # First hidden layer (X_i -> 8)
         self.relu1 = nn.ReLU()               # ReLU activation
         self.fc2 = nn.Linear(8, 8)           # Second hidden layer (8 -> 8)
         self.relu2 = nn.ReLU()               # ReLU activation
