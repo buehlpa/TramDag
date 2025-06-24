@@ -201,11 +201,18 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax
         theta_single=transform_intercepts_continous(theta_single)
         thetas_expanded = theta_single.repeat(n, 1).to(device)  # Shape: (n, 20)
         
-        targets2 = torch.linspace(xmin_plot, xmax_plot, steps=n).to(device)  # 1000 points from 0 to 1
-        
         min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
         max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
         min_max = torch.stack([min_vals, max_vals], dim=0)
+        
+        if xmin_plot==None:
+            xmin_plot=min_vals-1
+        if xmax_plot==None:
+            xmax_plot=max_vals+1        
+        
+        
+        targets2 = torch.linspace(xmin_plot, xmax_plot, steps=n).to(device)  # 1000 points from 0 to 1
+        
         min_val = min_max[0].clone().detach() if isinstance(min_max[0], torch.Tensor) else torch.tensor(min_max[0], dtype=targets2.dtype, device=targets2.device)
         max_val = min_max[1].clone().detach() if isinstance(min_max[1], torch.Tensor) else torch.tensor(min_max[1], dtype=targets2.dtype, device=targets2.device) 
 
@@ -225,7 +232,6 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax
         plt.plot(targets2_cpu[between_mask], hdag_extra_values_cpu[between_mask], color='blue', label='min_val <= x <= max_val')
         plt.plot(targets2_cpu[above_max_mask], hdag_extra_values_cpu[above_max_mask], color='red', label='x > max_val')
         plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
-        
         
         
 def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
@@ -252,18 +258,17 @@ def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df,
         min_max = torch.stack([min_vals, max_vals], dim=0)
 
         h_train_list, h_val_list = [], []
-
         with torch.no_grad():
             for x, y in tqdm(train_loader, desc=f"Train loader ({node})", total=len(train_loader)):
                 y = y.to(device)
-                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h.values(), device=device)
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 h_train, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
                 h_train_list.extend(h_train.cpu().numpy())
 
             for x, y in tqdm(val_loader, desc=f"Val loader ({node})", total=len(val_loader)):
                 y = y.to(device)
-                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h.values(), device=device)
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 h_val, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
                 h_val_list.extend(h_val.cpu().numpy())
