@@ -4,65 +4,107 @@ import seaborn as sns
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+import matplotlib.colors as mcolors
+import colorsys
+
 
 import ipywidgets as widgets
 from IPython.display import display, clear_output
 import os
+import re
 
-### plot the DAG
-def plot_dag(adj_matrix, data_type, seed=42):
+
+# Utility: Generate N shades of green
+def generate_green_shades(n):
+    return [
+        mcolors.to_hex(colorsys.hsv_to_rgb(0.33, 0.4 + 0.5 * (i / max(n - 1, 1)), 0.7 + 0.3 * (i / max(n - 1, 1))))
+        for i in range(n)
+    ]
+
+def plot_dag(adj_matrix, data_type, seed=42, use_spring=True):
     """
-    Plot the Directed Acyclic Graph (DAG) with Source and Sink nodes.
-    params:
-    adj_matrix: 2D numpy array, adjacency matrix of the DAG trainglular upper 
-    e.g. adj_matrix = np.array([
-                                ["0", "cs", "ls", "0"],  # A -> B (cs), A -> C (ls)
-                                ["0", "0", "0", "ls"],  # B -> D (ls)
-                                ["0", "0", "0", "cs"],  # C -> D (cs)
-                                ["0", "0", "0", "0"]    # No outgoing edges from D
-                            ], dtype=object)
-    seed: int, seed for the random layout , change to get different layout
+    Plot the DAG with Source, Sink, and Intermediate nodes.
+
+    Parameters:
+    - adj_matrix: square upper‐triangular numpy array of edge labels (strings)
+    - data_type: dict mapping node labels to types (keys are node names), 
+                 length must match adj_matrix.shape[0]
+    - seed: int, random seed for layout
+    - use_spring: bool, if True use networkx.spring_layout; 
+                  if False try Graphviz “dot” (falls back to spring)
     """
-    
-    #validate adj_matrix
+    import networkx as nx
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+
+    # assume validate_adj_matrix and create_nx_graph are defined elsewhere
     if not validate_adj_matrix(adj_matrix):
-        raise ValueError("Invalid adjacency matrix. Please check the criteria.")
-    
+        raise ValueError("Invalid adjacency matrix.")
     if len(data_type) != adj_matrix.shape[0]:
-        raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
-    
-    
-    node_labels=list(data_type.keys())
-    
-    #create a nx graph object
-    G, edge_labels=create_nx_graph(adj_matrix,node_labels=node_labels)
-    
-    # sources and sinks
-    sources = [node for node in G.nodes if G.in_degree(node) == 0]  # No incoming edges
-    sinks = [node for node in G.nodes if G.out_degree(node) == 0]   # No outgoing edges
-    
-    node_colors = []
-    for node in G.nodes:
-        if node in sources:
-            node_colors.append("green")  # Source nodes in green
-        elif node in sinks:
-            node_colors.append("red")    # Sink nodes in red
-        else:
-            node_colors.append("lightblue")  # Intermediate nodes in light blue
+        raise ValueError("data_type must match adjacency matrix size.")
 
-    # Draw the Graph
-    plt.figure(figsize=(6, 4))
-    pos = nx.spring_layout(G, seed=seed)  # Layout for positioning
-    nx.draw(G, pos, with_labels=True, node_color=node_colors, edge_color='gray',
-            node_size=3000, arrowsize=20)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red', font_size=12)
+    node_labels = list(data_type.keys())
+    G, edge_labels = create_nx_graph(adj_matrix, node_labels)
 
-    # Add a legend 
-    legend_elements = [
-        Patch(facecolor='green', edgecolor='black', label='Source'),
-        Patch(facecolor='red', edgecolor='black', label='Sink')]
-    plt.legend(handles=legend_elements, loc='upper right', fontsize=10, frameon=True)
+    # classify nodes
+    sources       = {n for n in G.nodes if G.in_degree(n) == 0}
+    sinks         = {n for n in G.nodes if G.out_degree(n) == 0}
+    intermediates = set(G.nodes) - sources - sinks
+
+    # assign node colors
+    node_colors = [
+        "green" if n in sources
+        else "red" if n in sinks
+        else "lightblue"
+        for n in G.nodes
+    ]
+
+    # choose layout
+    if use_spring:
+        pos = nx.spring_layout(G, seed=seed, k=1.5, iterations=100)
+    else:
+        try:
+            pos = nx.nx_agraph.graphviz_layout(G, prog="dot")
+        except (ImportError, nx.NetworkXException):
+            pos = nx.spring_layout(G, seed=seed, k=1.5, iterations=100)
+
+    # draw nodes and edges
+    plt.figure(figsize=(8, 6))
+    nx.draw(
+        G, pos,
+        with_labels=True,
+        node_color=node_colors,
+        edge_color="gray",
+        node_size=2500,
+        arrowsize=20
+    )
+
+    # draw edge labels colored by prefix
+    for (u, v), lbl in edge_labels.items():
+        color = (
+            "blue"  if lbl.startswith("ci")
+            else "red"   if lbl.startswith("ls")
+            else "green" if lbl.startswith("cs")
+            else "black"
+        )
+        nx.draw_networkx_edge_labels(
+            G, pos,
+            edge_labels={(u, v): lbl},
+            font_color=color,
+            font_size=12
+        )
+
+    # build legend
+    legend_items = [
+        Patch(facecolor="green",     edgecolor="black", label="Source"),
+        Patch(facecolor="red",       edgecolor="black", label="Sink"),
+        Patch(facecolor="lightblue", edgecolor="black", label="Intermediate")
+    ]
+    plt.legend(handles=legend_items, loc="upper right", frameon=True)
+
     plt.title("TRAM DAG")
+    plt.axis("off")
+    plt.tight_layout()
     plt.show()
 
 def plot_nn_names_matrix(nn_names_matrix,data_type):

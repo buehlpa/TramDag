@@ -37,20 +37,24 @@ def preprocess_inputs(x, transformation_terms, device='cuda'):
       - int_inputs: Tensor of shape (B, n_features) for intercept model
       - shift_list: List of tensors for each shift model, shape (B, group_features)
     """
+    transformation_terms=list(transformation_terms)
     #assert len(x) == len(transformation_terms), "Mismatch in inputs and term list length"
     
+    ## if there is only a source so transforamtion terms is 0:
     x = [xi.to(device, non_blocking=True) for xi in x]
-    
     if len(transformation_terms)== 0:
         x = [xi.unsqueeze(1) for xi in x] 
         int_inputs= x[0]
         return int_inputs, None
     
+    if not  any('ci' in str(value) for value in transformation_terms):
+        transformation_terms.insert(0,'si')
+    
     grouped_inputs = defaultdict(list)
 
     for tensor, term in zip(x, transformation_terms):
         # Handle terms like ci11, cs22, ls etc.
-        if term.startswith(('ci', 'cs', 'ls')):
+        if term.startswith(('si','ci', 'cs', 'ls')):
             if len(term) > 2 and term[2].isdigit():
                 key = term[:3]  # ci11 → ci1, cs22 → cs2
             else:
@@ -60,9 +64,8 @@ def preprocess_inputs(x, transformation_terms, device='cuda'):
             raise ValueError(f"Unknown transformation term: {term}")
 
     # Separate intercept and shift groups
-    int_keys = sorted([k for k in grouped_inputs if k.startswith('ci')])
+    int_keys = sorted([k for k in grouped_inputs if k.startswith(('si','ci'))])
     shift_keys = sorted([k for k in grouped_inputs if k.startswith(('cs', 'ls'))])
-    
     
     if len(int_keys) != 1:
         raise ValueError(f"Expected exactly one intercept group, got: {int_keys}")
@@ -83,6 +86,11 @@ def preprocess_inputs(x, transformation_terms, device='cuda'):
         shift_list.append(shift_tensor)
 
     return int_inputs, shift_list if shift_list else None
+
+
+
+
+
 
 # --------- Extract base model class ---------
 def get_base_model_class(class_name: str):
@@ -473,10 +481,6 @@ def train_val_loop(start_epoch,
                 loss = contram_nll(y_pred, y, min_max=min_max)
                 loss.backward()
                 optimizer.step()
-
-
-
-
                 train_loss += loss.item()
                 
             if use_scheduler:

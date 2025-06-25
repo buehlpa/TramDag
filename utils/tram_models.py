@@ -126,30 +126,55 @@ class LinearShift(nn.Module):
 
 
 ############################################### Default neural network for complex shift term and intercept
+import torch.nn as nn
+
 class ComplexShiftDefaultTabular(nn.Module):
     """
-    Complex shift term for tabular data. Can be any neural network architecture
+    A neural network module to compute complex shift terms for tabular data.
+    
+    Architecture:
+        Input layer -> Linear(64) -> ReLU -> Dropout
+                    -> Linear(128) -> ReLU -> Dropout
+                    -> Linear(64) -> ReLU -> Dropout
+                    -> Linear(1, no bias)
+    
     Attributes:
-        n_features (int): number of features/predictors
+        n_features (int): Number of input features (predictors)
     """
-    def __init__(self, n_features=1):
+    def __init__(self, n_features=1, dropout_rate=0.3):
         super(ComplexShiftDefaultTabular, self).__init__()
-        
-        # Define the layers
-        self.fc1 = nn.Linear(n_features, 32)  # First hidden layer (n_features -> 8)
-        self.relu1 = nn.ReLU()               # ReLU activation
-        self.fc2 = nn.Linear(32, 32)           # Second hidden layer (8 -> 8)
-        self.relu2 = nn.ReLU()               # ReLU activation
-        self.fc3 = nn.Linear(32, 1, bias=False)  # Output layer (8 -> 1, no bias)
-        
+        self.fc1 = nn.Linear(n_features, 64)     # Input layer: n_features -> 64
+        self.relu1 = nn.ReLU()
+        self.dropout1 = nn.Dropout(dropout_rate) # Dropout after first activation
+        self.fc2 = nn.Linear(64, 128)            # Hidden layer: 64 -> 128
+        self.relu2 = nn.ReLU()
+        self.dropout2 = nn.Dropout(dropout_rate) # Dropout after second activation
+        self.fc3 = nn.Linear(128, 64)            # Hidden layer: 128 -> 64
+        self.relu3 = nn.ReLU()
+        self.dropout3 = nn.Dropout(dropout_rate) # Dropout after third activation
+        self.fc4 = nn.Linear(64, 1, bias=False)  # Output layer: 64 -> 1, no bias
+
     def forward(self, x):
-        # Forward pass through the network
+        """
+        Forward pass through the network.
+        Args:
+            x (Tensor): Input tensor of shape (batch_size, n_features)
+
+        Returns:
+            Tensor: Output tensor of shape (batch_size, 1)
+        """
         x = self.fc1(x)
         x = self.relu1(x)
+        x = self.dropout1(x)
         x = self.fc2(x)
         x = self.relu2(x)
+        x = self.dropout2(x)
         x = self.fc3(x)
+        x = self.relu3(x)
+        x = self.dropout3(x)
+        x = self.fc4(x)
         return x
+
     
 
 class ComplexInterceptDefaultTabular(nn.Module):
@@ -160,7 +185,6 @@ class ComplexInterceptDefaultTabular(nn.Module):
     """
     def __init__(self, n_features=1,n_thetas=20):
         super(ComplexInterceptDefaultTabular, self).__init__()
-        
         # Define the layers
         self.fc1 = nn.Linear(n_features, 8)  # First hidden layer (X_i -> 8)
         self.relu1 = nn.ReLU()               # ReLU activation
