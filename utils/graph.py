@@ -2,16 +2,19 @@
 import numpy as np
 import seaborn as sns
 import networkx as nx
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import matplotlib.colors as mcolors
 import colorsys
 
-
 import ipywidgets as widgets
 from IPython.display import display, clear_output
-import os
 import re
+import sys
+import json
+from datetime import datetime
+
 
 
 # Utility: Generate N shades of green
@@ -33,9 +36,6 @@ def plot_dag(adj_matrix, data_type, seed=42, use_spring=True):
     - use_spring: bool, if True use networkx.spring_layout; 
                   if False try Graphviz “dot” (falls back to spring)
     """
-    import networkx as nx
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
 
     # assume validate_adj_matrix and create_nx_graph are defined elsewhere
     if not validate_adj_matrix(adj_matrix):
@@ -163,24 +163,17 @@ def create_nx_graph(adj_matrix, node_labels=None):
 
 
 
-def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./", filename="adj_matrix.npy"):
-    n = len(variable_names)
-    filepath = os.path.join(experiment_dir, filename)
 
-    if os.path.exists(filepath):
-        print(f"Found existing matrix at {filepath}. plotting...")
-        try:
-            adj_matrix = np.load(filepath, allow_pickle=True)
-            
-            
-            
-            
-            plot_dag(adj_matrix, data_type, seed=seed)
-            return None
+def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
+    
+    data_type =  load_configuration_dict(CONF_DICT_PATH)['data_type']
+    n = len(data_type.keys())
+    adj_matrix=read_adj_matrix_from_configuration(CONF_DICT_PATH)
+    
+    if adj_matrix is not None:
+        plot_dag(adj_matrix, data_type, seed=seed)
+        return None
         
-        except Exception as e:
-            print(f"Error loading or plotting DAG: {e}")
-            return None
     else:
         print("No matrix found. Please fill out the DAG and click 'Generate'.")
 
@@ -189,11 +182,11 @@ def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./",
 
         def create_grid():
             input_grid = []
-            header_widgets = [widgets.Label(value='')] + [widgets.Label(value=name) for name in variable_names]
+            header_widgets = [widgets.Label(value='')] + [widgets.Label(value=name) for name in data_type.keys()]
             input_grid.extend(header_widgets)
 
             for i in range(n):
-                input_grid.append(widgets.Label(value=variable_names[i]))
+                input_grid.append(widgets.Label(value=data_type.keys()[i]))
                 for j in range(n):
                     if i >= j:
                         cell = widgets.Label(value="0")
@@ -224,8 +217,7 @@ def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./",
                 try:
                     if not validate_adj_matrix(adj_matrix):
                         raise ValueError("Invalid adjacency matrix. Please check the criteria.")
-                    np.save(filepath, adj_matrix)
-                    print(f"Saved matrix to {filepath}")
+                    write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH)
                     plot_dag(adj_matrix, data_type, seed=seed)
                     return None
                 except Exception as e:
@@ -245,11 +237,321 @@ def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./",
         display(ui)
         return None
 
+def interactive_nn_names_matrix(CONF_DICT_PATH, seed=5):
+    """
+    If a saved NN-names matrix exists in configuration, load & display it.
+    Otherwise, generate defaults from the adjacency matrix, show them
+    in an editable grid (only for non-zero entries), and let the user overwrite before saving & plotting.
+    """
+    # Load config, types, matrices
+    cfg = load_configuration_dict(CONF_DICT_PATH)
+    data_type = cfg['data_type']
+    adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+    nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+    var_names = list(data_type.keys())
+    n = len(var_names)
+
+    # If already saved, just plot and exit
+    if nn_names_matrix is not None:
+        plot_nn_names_matrix(nn_names_matrix, data_type)
+        return
+
+    # No saved NN-names → build defaults
+    default_nn = create_nn_model_names(adj_matrix, data_type)
+
+    output = widgets.Output()
+    cells = {}
+
+    def create_grid():
+        # Build header row
+        header_widgets = [widgets.Label(value="")] + [widgets.Label(value=v) for v in var_names]
+        grid = header_widgets.copy()
+
+        for i, vi in enumerate(var_names):
+            grid.append(widgets.Label(value=vi))
+            for j, vj in enumerate(var_names):
+                if i >= j:
+                    # Diagonal & lower triangle: non-editable blank
+                    cell = widgets.Label(value="")
+                else:
+                    default = default_nn[i, j]
+                    if default == "0":
+                        # Do not display zeros
+                        cell = widgets.Label(value="")
+                    else:
+                        # Editable for prefilled entries only
+                        cell = widgets.Text(
+                            value=default,
+                            placeholder="",
+                            layout=widgets.Layout(width="100px")
+                        )
+                        cells[(i, j)] = cell
+                grid.append(cell)
+
+        return widgets.GridBox(
+            children=grid,
+            layout=widgets.Layout(
+                grid_template_columns=("100px " * (n + 1)).strip(),
+                overflow="auto"
+            )
+        )
+
+    def on_generate_clicked(b):
+        with output:
+            clear_output()
+            # Build final nn_names_matrix
+            nm = np.empty((n, n), dtype=object)
+            for i in range(n):
+                for j in range(n):
+                    if i >= j:
+                        nm[i, j] = "0"
+                    else:
+                        if (i, j) in cells:
+                            val = cells[(i, j)].value.strip()
+                            nm[i, j] = val if val else default_nn[i, j]
+                        else:
+                            nm[i, j] = "0"
+            try:
+                write_nn_names_matrix_to_configuration(nm, CONF_DICT_PATH)
+                plot_nn_names_matrix(nm, data_type)
+            except Exception as e:
+                print(f"Error saving or plotting NN-names matrix: {e}")
+
+    # Button to save and plot
+    btn = widgets.Button(description="Generate NN-Names + Plot", button_style="success")
+    btn.on_click(on_generate_clicked)
+
+    # Layout UI
+    grid = create_grid()
+    ui = widgets.VBox([
+        widgets.Label("Edit only the existing model names (non-zero entries)."),
+        grid,
+        btn,
+        output
+    ])
+    display(ui)
+
+# configuration dicitonary utils
+
+
+def new_conf_dict(experiment_name,EXPERIMENT_DIR,DATA_PATH,LOG_DIR):
+    """
+    creates the empty_configuration_file for the experiment
+    
+    Structure:
+    
+    json / dictionary like
+    
+    {
+        date_of_creation: '1.1.2024'
+        experiment_name: "example_1"
+        PATHS:{
+                    DATA_PATH:
+                    LOG_DIR:
+                    EXPERIMENT_DIR:
+                }  
+        data_type: {'x1':'cont','x2':'cont','x3':'cont','x4':'cont','x5':'cont','x6':'cont','x7':'cont','x8':'cont'},  # continous , images , ordinal
+        adj_matrix:   [[0,cs],[0,0]],
+        model_names:  [[0,ComplexInterceptDefaultTabular],[0,0]],
+        
+        seed:42, 
+        
+        nodes: {'x1': { 'Modelnr': 0,
+                        'data_type': 'cont',
+                        'node_type': 'source',
+                        'parents': [],
+                        'parents_datatype': {},
+                        'transformation_terms_in_h()': {},
+                        'transformation_term_nn_models_in_h()': {},
+                        'min': 0.1023280003906143,
+                        'max': 1.895380529733125},
+                'x2': { 'Modelnr': 1,
+                        'data_type': 'cont',
+                        'node_type': 'sink',
+                        'parents': ['x1'],
+                        'parents_datatype': {},
+                        'transformation_terms_in_h()': {'x1':'cs'},
+                        'transformation_term_nn_models_in_h()': {'x1':'ComplexInterceptDefaultTabular'},
+                        'min': 0.09848326169895154,
+                        'max': 1.9048444463462053},
+                }
+    
+    """
+    configuration_dict=    {
+                            'date_of_creation':          None,
+                            'experiment_name' :          None,
+                            'PATHS':{
+                                    'DATA_PATH':         None,
+                                    'LOG_DIR':           None,
+                                    'EXPERIMENT_DIR':    None,
+                                    }, 
+                            'data_type':                 None,
+                            'adj_matrix':                None,
+                            'model_names':               None,
+                            'seed':                      None, 
+                            'nodes':                     None,
+                            }
+    
+    configuration_dict['date_of_creation']=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    configuration_dict['experiment_name']=experiment_name
+    configuration_dict['PATHS']['DATA_PATH']=DATA_PATH
+    configuration_dict['PATHS']['LOG_DIR']=LOG_DIR
+    configuration_dict['PATHS']['EXPERIMENT_DIR']=EXPERIMENT_DIR
+    
+    return configuration_dict
+
+
+def write_configuration_dict(configuration_dict, CONF_DICT_PATH):
+    """
+    Write out the configuration dict as JSON. 
+    Catches filesystem and serialization errors.
+    """
+    try:
+        with open(CONF_DICT_PATH, 'w', encoding='utf-8') as f:
+            json.dump(configuration_dict, f, indent=4)
+    except (OSError, TypeError) as e:
+        # OSError covers file I/O errors, TypeError covers JSON serialization issues
+        print(f"Error writing config to {CONF_DICT_PATH}: {e}", file=sys.stderr)
+        raise   
+
+def load_configuration_dict(CONF_DICT_PATH):
+    """
+    Load configuration dictionary from a JSON file.
+
+    :param CONF_DICT_PATH: Path to the JSON configuration file.
+    :return: The configuration dictionary.
+    :raises:
+        OSError if the file can’t be read,
+        json.JSONDecodeError if the file isn’t valid JSON.
+    """
+    try:
+        with open(CONF_DICT_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error loading config from {CONF_DICT_PATH}: {e}", file=sys.stderr)
+        raise
+
+def create_and_write_new_configuration_dict(experiment_name,CONF_DICT_PATH,EXPERIMENT_DIR,DATA_PATH,LOG_DIR):
+    
+    """
+    Create a new configuration dictionary for the experiment and write it to the specified path.
+    :param experiment_name: Name of the experiment.
+    :param CONF_DICT_PATH: Path where the configuration dictionary should be saved.
+    :param EXPERIMENT_DIR: Directory for the experiment.
+    :param DATA_PATH: Path to the data.
+    :param LOG_DIR: Directory for logs.
+    :return: The created configuration dictionary.
+    :raises:
+        OSError if the file can’t be written,
+        json.JSONDecodeError if the file isn’t valid JSON.
+        Exception if there is an error creating the configuration dictionary.
+    """
+    try:
+        configuration_dict=new_conf_dict(experiment_name,EXPERIMENT_DIR,DATA_PATH,LOG_DIR)
+    except:
+        print(f"Error creating configuration dictionary for {experiment_name}.", file=sys.stderr)
+        raise
+    try:
+        write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+    except:
+        print(f"Error writing configuration dictionary to {CONF_DICT_PATH}.", file=sys.stderr)
+        raise
+    return configuration_dict
+
+def read_adj_matrix_from_configuration(CONF_DICT_PATH):
+    """
+    Read the adjacency matrix from the configuration dictionary.
+    
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    :return: The adjacency matrix as a numpy array.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    if configuration_dict['adj_matrix'] is None:
+        return None
+    else:
+        adj_matrix = configuration_dict['adj_matrix']
+        if isinstance(adj_matrix, list):
+            adj_matrix = np.array(configuration_dict['adj_matrix'])
+        return adj_matrix
+
+def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
+    """
+    Write the adjacency matrix to the configuration dictionary.
+    
+    :param adj_matrix: The adjacency matrix to write.
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    configuration_dict['adj_matrix'] = adj_matrix.tolist()  # Convert to list for JSON serialization
+    write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+
+
+def write_data_type_to_configuration(data_type:dict, CONF_DICT_PATH):
+    """
+    Write the data type information to the configuration dictionary.
+    
+    :param data_type: Dictionary containing variable names and their data types.
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    configuration_dict['data_type'] = data_type
+    write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+
+def read_nn_names_matrix_from_configuration(CONF_DICT_PATH):
+    """
+    Read the neural network names matrix from the configuration dictionary.
+    
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    :return: The neural network names matrix as a numpy array.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    if configuration_dict['model_names'] is None:
+        return None
+    else:
+        nn_names_matrix = configuration_dict['model_names']
+        if isinstance(nn_names_matrix, list):
+            nn_names_matrix = np.array(configuration_dict['model_names'])
+        return nn_names_matrix
+    
+def write_nn_names_matrix_to_configuration(nn_names_matrix, CONF_DICT_PATH):
+    """
+    Write the neural network names matrix to the configuration dictionary.
+    
+    :param nn_names_matrix: The neural network names matrix to write.
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    configuration_dict['model_names'] = nn_names_matrix.tolist()  # Convert to list for JSON serialization
+    write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+    
+    
+
+
+def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals):  
+    """
+    Write the nodes information to the configuration dictionary.
+    
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+    nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+    data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
+    
+    configuration_dict = get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals)
+    
+    conf = load_configuration_dict(CONF_DICT_PATH)
+    conf['nodes'] = configuration_dict
+    write_configuration_dict(conf, CONF_DICT_PATH)
 
 
 
 
-def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
+
+
+
+
+def get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
     """
     Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
     a neural network names matrix, and a data type dictionary.
@@ -260,7 +562,7 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
     if len(data_type) != adj_matrix.shape[0]:
         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
     
-    configuration_dict = {}
+    nodes_dict = {}
     G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
     
     sources = [node for node in G.nodes if G.in_degree(node) == 0]
@@ -268,14 +570,15 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
     
     for i, node in enumerate(G.nodes):
         parents = list(G.predecessors(node))
-        
-        configuration_dict[node] = {}
-        configuration_dict[node]['Modelnr'] = i
-        configuration_dict[node]['data_type'] = data_type[node]
-        configuration_dict[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
-        configuration_dict[node]['parents'] = parents
-        configuration_dict[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
-        configuration_dict[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
+        nodes_dict[node] = {}
+        nodes_dict[node]['Modelnr'] = i
+        nodes_dict[node]['data_type'] = data_type[node]
+        nodes_dict[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
+        nodes_dict[node]['parents'] = parents
+        nodes_dict[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
+        nodes_dict[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
+        nodes_dict[node]['min']=min_vals[i].tolist()   
+        nodes_dict[node]['max']=max_vals[i].tolist()
         
         transformation_term_nn_models = {}
         for parent in parents:
@@ -284,9 +587,47 @@ def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
             
             if nn_names_matrix[parent_idx, child_idx] != "0":
                 transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
-        configuration_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
+        nodes_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
+    return nodes_dict
+
+# def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
+#     """
+#     Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
+#     a neural network names matrix, and a data type dictionary.
+#     """
+#     if not validate_adj_matrix(adj_matrix):
+#         raise ValueError("Invalid adjacency matrix. Please check the criteria.")
     
-    return configuration_dict
+#     if len(data_type) != adj_matrix.shape[0]:
+#         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
+    
+#     configuration_dict = {}
+#     G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
+    
+#     sources = [node for node in G.nodes if G.in_degree(node) == 0]
+#     sinks = [node for node in G.nodes if G.out_degree(node) == 0]
+    
+#     for i, node in enumerate(G.nodes):
+#         parents = list(G.predecessors(node))
+        
+#         configuration_dict[node] = {}
+#         configuration_dict[node]['Modelnr'] = i
+#         configuration_dict[node]['data_type'] = data_type[node]
+#         configuration_dict[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
+#         configuration_dict[node]['parents'] = parents
+#         configuration_dict[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
+#         configuration_dict[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
+        
+#         transformation_term_nn_models = {}
+#         for parent in parents:
+#             parent_idx = list(data_type.keys()).index(parent)  
+#             child_idx = list(data_type.keys()).index(node) 
+            
+#             if nn_names_matrix[parent_idx, child_idx] != "0":
+#                 transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
+#         configuration_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
+    
+#     return configuration_dict
 
 
 def create_nn_model_names(adj_matrix, data_type):
