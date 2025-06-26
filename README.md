@@ -1,4 +1,4 @@
-Pytorch implementation of TRAM DAG by Beate Sick and Oliver Dürr
+Pytorch implementation of TRAnsformation Models in Directed Acyclic Graphs (TRAMDAG)
 
 
 
