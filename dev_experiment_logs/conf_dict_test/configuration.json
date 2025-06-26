@@ -1,0 +1,334 @@
+{
+    "date_of_creation": "2025-06-26 14:34:02",
+    "experiment_name": "conf_dict_test",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/conf_dict_test",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/conf_dict_test"
+    },
+    "data_type": {
+        "x1": "cont",
+        "x2": "cont",
+        "x3": "cont",
+        "x4": "cont",
+        "x5": "cont",
+        "x6": "cont",
+        "x7": "cont",
+        "x8": "cont"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs",
+            "0",
+            "0"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs",
+            "ci12",
+            "cs12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls",
+            "ls",
+            "cs11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ci11",
+            "0"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ci13",
+            "cs21"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs22"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ci"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular",
+            "0",
+            "0"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular",
+            "ComplexInterceptDefaultTabular12",
+            "ComplexShiftDefaultTabular12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift",
+            "LinearShift",
+            "ComplexShiftDefaultTabular11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular11",
+            "0"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular13",
+            "ComplexShiftDefaultTabular21"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular22"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10232800039061428,
+            "max": 1.8953805297331245,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.0984832616989515,
+            "max": 1.9048444463462053,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10592383041862731,
+            "max": 1.9012680218740787,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x4": {
+            "Modelnr": 3,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.09720500269108459,
+            "max": 1.898116801817593,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x5": {
+            "Modelnr": 4,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": -3.2852239980233717,
+            "max": 3.2738588823961456,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x6": {
+            "Modelnr": 5,
+            "data_type": "cont",
+            "node_type": "internal",
+            "parents": [
+                "x1",
+                "x2",
+                "x3"
+            ],
+            "parents_datatype": {
+                "x1": "cont",
+                "x2": "cont",
+                "x3": "cont"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "cs",
+                "x2": "cs",
+                "x3": "ls"
+            },
+            "min": 0.10024236735794097,
+            "max": 1.8948382404922974,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "ComplexShiftDefaultTabular",
+                "x2": "ComplexShiftDefaultTabular",
+                "x3": "LinearShift"
+            }
+        },
+        "x7": {
+            "Modelnr": 6,
+            "data_type": "cont",
+            "node_type": "internal",
+            "parents": [
+                "x2",
+                "x3",
+                "x4",
+                "x5"
+            ],
+            "parents_datatype": {
+                "x2": "cont",
+                "x3": "cont",
+                "x4": "cont",
+                "x5": "cont"
+            },
+            "transformation_terms_in_h()": {
+                "x2": "ci12",
+                "x3": "ls",
+                "x4": "ci11",
+                "x5": "ci13"
+            },
+            "min": -3.3760478609047664,
+            "max": 3.2822939559647093,
+            "transformation_term_nn_models_in_h()": {
+                "x2": "ComplexInterceptDefaultTabular12",
+                "x3": "LinearShift",
+                "x4": "ComplexInterceptDefaultTabular11",
+                "x5": "ComplexInterceptDefaultTabular13"
+            }
+        },
+        "x8": {
+            "Modelnr": 7,
+            "data_type": "cont",
+            "node_type": "sink",
+            "parents": [
+                "x2",
+                "x3",
+                "x5",
+                "x6",
+                "x7"
+            ],
+            "parents_datatype": {
+                "x2": "cont",
+                "x3": "cont",
+                "x5": "cont",
+                "x6": "cont",
+                "x7": "cont"
+            },
+            "transformation_terms_in_h()": {
+                "x2": "cs12",
+                "x3": "cs11",
+                "x5": "cs21",
+                "x6": "cs22",
+                "x7": "ci"
+            },
+            "min": -4.52786107852775,
+            "max": 5.556345321881678,
+            "transformation_term_nn_models_in_h()": {
+                "x2": "ComplexShiftDefaultTabular12",
+                "x3": "ComplexShiftDefaultTabular11",
+                "x5": "ComplexShiftDefaultTabular21",
+                "x6": "ComplexShiftDefaultTabular22",
+                "x7": "ComplexInterceptDefaultTabular"
+            }
+        }
+    }
+}

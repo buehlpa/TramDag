@@ -168,6 +168,7 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
     
     data_type =  load_configuration_dict(CONF_DICT_PATH)['data_type']
     n = len(data_type.keys())
+    variables = list(data_type.keys())
     adj_matrix=read_adj_matrix_from_configuration(CONF_DICT_PATH)
     
     if adj_matrix is not None:
@@ -182,11 +183,11 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
 
         def create_grid():
             input_grid = []
-            header_widgets = [widgets.Label(value='')] + [widgets.Label(value=name) for name in data_type.keys()]
+            header_widgets = [widgets.Label(value='')] + [widgets.Label(value=name) for name in variables]
             input_grid.extend(header_widgets)
 
             for i in range(n):
-                input_grid.append(widgets.Label(value=data_type.keys()[i]))
+                input_grid.append(widgets.Label(value=variables[i]))
                 for j in range(n):
                     if i >= j:
                         cell = widgets.Label(value="0")
