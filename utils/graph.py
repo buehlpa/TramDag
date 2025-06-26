@@ -171,6 +171,10 @@ def interactive_adj_matrix(variable_names, data_type, seed, experiment_dir="./",
         print(f"Found existing matrix at {filepath}. plotting...")
         try:
             adj_matrix = np.load(filepath, allow_pickle=True)
+            
+            
+            
+            
             plot_dag(adj_matrix, data_type, seed=seed)
             return None
         
