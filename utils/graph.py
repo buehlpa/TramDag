@@ -590,44 +590,7 @@ def get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
         nodes_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
     return nodes_dict
 
-# def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
-#     """
-#     Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
-#     a neural network names matrix, and a data type dictionary.
-#     """
-#     if not validate_adj_matrix(adj_matrix):
-#         raise ValueError("Invalid adjacency matrix. Please check the criteria.")
-    
-#     if len(data_type) != adj_matrix.shape[0]:
-#         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
-    
-#     configuration_dict = {}
-#     G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
-    
-#     sources = [node for node in G.nodes if G.in_degree(node) == 0]
-#     sinks = [node for node in G.nodes if G.out_degree(node) == 0]
-    
-#     for i, node in enumerate(G.nodes):
-#         parents = list(G.predecessors(node))
-        
-#         configuration_dict[node] = {}
-#         configuration_dict[node]['Modelnr'] = i
-#         configuration_dict[node]['data_type'] = data_type[node]
-#         configuration_dict[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
-#         configuration_dict[node]['parents'] = parents
-#         configuration_dict[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
-#         configuration_dict[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
-        
-#         transformation_term_nn_models = {}
-#         for parent in parents:
-#             parent_idx = list(data_type.keys()).index(parent)  
-#             child_idx = list(data_type.keys()).index(node) 
-            
-#             if nn_names_matrix[parent_idx, child_idx] != "0":
-#                 transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
-#         configuration_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
-    
-#     return configuration_dict
+
 
 
 def create_nn_model_names(adj_matrix, data_type):
@@ -857,3 +820,47 @@ def sort_second_dict_by_first_dict_keys(sort_by, to_sort):
         dict: A sorted dictionary with keys appearing in the same order as in first_dict.
     """
     return {key: to_sort[key] for key in sort_by.keys() if key in to_sort}
+
+
+
+############### graveyarded code, not used anymore, but might be useful in the future
+
+
+# def get_configuration_dict(adj_matrix, nn_names_matrix, data_type):
+#     """
+#     Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
+#     a neural network names matrix, and a data type dictionary.
+#     """
+#     if not validate_adj_matrix(adj_matrix):
+#         raise ValueError("Invalid adjacency matrix. Please check the criteria.")
+    
+#     if len(data_type) != adj_matrix.shape[0]:
+#         raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
+    
+#     configuration_dict = {}
+#     G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
+    
+#     sources = [node for node in G.nodes if G.in_degree(node) == 0]
+#     sinks = [node for node in G.nodes if G.out_degree(node) == 0]
+    
+#     for i, node in enumerate(G.nodes):
+#         parents = list(G.predecessors(node))
+        
+#         configuration_dict[node] = {}
+#         configuration_dict[node]['Modelnr'] = i
+#         configuration_dict[node]['data_type'] = data_type[node]
+#         configuration_dict[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
+#         configuration_dict[node]['parents'] = parents
+#         configuration_dict[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
+#         configuration_dict[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
+        
+#         transformation_term_nn_models = {}
+#         for parent in parents:
+#             parent_idx = list(data_type.keys()).index(parent)  
+#             child_idx = list(data_type.keys()).index(node) 
+            
+#             if nn_names_matrix[parent_idx, child_idx] != "0":
+#                 transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
+#         configuration_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
+    
+#     return configuration_dict

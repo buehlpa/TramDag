@@ -87,11 +87,6 @@ def preprocess_inputs(x, transformation_terms, device='cuda'):
 
     return int_inputs, shift_list if shift_list else None
 
-
-
-
-
-
 # --------- Extract base model class ---------
 def get_base_model_class(class_name: str):
     # Strip digits to get the base class name
@@ -116,8 +111,6 @@ def group_by_base(term_dict, prefixes):
                 groups[key].append((feat, conf))
                 break
     return groups
-
-
 
 
 def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version 11/06/25
@@ -184,58 +177,7 @@ def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version
 
 
 
-# def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version 11/06/25
 
-    
-
-#     ### iF node is a source -> no deep nn is needed
-#     if conf_dict[node]['node_type'] == 'source':
-#         nn_int = SimpleIntercept()
-#         tram_model = TramModel(nn_int, None)  
-#         if verbose:
-#             print('>>>>>>>>>>>>  source node --> only  modelled only  by si')
-#             print(tram_model)
-#         return tram_model
-    
-    
-#     ### if node is not a source node 
-#     else:
-#         # read terms and model names form the config
-        
-#         _,terms_dict,model_names_dict=ordered_parents(node, conf_dict)
-        
-#         #old
-#         # terms_dict=conf_dict[node]['transformation_terms_in_h()']
-#         # model_names_dict=conf_dict[node]['transformation_term_nn_models_in_h()']
-        
-#         # Combine terms and model names and divide in intercept and shift terms
-#         model_dict=merge_transformation_dicts(terms_dict, model_names_dict)
-#         intercepts_dict = {k: v for k, v in model_dict.items() if "ci" in v['h_term'] or 'si' in v['h_term']}        
-#         shifts_dict = {k: v for k, v in model_dict.items() if "ci" not in v['h_term'] and  'si' not in v['h_term']}        
-        
-#         # make sure that nns are correctly defined afterwards
-#         nn_int, nn_shifts_list = None, None
-        
-#         # intercept term
-#         if not np.any(np.array([True for diction in intercepts_dict.values() if 'ci' in diction['h_term']]) == True):
-#             print('>>>>>>>>>>>> No ci detected --> intercept defaults to si') if verbose else None
-#             nn_int = SimpleIntercept()
-        
-#         else:
-            
-#             # intercept term -> model
-#             nn_int_name = list(intercepts_dict.items())[0][1]['class_name'] # TODO this doesnt work for multi inpout CI's
-#             nn_int = globals()[nn_int_name]()
-        
-#         # shift term -> lsit of models         
-#         nn_shift_names=[v["class_name"] for v in shifts_dict.values() if "class_name" in v]
-#         nn_shifts_list = [globals()[name]() for name in nn_shift_names]
-        
-#         # ontram model
-#         tram_model = TramModel(nn_int, nn_shifts_list)    
-        
-#         print('>>> TRAM MODEL:\n',tram_model) if verbose else None
-#     return tram_model
 
 ## jsut for SI experiments
 def get_fully_specified_tram_model_hardcoded_init_weights_for_si(node, conf_dict, verbose=True):
@@ -332,22 +274,7 @@ def ordered_parents(node, conf_dict) -> dict:
     return ordered_parents_datatype, ordered_transformation_terms_in_h, ordered_transformation_term_nn_models_in_h
 
 
-# def preprocess_inputs(x, device='cuda'): # old hardcoded version
-#     """
-#     Prepares model input by:
-#     - Accepting a tuple or list of tensors
-#     - Adding channel dim (unsqueeze)
-#     - Moving everything to the device once
-#     - Returning int_inputs and shift_list
-#     """
-#     # Unpack x if it's a tuple/list
-#     x = [xi.unsqueeze(1) for xi in x]  # shape: (B, 1, ...)
-#     x = [xi.to(device, non_blocking=True) for xi in x]  # single device transfer
 
-#     int_inputs = x[0]  # TODO remove hardcoded stuff   use tuple as input 
-#     shift_list = x[1:] if len(x) > 1 else None
-
-#     return int_inputs, shift_list
 
 # print training history
 def load_history(node, experiment_dir):
@@ -564,6 +491,96 @@ def train_val_loop(start_epoch,
             if verbose>0:
                 print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
                 print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
+                
+                
+ 
+def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
+    """
+    Evaluate how well the input data fits a standard logistic distribution.
+
+    Parameters:
+    - data: np.ndarray of raw sample values
+    - num_quantiles: Number of quantiles used in quantile-based metrics
+
+    Returns:
+    - dict with RMSE, MAE, KS test result, and Anderson-Darling statistic
+    """
+    data = np.asarray(data)
+    probs = np.linspace(0, 1, num_quantiles + 2)[1:-1]  # exclude 0 and 1
+    empirical_q = np.quantile(data, probs)
+    theoretical_q = logistic.ppf(probs)  # standard logistic: loc=0, scale=1
+
+    rmse = np.sqrt(np.mean((empirical_q - theoretical_q) ** 2))
+    mae = np.mean(np.abs(empirical_q - theoretical_q))
+
+    ks_stat, ks_pval = kstest(data, 'logistic')  # against standard logistic
+    ad_result = anderson(data, dist='logistic')
+    ad_stat = ad_result.statistic
+
+    return {
+        'quantile_rmse': rmse,
+        'quantile_mae': mae,
+        'ks_statistic': ks_stat,
+        'ks_pvalue': ks_pval,
+        'ad_statistic': ad_stat
+    }               
+                
+                
+ # def get_fully_specified_tram_model(node,conf_dict,verbose=True):  ## old version 11/06/25
+
+    
+
+#     ### iF node is a source -> no deep nn is needed
+#     if conf_dict[node]['node_type'] == 'source':
+#         nn_int = SimpleIntercept()
+#         tram_model = TramModel(nn_int, None)  
+#         if verbose:
+#             print('>>>>>>>>>>>>  source node --> only  modelled only  by si')
+#             print(tram_model)
+#         return tram_model
+    
+    
+#     ### if node is not a source node 
+#     else:
+#         # read terms and model names form the config
+        
+#         _,terms_dict,model_names_dict=ordered_parents(node, conf_dict)
+        
+#         #old
+#         # terms_dict=conf_dict[node]['transformation_terms_in_h()']
+#         # model_names_dict=conf_dict[node]['transformation_term_nn_models_in_h()']
+        
+#         # Combine terms and model names and divide in intercept and shift terms
+#         model_dict=merge_transformation_dicts(terms_dict, model_names_dict)
+#         intercepts_dict = {k: v for k, v in model_dict.items() if "ci" in v['h_term'] or 'si' in v['h_term']}        
+#         shifts_dict = {k: v for k, v in model_dict.items() if "ci" not in v['h_term'] and  'si' not in v['h_term']}        
+        
+#         # make sure that nns are correctly defined afterwards
+#         nn_int, nn_shifts_list = None, None
+        
+#         # intercept term
+#         if not np.any(np.array([True for diction in intercepts_dict.values() if 'ci' in diction['h_term']]) == True):
+#             print('>>>>>>>>>>>> No ci detected --> intercept defaults to si') if verbose else None
+#             nn_int = SimpleIntercept()
+        
+#         else:
+            
+#             # intercept term -> model
+#             nn_int_name = list(intercepts_dict.items())[0][1]['class_name'] # TODO this doesnt work for multi inpout CI's
+#             nn_int = globals()[nn_int_name]()
+        
+#         # shift term -> lsit of models         
+#         nn_shift_names=[v["class_name"] for v in shifts_dict.values() if "class_name" in v]
+#         nn_shifts_list = [globals()[name]() for name in nn_shift_names]
+        
+#         # ontram model
+#         tram_model = TramModel(nn_int, nn_shifts_list)    
+        
+#         print('>>> TRAM MODEL:\n',tram_model) if verbose else None
+#     return tram_model               
+                
+# graveyard version of train_val_loop with AMP              
+                
 
 # from torch.cuda.amp import autocast, GradScaler
 
@@ -687,36 +704,22 @@ def train_val_loop(start_epoch,
 #         print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
 
 
-def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
-    """
-    Evaluate how well the input data fits a standard logistic distribution.
-
-    Parameters:
-    - data: np.ndarray of raw sample values
-    - num_quantiles: Number of quantiles used in quantile-based metrics
-
-    Returns:
-    - dict with RMSE, MAE, KS test result, and Anderson-Darling statistic
-    """
-    data = np.asarray(data)
-    probs = np.linspace(0, 1, num_quantiles + 2)[1:-1]  # exclude 0 and 1
-    empirical_q = np.quantile(data, probs)
-    theoretical_q = logistic.ppf(probs)  # standard logistic: loc=0, scale=1
-
-    rmse = np.sqrt(np.mean((empirical_q - theoretical_q) ** 2))
-    mae = np.mean(np.abs(empirical_q - theoretical_q))
-
-    ks_stat, ks_pval = kstest(data, 'logistic')  # against standard logistic
-    ad_result = anderson(data, dist='logistic')
-    ad_stat = ad_result.statistic
-
-    return {
-        'quantile_rmse': rmse,
-        'quantile_mae': mae,
-        'ks_statistic': ks_stat,
-        'ks_pvalue': ks_pval,
-        'ad_statistic': ad_stat
-    }
     
 
 
+# def preprocess_inputs(x, device='cuda'): # old hardcoded version
+#     """
+#     Prepares model input by:
+#     - Accepting a tuple or list of tensors
+#     - Adding channel dim (unsqueeze)
+#     - Moving everything to the device once
+#     - Returning int_inputs and shift_list
+#     """
+#     # Unpack x if it's a tuple/list
+#     x = [xi.unsqueeze(1) for xi in x]  # shape: (B, 1, ...)
+#     x = [xi.to(device, non_blocking=True) for xi in x]  # single device transfer
+
+#     int_inputs = x[0]  # TODO remove hardcoded stuff   use tuple as input 
+#     shift_list = x[1:] if len(x) > 1 else None
+
+#     return int_inputs, shift_list
