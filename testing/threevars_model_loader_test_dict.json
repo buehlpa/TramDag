@@ -41,7 +41,232 @@
         "output": {
             "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
             "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
-            "x3": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0): LinearShift(\n      (fc): Linear(in_features=2, out_features=1, bias=False)\n    )\n  )\n)"
+            "x3": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0-1): 2 x LinearShift(\n      (fc): Linear(in_features=1, out_features=1, bias=False)\n    )\n  )\n)"
+        }
+    },
+    "test_2": {
+        "input": {
+            "x1": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x2": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x3": {
+                "data_type": "cont",
+                "node_type": "sink",
+                "parents": [
+                    "x1",
+                    "x2"
+                ],
+                "parents_datatype": {
+                    "x1": "cont",
+                    "x2": "cont"
+                },
+                "transformation_terms_in_h()": {
+                    "x1": "cs",
+                    "x2": "cs"
+                },
+                "transformation_term_nn_models_in_h()": {
+                    "x1": "ComplexShiftDefaultTabular",
+                    "x2": "ComplexShiftDefaultTabular"
+                }
+            }
+        },
+        "output": {
+            "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x3": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0-1): 2 x ComplexShiftDefaultTabular(\n      (fc1): Linear(in_features=1, out_features=64, bias=True)\n      (relu1): ReLU()\n      (dropout1): Dropout(p=0.3, inplace=False)\n      (fc2): Linear(in_features=64, out_features=128, bias=True)\n      (relu2): ReLU()\n      (dropout2): Dropout(p=0.3, inplace=False)\n      (fc3): Linear(in_features=128, out_features=64, bias=True)\n      (relu3): ReLU()\n      (dropout3): Dropout(p=0.3, inplace=False)\n      (fc4): Linear(in_features=64, out_features=1, bias=False)\n    )\n  )\n)"
+        }
+    },
+    "test_3": {
+        "input": {
+            "x1": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x2": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x3": {
+                "data_type": "cont",
+                "node_type": "sink",
+                "parents": [
+                    "x1",
+                    "x2"
+                ],
+                "parents_datatype": {
+                    "x1": "cont",
+                    "x2": "cont"
+                },
+                "transformation_terms_in_h()": {
+                    "x1": "cs",
+                    "x2": "cs"
+                },
+                "transformation_term_nn_models_in_h()": {
+                    "x1": "ComplexShiftDefaultTabular",
+                    "x2": "ComplexShiftDefaultTabular"
+                }
+            }
+        },
+        "output": {
+            "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x3": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0-1): 2 x ComplexShiftDefaultTabular(\n      (fc1): Linear(in_features=1, out_features=64, bias=True)\n      (relu1): ReLU()\n      (dropout1): Dropout(p=0.3, inplace=False)\n      (fc2): Linear(in_features=64, out_features=128, bias=True)\n      (relu2): ReLU()\n      (dropout2): Dropout(p=0.3, inplace=False)\n      (fc3): Linear(in_features=128, out_features=64, bias=True)\n      (relu3): ReLU()\n      (dropout3): Dropout(p=0.3, inplace=False)\n      (fc4): Linear(in_features=64, out_features=1, bias=False)\n    )\n  )\n)"
+        }
+    },
+    "test_4": {
+        "input": {
+            "x1": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x2": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x3": {
+                "data_type": "cont",
+                "node_type": "sink",
+                "parents": [
+                    "x1",
+                    "x2"
+                ],
+                "parents_datatype": {
+                    "x1": "cont",
+                    "x2": "cont"
+                },
+                "transformation_terms_in_h()": {
+                    "x1": "cs",
+                    "x2": "ci"
+                },
+                "transformation_term_nn_models_in_h()": {
+                    "x1": "ComplexShiftDefaultTabular",
+                    "x2": "ComplexInterceptDefaultTabular"
+                }
+            }
+        },
+        "output": {
+            "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x3": "TramModel(\n  (nn_int): ComplexInterceptDefaultTabular(\n    (fc1): Linear(in_features=1, out_features=8, bias=True)\n    (relu1): ReLU()\n    (fc2): Linear(in_features=8, out_features=8, bias=True)\n    (relu2): ReLU()\n    (fc3): Linear(in_features=8, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0): ComplexShiftDefaultTabular(\n      (fc1): Linear(in_features=1, out_features=64, bias=True)\n      (relu1): ReLU()\n      (dropout1): Dropout(p=0.3, inplace=False)\n      (fc2): Linear(in_features=64, out_features=128, bias=True)\n      (relu2): ReLU()\n      (dropout2): Dropout(p=0.3, inplace=False)\n      (fc3): Linear(in_features=128, out_features=64, bias=True)\n      (relu3): ReLU()\n      (dropout3): Dropout(p=0.3, inplace=False)\n      (fc4): Linear(in_features=64, out_features=1, bias=False)\n    )\n  )\n)"
+        }
+    },
+    "test_5": {
+        "input": {
+            "x1": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x2": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x3": {
+                "data_type": "cont",
+                "node_type": "sink",
+                "parents": [
+                    "x1",
+                    "x2"
+                ],
+                "parents_datatype": {
+                    "x1": "cont",
+                    "x2": "cont"
+                },
+                "transformation_terms_in_h()": {
+                    "x1": "cs11",
+                    "x2": "cs12"
+                },
+                "transformation_term_nn_models_in_h()": {
+                    "x1": "ComplexShiftDefaultTabular11",
+                    "x2": "ComplexShiftDefaultTabular12"
+                }
+            }
+        },
+        "output": {
+            "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x3": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0): ComplexShiftDefaultTabular(\n      (fc1): Linear(in_features=2, out_features=64, bias=True)\n      (relu1): ReLU()\n      (dropout1): Dropout(p=0.3, inplace=False)\n      (fc2): Linear(in_features=64, out_features=128, bias=True)\n      (relu2): ReLU()\n      (dropout2): Dropout(p=0.3, inplace=False)\n      (fc3): Linear(in_features=128, out_features=64, bias=True)\n      (relu3): ReLU()\n      (dropout3): Dropout(p=0.3, inplace=False)\n      (fc4): Linear(in_features=64, out_features=1, bias=False)\n    )\n  )\n)"
+        }
+    },
+    "test_6": {
+        "input": {
+            "x1": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x2": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x3": {
+                "data_type": "cont",
+                "node_type": "sink",
+                "parents": [
+                    "x1",
+                    "x2"
+                ],
+                "parents_datatype": {
+                    "x1": "cont",
+                    "x2": "cont"
+                },
+                "transformation_terms_in_h()": {
+                    "x1": "ci11",
+                    "x2": "ci12"
+                },
+                "transformation_term_nn_models_in_h()": {
+                    "x1": "ComplexInterceptDefaultTabular11",
+                    "x2": "ComplexInterceptDefaultTabular12"
+                }
+            }
+        },
+        "output": {
+            "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x3": "TramModel(\n  (nn_int): ComplexInterceptDefaultTabular(\n    (fc1): Linear(in_features=2, out_features=8, bias=True)\n    (relu1): ReLU()\n    (fc2): Linear(in_features=8, out_features=8, bias=True)\n    (relu2): ReLU()\n    (fc3): Linear(in_features=8, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList()\n)"
         }
     }
 }
