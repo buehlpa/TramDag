@@ -1,0 +1,34 @@
+{
+    "test_1": {
+        "input": {
+            "x1": {
+                "data_type": "cont",
+                "node_type": "source",
+                "parents": [],
+                "parents_datatype": {},
+                "transformation_terms_in_h()": {},
+                "transformation_term_nn_models_in_h()": {}
+            },
+            "x2": {
+                "data_type": "cont",
+                "node_type": "sink",
+                "parents": [
+                    "x1"
+                ],
+                "parents_datatype": {
+                    "x1": "cont"
+                },
+                "transformation_terms_in_h()": {
+                    "x1": "ls"
+                },
+                "transformation_term_nn_models_in_h()": {
+                    "x1": "LinearShift"
+                }
+            }
+        },
+        "output": {
+            "x1": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n)",
+            "x2": "TramModel(\n  (nn_int): SimpleIntercept(\n    (fc): Linear(in_features=1, out_features=20, bias=False)\n  )\n  (nn_shift): ModuleList(\n    (0): LinearShift(\n      (fc): Linear(in_features=1, out_features=1, bias=False)\n    )\n  )\n)"
+        }
+    }
+}

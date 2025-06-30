@@ -488,16 +488,22 @@ def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
 
 
-def write_data_type_to_configuration(data_type:dict, CONF_DICT_PATH):
+def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> None:
     """
     Write the data type information to the configuration dictionary.
+    Prints a success message if it completes without error, otherwise prints the exception.
     
     :param data_type: Dictionary containing variable names and their data types.
-    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    :param CONF_DICT_PATH: Path to the configuration dictionary (JSON file).
     """
-    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
-    configuration_dict['data_type'] = data_type
-    write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+    try:
+        configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+        configuration_dict['data_type'] = data_type
+        write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+    except Exception as e:
+        print(f"Failed to update configuration: {e}")
+    else:
+        print("Configuration updated successfully.")
 
 def read_nn_names_matrix_from_configuration(CONF_DICT_PATH):
     """
@@ -535,16 +541,22 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals)
     
     :param CONF_DICT_PATH: Path to the configuration dictionary.
     """
-    adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
-    nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
-    data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
+    try:
+        adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+        nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+        data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
+        
+        configuration_dict = get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals)
+        
+        conf = load_configuration_dict(CONF_DICT_PATH)
+        conf['nodes'] = configuration_dict
     
-    configuration_dict = get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals)
-    
-    conf = load_configuration_dict(CONF_DICT_PATH)
-    conf['nodes'] = configuration_dict
-    write_configuration_dict(conf, CONF_DICT_PATH)
-
+        write_configuration_dict(conf, CONF_DICT_PATH)
+        
+    except Exception as e:
+        print("Failed to update configuration:", e)
+    else:
+        print("Configuration updated successfully.")
 
 
 
