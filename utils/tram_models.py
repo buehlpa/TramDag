@@ -141,17 +141,14 @@ class ComplexShiftDefaultTabular(nn.Module):
     Attributes:
         n_features (int): Number of input features (predictors)
     """
-    def __init__(self, n_features=1, dropout_rate=0.3):
+    def __init__(self, n_features=1):
         super(ComplexShiftDefaultTabular, self).__init__()
         self.fc1 = nn.Linear(n_features, 64)     # Input layer: n_features -> 64
         self.relu1 = nn.ReLU()
-        self.dropout1 = nn.Dropout(dropout_rate) # Dropout after first activation
         self.fc2 = nn.Linear(64, 128)            # Hidden layer: 64 -> 128
         self.relu2 = nn.ReLU()
-        self.dropout2 = nn.Dropout(dropout_rate) # Dropout after second activation
         self.fc3 = nn.Linear(128, 64)            # Hidden layer: 128 -> 64
         self.relu3 = nn.ReLU()
-        self.dropout3 = nn.Dropout(dropout_rate) # Dropout after third activation
         self.fc4 = nn.Linear(64, 1, bias=False)  # Output layer: 64 -> 1, no bias
 
     def forward(self, x):
@@ -165,13 +162,10 @@ class ComplexShiftDefaultTabular(nn.Module):
         """
         x = self.fc1(x)
         x = self.relu1(x)
-        x = self.dropout1(x)
         x = self.fc2(x)
         x = self.relu2(x)
-        x = self.dropout2(x)
         x = self.fc3(x)
         x = self.relu3(x)
-        x = self.dropout3(x)
         x = self.fc4(x)
         return x
 
