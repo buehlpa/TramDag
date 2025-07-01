@@ -77,7 +77,15 @@ class SamplingDataset(Dataset):
                 if self.transform:
                     image = self.transform(image)
                 x_data.append(image)
-        return tuple(x_data)
+        # return tuple(x_data)
+        squeezed = []
+        for t in x_data:
+            if isinstance(t, torch.Tensor) and t.dim() == 1 and t.shape[0] == 1:
+                squeezed.append(t.squeeze(0))  # from shape (1,) → shape ()
+            else:
+                squeezed.append(t)
+        return tuple(squeezed)
+    
     
     
 # helpers
