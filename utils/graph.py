@@ -560,10 +560,6 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals)
 
 
 
-
-
-
-
 def get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
     """
     Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,

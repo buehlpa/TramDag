@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-06-26 14:34:02",
+    "date_of_creation": "2025-07-01 04:54:33",
     "experiment_name": "conf_dict_test",
     "PATHS": {
         "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/conf_dict_test",
@@ -23,39 +23,49 @@
             "0",
             "0",
             "0",
-            "cs",
-            "0",
-            "0"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "cs",
-            "ci12",
-            "cs12"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "ls",
-            "ls",
-            "cs11"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
             "ci11",
-            "0"
+            "ls",
+            "ci11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ci12",
+            "cs",
+            "ci12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls",
+            "cs22",
+            "cs"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs",
+            "cs12",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs",
+            "cs21",
+            "cs"
         ],
         [
             "0",
@@ -64,8 +74,8 @@
             "0",
             "0",
             "0",
-            "ci13",
-            "cs21"
+            "cs11",
+            "ci14"
         ],
         [
             "0",
@@ -75,17 +85,7 @@
             "0",
             "0",
             "0",
-            "cs22"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "ci"
+            "ci13"
         ],
         [
             "0",
@@ -105,39 +105,49 @@
             "0",
             "0",
             "0",
-            "ComplexShiftDefaultTabular",
-            "0",
-            "0"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "ComplexShiftDefaultTabular",
-            "ComplexInterceptDefaultTabular12",
-            "ComplexShiftDefaultTabular12"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "LinearShift",
-            "LinearShift",
-            "ComplexShiftDefaultTabular11"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
             "ComplexInterceptDefaultTabular11",
-            "0"
+            "LinearShift",
+            "ComplexInterceptDefaultTabular11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular12",
+            "ComplexShiftDefaultTabular",
+            "ComplexInterceptDefaultTabular12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift",
+            "ComplexShiftDefaultTabular22",
+            "ComplexShiftDefaultTabular"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular",
+            "ComplexShiftDefaultTabular12",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular",
+            "ComplexShiftDefaultTabular21",
+            "ComplexShiftDefaultTabular"
         ],
         [
             "0",
@@ -146,8 +156,8 @@
             "0",
             "0",
             "0",
-            "ComplexInterceptDefaultTabular13",
-            "ComplexShiftDefaultTabular21"
+            "ComplexShiftDefaultTabular11",
+            "ComplexInterceptDefaultTabular14"
         ],
         [
             "0",
@@ -157,17 +167,7 @@
             "0",
             "0",
             "0",
-            "ComplexShiftDefaultTabular22"
-        ],
-        [
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "ComplexInterceptDefaultTabular"
+            "ComplexInterceptDefaultTabular13"
         ],
         [
             "0",
@@ -244,24 +244,32 @@
             "parents": [
                 "x1",
                 "x2",
-                "x3"
+                "x3",
+                "x4",
+                "x5"
             ],
             "parents_datatype": {
                 "x1": "cont",
                 "x2": "cont",
-                "x3": "cont"
+                "x3": "cont",
+                "x4": "cont",
+                "x5": "cont"
             },
             "transformation_terms_in_h()": {
-                "x1": "cs",
-                "x2": "cs",
-                "x3": "ls"
+                "x1": "ci11",
+                "x2": "ci12",
+                "x3": "ls",
+                "x4": "cs",
+                "x5": "cs"
             },
             "min": 0.10024236735794097,
             "max": 1.8948382404922974,
             "transformation_term_nn_models_in_h()": {
-                "x1": "ComplexShiftDefaultTabular",
-                "x2": "ComplexShiftDefaultTabular",
-                "x3": "LinearShift"
+                "x1": "ComplexInterceptDefaultTabular11",
+                "x2": "ComplexInterceptDefaultTabular12",
+                "x3": "LinearShift",
+                "x4": "ComplexShiftDefaultTabular",
+                "x5": "ComplexShiftDefaultTabular"
             }
         },
         "x7": {
@@ -269,30 +277,38 @@
             "data_type": "cont",
             "node_type": "internal",
             "parents": [
+                "x1",
                 "x2",
                 "x3",
                 "x4",
-                "x5"
+                "x5",
+                "x6"
             ],
             "parents_datatype": {
+                "x1": "cont",
                 "x2": "cont",
                 "x3": "cont",
                 "x4": "cont",
-                "x5": "cont"
+                "x5": "cont",
+                "x6": "cont"
             },
             "transformation_terms_in_h()": {
-                "x2": "ci12",
-                "x3": "ls",
-                "x4": "ci11",
-                "x5": "ci13"
+                "x1": "ls",
+                "x2": "cs",
+                "x3": "cs22",
+                "x4": "cs12",
+                "x5": "cs21",
+                "x6": "cs11"
             },
             "min": -3.3760478609047664,
             "max": 3.2822939559647093,
             "transformation_term_nn_models_in_h()": {
-                "x2": "ComplexInterceptDefaultTabular12",
-                "x3": "LinearShift",
-                "x4": "ComplexInterceptDefaultTabular11",
-                "x5": "ComplexInterceptDefaultTabular13"
+                "x1": "LinearShift",
+                "x2": "ComplexShiftDefaultTabular",
+                "x3": "ComplexShiftDefaultTabular22",
+                "x4": "ComplexShiftDefaultTabular12",
+                "x5": "ComplexShiftDefaultTabular21",
+                "x6": "ComplexShiftDefaultTabular11"
             }
         },
         "x8": {
@@ -300,34 +316,42 @@
             "data_type": "cont",
             "node_type": "sink",
             "parents": [
+                "x1",
                 "x2",
                 "x3",
+                "x4",
                 "x5",
                 "x6",
                 "x7"
             ],
             "parents_datatype": {
+                "x1": "cont",
                 "x2": "cont",
                 "x3": "cont",
+                "x4": "cont",
                 "x5": "cont",
                 "x6": "cont",
                 "x7": "cont"
             },
             "transformation_terms_in_h()": {
-                "x2": "cs12",
-                "x3": "cs11",
-                "x5": "cs21",
-                "x6": "cs22",
-                "x7": "ci"
+                "x1": "ci11",
+                "x2": "ci12",
+                "x3": "cs",
+                "x4": "ls",
+                "x5": "cs",
+                "x6": "ci14",
+                "x7": "ci13"
             },
             "min": -4.52786107852775,
             "max": 5.556345321881678,
             "transformation_term_nn_models_in_h()": {
-                "x2": "ComplexShiftDefaultTabular12",
-                "x3": "ComplexShiftDefaultTabular11",
-                "x5": "ComplexShiftDefaultTabular21",
-                "x6": "ComplexShiftDefaultTabular22",
-                "x7": "ComplexInterceptDefaultTabular"
+                "x1": "ComplexInterceptDefaultTabular11",
+                "x2": "ComplexInterceptDefaultTabular12",
+                "x3": "ComplexShiftDefaultTabular",
+                "x4": "LinearShift",
+                "x5": "ComplexShiftDefaultTabular",
+                "x6": "ComplexInterceptDefaultTabular14",
+                "x7": "ComplexInterceptDefaultTabular13"
             }
         }
     }
