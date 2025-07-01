@@ -11,7 +11,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 
 from utils.tram_model_helpers import ordered_parents
 from utils.tram_model_helpers import *           
-from utils.continous import *   
+from utils.loss_continous import *   
 from utils.tram_data import get_dataloader
 
 class SamplingDataset(Dataset):

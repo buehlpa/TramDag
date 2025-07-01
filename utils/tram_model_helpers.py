@@ -1,5 +1,5 @@
 from utils.tram_models import *
-from utils.continous import contram_nll
+from utils.loss_continous import contram_nll
 from utils.graph import *
 import os
 import re
