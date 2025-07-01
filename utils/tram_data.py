@@ -65,7 +65,6 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
 
     # TODO move args to config file batchsize  etc.
     
-    # TODO amove transforms to the config file  
     transform = transforms.Compose([
             transforms.Resize((128, 128)),
             transforms.ToTensor()
@@ -86,7 +85,6 @@ def get_dataloader(node, conf_dict, train_df, val_df, batch_size=32,verbose=Fals
         
         train_dataset = GenericDataset(train_df, target_col=node, conf_dict=parents_dataype_dict, transform=transform,transformation_terms_in_h=transformation_terms_in_h)
         validation_dataset = GenericDataset(val_df, target_col=node, conf_dict=parents_dataype_dict, transform=transform,transformation_terms_in_h=transformation_terms_in_h)
-    # TODO add args to the datloader via config file    
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,pin_memory=True)
     val_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, num_workers=4,pin_memory=True)
     
