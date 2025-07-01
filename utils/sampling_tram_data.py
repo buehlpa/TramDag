@@ -589,11 +589,7 @@ def sample_full_dag_chandru(conf_dict,
                 with torch.no_grad():
                     for x in tqdm(sample_loader, desc=f"h() for samples in  {node}"):
                         x = [xi.to(device) for xi in x]
-                        
-                        print(x)
                         int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h.values(), device=device)
-                        print(int_input, shift_list)
-                        
                         model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
                         output_list.append(model_outputs)
                         

@@ -479,15 +479,7 @@ def train_val_loop(start_epoch,
             for x, y in train_loader:
                 optimizer.zero_grad()
                 y = y.to(device)
-
-                
                 int_input, shift_list = preprocess_inputs(x, ordered_transformation_terms_in_h.values(), device=device)
-
-                if int_input is not None:
-                        print(f"int_input {int_input.shape}")
-                if shift_list is not None:
-                        print(f"shift_list {[s.shape for s in shift_list]}") 
-                
                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                 loss = contram_nll(y_pred, y, min_max=min_max)
                 loss.backward()
@@ -512,7 +504,6 @@ def train_val_loop(start_epoch,
                     y = y.to(device)
                     int_input, shift_list = preprocess_inputs(x, ordered_transformation_terms_in_h.values(), device=device)
                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-
                     loss = contram_nll(y_pred, y, min_max=min_max)
                     val_loss += loss.item()
             val_time = time.time() - val_start
