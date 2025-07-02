@@ -11,7 +11,23 @@
         "x2": "cont",
         "y_ord": "ord"
     },
-    "adj_matrix": null,
+    "adj_matrix": [
+        [
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
     "model_names": null,
     "seed": null,
     "nodes": null

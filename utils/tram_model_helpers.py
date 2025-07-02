@@ -416,6 +416,174 @@ def model_train_val_paths(NODE_DIR):
     VAL_HIST_PATH = os.path.join(NODE_DIR, "val_loss_hist.json")
     return MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH
 
+def check_if_training_complete(node, NODE_DIR, epochs):
+    """
+    Check if the training for the given node is complete.
+    Returns True if training is complete, False otherwise.
+    """
+    MODEL_PATH, _, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
+    try:
+        if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
+            with open(TRAIN_HIST_PATH, 'r') as f:
+                train_loss_hist = json.load(f)
+
+            start_epoch = len(train_loss_hist)
+            
+            # return false if already trained to skip to the next node 
+            if start_epoch >= epochs:
+                print(f"Node {node} already trained for {epochs} epochs. Skipping.")
+                return False
+            else:
+                print(f"Node {node} not trained yet or training incomplete. Starting from epoch {start_epoch}.")
+                return True
+    except Exception as e:
+        print(f"Error checking training status for node {node}: {e}")
+        return False
+
+
+def train_val_loop_v2(
+                   node,
+                   target_nodes,
+                   NODE_DIR,
+                   tram_model,
+                   train_loader,
+                   val_loader,
+                   epochs,
+                   optimizer,
+                   use_scheduler,
+                   scheduler,
+                   save_linear_shifts=False,
+                   verbose=1,
+                   device='cpu'):
+        # get all paths  for this training run
+        MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH=model_train_val_paths(NODE_DIR)
+        
+        # this is needed for the preprocessing of the inputs such that they are in the correct order
+        _, ordered_transformation_terms_in_h, _=ordered_parents(node, target_nodes)
+        
+        # this is needed for the scaling if there is a bernstein polynomial for contionous outcomes
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+        
+        
+        ###### Load Model & History #####
+        if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
+            print("Existing model found. Loading weights and history...")
+            tram_model.load_state_dict(torch.load(MODEL_PATH))
+
+            with open(TRAIN_HIST_PATH, 'r') as f:
+                train_loss_hist = json.load(f)
+            with open(VAL_HIST_PATH, 'r') as f:
+                val_loss_hist = json.load(f)
+
+            start_epoch = len(train_loss_hist)
+            best_val_loss = min(val_loss_hist)
+        else:
+            print("No existing model found. Starting fresh...")
+            train_loss_hist, val_loss_hist = [], []
+            start_epoch = 0
+            best_val_loss = float('inf')
+        
+        ##### Training and Validation loop
+        for epoch in range(start_epoch, epochs):
+            epoch_start = time.time()
+
+            #####  Training #####
+            train_start = time.time()
+            train_loss = 0.0
+            tram_model.train()
+            for x, y in train_loader:
+                optimizer.zero_grad()
+                y = y.to(device)
+                int_input, shift_list = preprocess_inputs(x, ordered_transformation_terms_in_h.values(), device=device)
+                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                loss = contram_nll(y_pred, y, min_max=min_max)
+                loss.backward()
+                optimizer.step()
+                train_loss += loss.item()
+                
+            if use_scheduler:
+                scheduler.step()
+                
+            train_time = time.time() - train_start
+
+            avg_train_loss = train_loss / len(train_loader)
+            train_loss_hist.append(avg_train_loss)
+
+            ##### Validation #####
+            val_start = time.time()
+            val_loss = 0.0
+            tram_model.eval()
+            
+            with torch.no_grad():
+                for x, y in val_loader:
+                    y = y.to(device)
+                    int_input, shift_list = preprocess_inputs(x, ordered_transformation_terms_in_h.values(), device=device)
+                    y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                    loss = contram_nll(y_pred, y, min_max=min_max)
+                    val_loss += loss.item()
+            val_time = time.time() - val_start
+
+            avg_val_loss = val_loss / len(val_loader)
+            val_loss_hist.append(avg_val_loss)
+
+            ##### Save linear shift weights #####
+
+            if save_linear_shifts and tram_model.nn_shift is not None:
+                # Define the path for the cumulative JSON file
+                shift_path = os.path.join(NODE_DIR, "linear_shifts_all_epochs.json")
+
+                # Load existing data if the file exists
+                if os.path.exists(shift_path):
+                    with open(shift_path, 'r') as f:
+                        all_shift_weights = json.load(f)
+                else:
+                    all_shift_weights = {}
+
+                # Prepare current epoch's shift weights
+                epoch_weights = {}
+                for i in range(len(tram_model.nn_shift)):
+                    shift_layer = tram_model.nn_shift[i]
+                    
+                    if hasattr(shift_layer, 'fc') and hasattr(shift_layer.fc, 'weight'):
+                        epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
+                    else:
+                        print(f"shift_{i}: 'fc' or 'weight' layer does not exist.")
+                
+                # Add to the dictionary under current epoch
+                all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
+                
+                # Write back the updated dictionary
+                with open(shift_path, 'w') as f:
+                    json.dump(all_shift_weights, f)
+                if verbose > 1:
+                    print(f'shift weights: {epoch_weights}')
+                    print(f"Appended linear shift weights for epoch {epoch+1} to: {shift_path}")
+
+            ##### Saving #####
+            save_start = time.time()
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                torch.save(tram_model.state_dict(), MODEL_PATH)
+                if verbose > 0:
+                    print("Saved new best model.")
+
+            torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
+
+            with open(TRAIN_HIST_PATH, 'w') as f:
+                json.dump(train_loss_hist, f)
+            with open(VAL_HIST_PATH, 'w') as f:
+                json.dump(val_loss_hist, f)
+            save_time = time.time() - save_start
+
+            epoch_total = time.time() - epoch_start
+
+            ##### Epoch Summary #####
+            if verbose>0:
+                print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+                print(f"  [Train: {train_time:.2f}s | Val: {val_time:.2f}s | Save: {save_time:.2f}s | Total: {epoch_total:.2f}s]")
+                
 
 #old test val loop 27.5
 def train_val_loop(start_epoch,
