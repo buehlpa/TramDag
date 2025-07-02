@@ -436,6 +436,10 @@ def check_if_training_complete(node, NODE_DIR, epochs):
             else:
                 print(f"Node {node} not trained yet or training incomplete. Starting from epoch {start_epoch}.")
                 return True
+        else:
+            
+            return True
+        
     except Exception as e:
         print(f"Error checking training status for node {node}: {e}")
         return False
@@ -455,6 +459,7 @@ def train_val_loop_v2(
                    save_linear_shifts=False,
                    verbose=1,
                    device='cpu'):
+    
         # get all paths  for this training run
         MODEL_PATH,LAST_MODEL_PATH,TRAIN_HIST_PATH,VAL_HIST_PATH=model_train_val_paths(NODE_DIR)
         
