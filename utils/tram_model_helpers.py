@@ -26,66 +26,7 @@ def timeit(name=None):
         return wrapper
     return decorator
 
-# def preprocess_inputs(x, transformation_terms, device='cuda'): ## old version 
-#     """
-#     Prepares model input by grouping features by transformation term base:
-#       - ci11, ci12 → 'ci1' (intercept)
-#       - cs11, cs12 → 'cs1' (shift)
-#       - cs21 → 'cs2' (another shift group)
-#       - cs, ls → treated as full group keys
-#     Returns:
-#       - int_inputs: Tensor of shape (B, n_features) for intercept model
-#       - shift_list: List of tensors for each shift model, shape (B, group_features)
-#     """
-#     transformation_terms=list(transformation_terms)
-#     #assert len(x) == len(transformation_terms), "Mismatch in inputs and term list length"
-    
-#     ## if there is only a source so transforamtion terms is 0:
-#     x = [xi.to(device, non_blocking=True) for xi in x]
-#     if len(transformation_terms)== 0:
-#         x = [xi.unsqueeze(1) for xi in x] 
-#         int_inputs= x[0]
-#         return int_inputs, None
-    
-#     if not  any('ci' in str(value) for value in transformation_terms):
-#         transformation_terms.insert(0,'si')
-    
-#     grouped_inputs = defaultdict(list)
 
-#     for tensor, term in zip(x, transformation_terms):
-#         # Handle terms like ci11, cs22, ls etc.
-#         if term.startswith(('si','ci', 'cs', 'ls')):
-#             if len(term) > 2 and term[2].isdigit():
-#                 key = term[:3]  # ci11 → ci1, cs22 → cs2
-#             else:
-#                 key = term      # cs, ls → remain as-is
-#             grouped_inputs[key].append(tensor)
-#         else:
-#             raise ValueError(f"Unknown transformation term: {term}")
-
-#     # Separate intercept and shift groups
-#     int_keys = sorted([k for k in grouped_inputs if k.startswith(('si','ci'))])
-#     shift_keys = sorted([k for k in grouped_inputs if k.startswith(('cs', 'ls'))])
-    
-#     if len(int_keys) != 1:
-#         raise ValueError(f"Expected exactly one intercept group, got: {int_keys}")
-
-#     # Process intercept inputs
-#     int_inputs = torch.cat(
-#         [t.unsqueeze(1).to(device, non_blocking=True) for t in grouped_inputs[int_keys[0]]],
-#         dim=1
-#     )  # Shape: (B, n_int_features)
-
-#     # Process shift groups
-#     shift_list = []
-#     for k in shift_keys:
-#         shift_tensor = torch.cat(
-#             [t.unsqueeze(1).to(device, non_blocking=True) for t in grouped_inputs[k]],
-#             dim=1
-#         )  # Shape: (B, n_features_for_this_shift_model)
-#         shift_list.append(shift_tensor)
-
-#     return int_inputs, shift_list if shift_list else None
 
 def preprocess_inputs(x, transformation_terms, device='cuda'):
     """
@@ -203,8 +144,6 @@ def group_by_base(term_dict, prefixes):
 
     return groups
 
-
-# Example integration in your tram‐model builder:
 def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True):
     # Source nodes get a simple intercept only
     if target_nodes[node]['node_type'] == 'source':
@@ -971,3 +910,67 @@ def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
 #     shift_list = x[1:] if len(x) > 1 else None
 
 #     return int_inputs, shift_list
+
+
+
+
+# def preprocess_inputs(x, transformation_terms, device='cuda'): ## old version 
+#     """
+#     Prepares model input by grouping features by transformation term base:
+#       - ci11, ci12 → 'ci1' (intercept)
+#       - cs11, cs12 → 'cs1' (shift)
+#       - cs21 → 'cs2' (another shift group)
+#       - cs, ls → treated as full group keys
+#     Returns:
+#       - int_inputs: Tensor of shape (B, n_features) for intercept model
+#       - shift_list: List of tensors for each shift model, shape (B, group_features)
+#     """
+#     transformation_terms=list(transformation_terms)
+#     #assert len(x) == len(transformation_terms), "Mismatch in inputs and term list length"
+    
+#     ## if there is only a source so transforamtion terms is 0:
+#     x = [xi.to(device, non_blocking=True) for xi in x]
+#     if len(transformation_terms)== 0:
+#         x = [xi.unsqueeze(1) for xi in x] 
+#         int_inputs= x[0]
+#         return int_inputs, None
+    
+#     if not  any('ci' in str(value) for value in transformation_terms):
+#         transformation_terms.insert(0,'si')
+    
+#     grouped_inputs = defaultdict(list)
+
+#     for tensor, term in zip(x, transformation_terms):
+#         # Handle terms like ci11, cs22, ls etc.
+#         if term.startswith(('si','ci', 'cs', 'ls')):
+#             if len(term) > 2 and term[2].isdigit():
+#                 key = term[:3]  # ci11 → ci1, cs22 → cs2
+#             else:
+#                 key = term      # cs, ls → remain as-is
+#             grouped_inputs[key].append(tensor)
+#         else:
+#             raise ValueError(f"Unknown transformation term: {term}")
+
+#     # Separate intercept and shift groups
+#     int_keys = sorted([k for k in grouped_inputs if k.startswith(('si','ci'))])
+#     shift_keys = sorted([k for k in grouped_inputs if k.startswith(('cs', 'ls'))])
+    
+#     if len(int_keys) != 1:
+#         raise ValueError(f"Expected exactly one intercept group, got: {int_keys}")
+
+#     # Process intercept inputs
+#     int_inputs = torch.cat(
+#         [t.unsqueeze(1).to(device, non_blocking=True) for t in grouped_inputs[int_keys[0]]],
+#         dim=1
+#     )  # Shape: (B, n_int_features)
+
+#     # Process shift groups
+#     shift_list = []
+#     for k in shift_keys:
+#         shift_tensor = torch.cat(
+#             [t.unsqueeze(1).to(device, non_blocking=True) for t in grouped_inputs[k]],
+#             dim=1
+#         )  # Shape: (B, n_features_for_this_shift_model)
+#         shift_list.append(shift_tensor)
+
+#     return int_inputs, shift_list if shift_list else None
