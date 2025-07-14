@@ -1,4 +1,4 @@
-Pytorch implementation of TRAnsformation Models in Directed Acyclic Graphs (TRAMDAG)
+Pytorch implementation of **TRA**nsformation **M**odels in **D**irected **A**cyclic **G**raphs (**TRAMDAG**)
 
 
 
