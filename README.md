@@ -1,9 +1,16 @@
-Pytorch implementation of TRAnsformation Models in Directed Acyclic Graphs (TRAMDAG)
+Pytorch implementation of **TRA**nsformation **M**odels in **D**irected **A**cyclic **G**raphs (**TRAMDAG**)
+
+Work in progress 🔧👷
+
+
+The Repos for the continous case and the ordinal case are in 
+
+- github.com/buehlpa/contram_pytorch
+- github.com/liherz/ontram_pytorch
 
 
 
 
-Under Construction!
 
 
 -  allows for interactions in Complex models
