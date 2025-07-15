@@ -49,7 +49,6 @@ class TramModel(nn.Module):
 
 #### Default Neural Network Models  ####
 
-### SI an LS are always the same
 class SimpleIntercept(nn.Module):
     """
     Intercept term , hI()
@@ -62,6 +61,11 @@ class SimpleIntercept(nn.Module):
 
     def forward(self, x):
         return self.fc(x)
+    
+    
+    
+    
+    
     
     
 # class LinearShift(nn.Module):

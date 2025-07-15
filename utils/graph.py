@@ -546,7 +546,7 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals)
         nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
         data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
         
-        configuration_dict = get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals)
+        configuration_dict = create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals)
         
         conf = load_configuration_dict(CONF_DICT_PATH)
         conf['nodes'] = configuration_dict
@@ -560,7 +560,7 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals)
 
 
 
-def get_nodes_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
+def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
     """
     Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
     a neural network names matrix, and a data type dictionary.
