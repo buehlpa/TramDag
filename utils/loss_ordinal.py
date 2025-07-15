@@ -1,7 +1,7 @@
 import torch
 
 # utils functions: ensures that intercept is increasing
-def transform_intercepts(int_in):
+def transform_intercepts_ordinal(int_in):
     # get batch size
     bs = int_in.shape[0]
 
@@ -27,7 +27,7 @@ def ontram_nll(outputs, targets):
     target_class_low = torch.argmax(targets, dim=1)
     target_class_up = target_class_low + 1
 
-    int_trans = transform_intercepts(int_in)
+    int_trans = transform_intercepts_ordinal(int_in)
 
     if shift_in is not None:
         shift = torch.stack(shift_in, dim=1).sum(dim=1).view(-1)
