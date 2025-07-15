@@ -1,7 +1,9 @@
 Pytorch implementation of **TRA**nsformation **M**odels in **D**irected **A**cyclic **G**raphs (**TRAMDAG**)
+Pytorch implementation of **TRA**nsformation **M**odels in **D**irected **A**cyclic **G**raphs (**TRAMDAG**)
 
 Work in progress 🔧👷
 
+The Repos for the continous case and the ordinal case are in 
 
 The Repos for the continous case and the ordinal case are in 
 
@@ -18,7 +20,7 @@ The Repos for the continous case and the ordinal case are in
 - allows for independent training of NNs instead of MAF.
 
 
-https://arxiv.org/abs/2503.16206
+Original Paper with R Code: https://arxiv.org/abs/2503.16206
 
 Reproduced experiments of 6.1 under /reproducing_tramdag_experiments
 
