@@ -89,7 +89,6 @@ class SamplingDataset(Dataset):
         return tuple(squeezed)
     
     
-    
 # helpers
 def check_roots_and_latents(NODE_DIR,rootfinder='bisection',verbose=True):
     root_path = os.path.join(NODE_DIR, 'sampling',f"roots_{rootfinder}.pt")
@@ -125,8 +124,6 @@ def load_roots_and_latents(NODE_DIR,rootfinder='bisection'):
     root=load_roots(NODE_DIR,rootfinder=rootfinder)
     latents=load_latents(NODE_DIR)
     return root, latents
-
-
 
 
 def merge_outputs(dict_list, skip_nan=True):
