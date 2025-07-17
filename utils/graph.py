@@ -559,6 +559,31 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals)
         print("Configuration updated successfully.")
 
 
+def write_nodes_information_to_configuration_v2(CONF_DICT_PATH, min_vals, max_vals,levels_dict=None):  
+    """
+    Write the nodes information to the configuration dictionary.
+    
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    try:
+        adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+        nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+        data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
+        
+        configuration_dict = create_node_dict_v2(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,levels_dict=levels_dict)
+        print(configuration_dict)
+        conf = load_configuration_dict(CONF_DICT_PATH)
+        conf['nodes'] = configuration_dict
+    
+        write_configuration_dict(conf, CONF_DICT_PATH)
+        
+    except Exception as e:
+        print("Failed to update configuration:", e)
+    else:
+        print("Configuration updated successfully.")
+
+
+
 
 def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
     """
@@ -623,12 +648,18 @@ def create_node_dict_v2(adj_matrix, nn_names_matrix, data_type, min_vals, max_va
         target_nodes[node]['data_type'] = data_type[node]
         
         # write the levels of the ordinal outcome
-        if data_type[node]=='ord':
+        if data_type[node] == 'ord':
             if levels_dict is None:
-                print('provide levels_dict e.g. {"x3":3}')
-            else:
-                target_nodes[node]['levels'] = levels_dict[node]
-            
+                raise ValueError(
+                    "levels_dict must be provided for ordinal nodes; "
+                    "e.g. levels_dict={'x3': 3}"
+                )
+            if node not in levels_dict:
+                raise KeyError(
+                    f"levels_dict is missing an entry for node '{node}'. "
+                    f"Expected something like levels_dict['{node}'] = <num_levels>"
+                )
+            target_nodes[node]['levels'] = levels_dict[node]
     
         target_nodes[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
         target_nodes[node]['parents'] = parents
