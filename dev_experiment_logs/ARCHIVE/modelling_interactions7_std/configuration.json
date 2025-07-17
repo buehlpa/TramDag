@@ -73,7 +73,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.09277851305904948,
+            "min": 0.09277851305904943,
             "max": 1.9029203854862966,
             "transformation_term_nn_models_in_h()": {}
         },
@@ -84,7 +84,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.15140970379970564,
+            "min": 0.15140970379970556,
             "max": 1.8505908736029426,
             "transformation_term_nn_models_in_h()": {}
         },
@@ -95,7 +95,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.0745557860031816,
+            "min": 0.07455578600318157,
             "max": 1.9088262940138412,
             "transformation_term_nn_models_in_h()": {}
         },
@@ -118,8 +118,8 @@
                 "x2": "ls",
                 "x3": "ls"
             },
-            "min": -0.09291542872441826,
-            "max": 3.277624543653215,
+            "min": -0.09291542872441821,
+            "max": 3.2776245436532148,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
                 "x2": "LinearShift",

@@ -599,7 +599,54 @@ def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals)
         nodes_dict[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
     return nodes_dict
 
+def create_node_dict_v2(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,levels_dict=None):
+    """
+    Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
+    a neural network names matrix, and a data type dictionary.
+    """
+    if not validate_adj_matrix(adj_matrix):
+        raise ValueError("Invalid adjacency matrix. Please check the criteria.")
+    
+    if len(data_type) != adj_matrix.shape[0]:
+        raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
+    
+    target_nodes = {}
+    G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
+    
+    sources = [node for node in G.nodes if G.in_degree(node) == 0]
+    sinks = [node for node in G.nodes if G.out_degree(node) == 0]
+    
+    for i, node in enumerate(G.nodes):
+        parents = list(G.predecessors(node))
+        target_nodes[node] = {}
+        target_nodes[node]['Modelnr'] = i
+        target_nodes[node]['data_type'] = data_type[node]
+        
+        # write the levels of the ordinal outcome
+        if data_type[node]=='ord':
+            if levels_dict is None:
+                print('provide levels_dict e.g. {"x3":3}')
+            else:
+                target_nodes[node]['levels'] = levels_dict[node]
+            
+    
+        target_nodes[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
+        target_nodes[node]['parents'] = parents
+        target_nodes[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
+        target_nodes[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
+        target_nodes[node]['min'] = min_vals.iloc[i].tolist()   
+        target_nodes[node]['max'] = max_vals.iloc[i].tolist()
 
+        
+        transformation_term_nn_models = {}
+        for parent in parents:
+            parent_idx = list(data_type.keys()).index(parent)  
+            child_idx = list(data_type.keys()).index(node) 
+            
+            if nn_names_matrix[parent_idx, child_idx] != "0":
+                transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
+        target_nodes[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
+    return target_nodes
 
 
 def create_nn_model_names(adj_matrix, data_type):
