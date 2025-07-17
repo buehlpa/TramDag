@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from utils.tram_model_helpers import ordered_parents
+import torch.nn.functional as F
 
 class GenericDataset(Dataset):
     def __init__(self, df, target_col, conf_dict=None, transform=None, transformation_terms_in_h=None):
