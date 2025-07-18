@@ -15,7 +15,7 @@ from utils.loss_continous import *
 from utils.tram_data import get_dataloader,get_dataloader_v2
 
 class SamplingDataset(Dataset):
-    def __init__(self, node,EXPERIMENT_DIR,number_of_samples=100,rootfinder='bisection', conf_dict=None, transform=None):
+    def __init__(self, node,EXPERIMENT_DIR,number_of_samples=100,rootfinder='bisection', target_nodes=None, transform=None):
         """
         Args:
             node (str): Name of the target node.
@@ -25,21 +25,21 @@ class SamplingDataset(Dataset):
         self.EXPERIMENT_DIR=EXPERIMENT_DIR
         self.node = node
         self.number_of_samples=number_of_samples
-        self.conf_dict = conf_dict
+        self.target_nodes = target_nodes
         self.transform = transform
         self.rootfinder=rootfinder
-        self.variables = None if conf_dict is None else self._ordered_keys()
+        self.variables = None if target_nodes is None else self._ordered_keys()
         self.datatensors = self._get_sampled_parent_tensors()# shape: (num_parents, num_samples, dim)
-        _,self.transformation_terms_in_h, _ = ordered_parents(self.node, self.conf_dict)
+        _,self.transformation_terms_in_h, _ = ordered_parents(self.node, self.target_nodes)
 
     def _get_sampled_parent_tensors(self):
         ## loads parent roots if they are available 
         tensor_list = []
-        if self.conf_dict is None or self.conf_dict[self.node]['node_type'] == 'source':
+        if self.target_nodes is None or self.target_nodes[self.node]['node_type'] == 'source':
             tensor_list.append(torch.ones(self.number_of_samples) * 1.0)
             return tensor_list 
         else:        
-            parents_dataype_dict, _, _ = ordered_parents(self.node, self.conf_dict)
+            parents_dataype_dict, _, _ = ordered_parents(self.node, self.target_nodes)
         for parent_pair in parents_dataype_dict:
             # print(parent_pair)
             PARENT_DIR = os.path.join(self.EXPERIMENT_DIR, f'{parent_pair}')
@@ -48,7 +48,7 @@ class SamplingDataset(Dataset):
         return tensor_list  # list of tensors, each (num_samples, dim)
 
     def _ordered_keys(self):
-        parents_dataype_dict, _, _ = ordered_parents(self.node, self.conf_dict)
+        parents_dataype_dict, _, _ = ordered_parents(self.node, self.target_nodes)
         return list(parents_dataype_dict.keys())
 
     def __len__(self):        
@@ -57,7 +57,7 @@ class SamplingDataset(Dataset):
     def __getitem__(self, idx):
         x_data = []
         
-        if self.conf_dict is None or self.conf_dict[self.node]['node_type'] == 'source':
+        if self.target_nodes is None or self.target_nodes[self.node]['node_type'] == 'source':
             return (torch.tensor([1.0], dtype=torch.float32),)
 
         if all('i' not in str(value) for value in self.transformation_terms_in_h.values()):
@@ -65,13 +65,13 @@ class SamplingDataset(Dataset):
             x_data.append(x)
 
         for i, var in enumerate(self.variables):
-            if self.conf_dict[var]['data_type'] == "cont":
+            if self.target_nodes[var]['data_type'] == "cont":
                 val = self.datatensors[i][idx]
                 x_data.append(val.unsqueeze(0))  # ensure shape (1,)
-            elif self.conf_dict[var]['data_type'] == "ord":
+            elif self.target_nodes[var]['data_type'] == "ord":
                 val = self.datatensors[i][idx]
                 x_data.append(val.unsqueeze(0).long())  # ensure shape (1,) and long
-            elif self.conf_dict[var]['data_type'] == "other":
+            elif self.target_nodes[var]['data_type'] == "other":
                 img_path = self.datatensors[i][idx]
                 image = Image.open(img_path).convert("RGB")
                 if self.transform:
@@ -241,8 +241,89 @@ def show_hdag_for_source_nodes(target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,x
         plt.plot(targets2_cpu[between_mask], hdag_extra_values_cpu[between_mask], color='blue', label='min_val <= x <= max_val')
         plt.plot(targets2_cpu[above_max_mask], hdag_extra_values_cpu[above_max_mask], color='red', label='x > max_val')
         plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
+
+def show_hdag_for_single_source_node_continous(node,target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
+        verbose=False
+        n=1000
+        #### 0.  paths
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
         
+        ##### 1.  load model 
+        model_path = os.path.join(NODE_DIR, "best_model.pt")
+        tram_model = get_fully_specified_tram_model_v2(node, target_nodes, verbose=verbose)
+        tram_model = tram_model.to(device)
+        tram_model.load_state_dict(torch.load(model_path))
+        _, ordered_transformation_terms_in_h, _=ordered_parents(node, target_nodes)
         
+        #### 2. Sampling Dataloader
+        dataset = SamplingDataset(node=node,EXPERIMENT_DIR=EXPERIMENT_DIR,number_of_samples=n, target_nodes=target_nodes, transform=None)
+        sample_loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
+        output_list = []
+        with torch.no_grad():
+            for x in tqdm(sample_loader, desc=f"h() for  {node}"):
+                x = [xi.to(device) for xi in x]
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h, device=device)
+                model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+                output_list.append(model_outputs)
+                break
+        if verbose:
+            print("source node, Defaults to SI and 1 as inputs")
+            
+        theta_single =     output_list[0]['int_out'][0]  # Shape: (20,)
+        theta_single=transform_intercepts_continous(theta_single)
+        thetas_expanded = theta_single.repeat(n, 1).to(device)  # Shape: (n, 20)
+        
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+        
+        if xmin_plot==None:
+            xmin_plot=min_vals-1
+        if xmax_plot==None:
+            xmax_plot=max_vals+1        
+        
+        targets2 = torch.linspace(xmin_plot, xmax_plot, steps=n).to(device)  # 1000 points from 0 to 1
+        
+        min_val = min_max[0].clone().detach() if isinstance(min_max[0], torch.Tensor) else torch.tensor(min_max[0], dtype=targets2.dtype, device=targets2.device)
+        max_val = min_max[1].clone().detach() if isinstance(min_max[1], torch.Tensor) else torch.tensor(min_max[1], dtype=targets2.dtype, device=targets2.device) 
+
+        hdag_extra_values=h_extrapolated(thetas_expanded, targets2, k_min=min_val, k_max=max_val)
+        # Move to CPU for plotting
+        targets2_cpu = targets2.cpu().numpy()
+        hdag_extra_values_cpu = hdag_extra_values.cpu().detach().numpy()
+
+        # # Split masks
+        below_min_mask = targets2_cpu < min_val.item()
+        between_mask = (targets2_cpu >= min_val.item()) & (targets2_cpu <= max_val.item())
+        above_max_mask = targets2_cpu > max_val.item()
+
+        # Plot
+        plt.figure(figsize=(8, 6))
+        plt.plot(targets2_cpu[below_min_mask], hdag_extra_values_cpu[below_min_mask], color='red', label='x < min_val')
+        plt.plot(targets2_cpu[between_mask], hdag_extra_values_cpu[between_mask], color='blue', label='min_val <= x <= max_val')
+        plt.plot(targets2_cpu[above_max_mask], hdag_extra_values_cpu[above_max_mask], color='red', label='x > max_val')
+        plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
+
+
+
+def show_hdag_for_source_nodes_v2(target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
+    for node in target_nodes:
+
+        print(f'\n----*----------*-------------*--------Inspect TRAFO Node: {node} ------------*-----------------*-------------------*--')
+        if (target_nodes[node]['node_type'] != 'source'):
+            print("skipped.. since h does depend on parents and is different for every instance")
+            continue
+        else:
+            if target_nodes[node]['data_type']=='cont':
+                show_hdag_for_single_source_node_continous(node=node,target_nodes=target_nodes,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
+            if target_nodes[node]['data_type']=='ord':
+                print('not implemeneted yet')
+            else:
+                print(f"not implemented for {target_nodes[node]['data_type']}")
+
+
+
+
 def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
     batch_size = 4112
     for node in conf_dict:
