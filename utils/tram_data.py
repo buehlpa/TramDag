@@ -143,15 +143,10 @@ class GenericDataset_v2(Dataset):
             # handle y
             if self.num_classes is not None:
                 # ordinal source → one-hot
-
-                
                 raw = row[self.target_col]
                 y_int = int(raw)
-                print(f'y_int: {y_int}')
-                print(f'shape: {y_int.shape}')
-                
-                
                 y = F.one_hot(torch.tensor(y_int, dtype=torch.long), num_classes=self.num_classes).float()
+                
             else:
                 # continuous or other
                 y = torch.tensor(row[self.target_col], dtype=torch.float32)
@@ -178,15 +173,9 @@ class GenericDataset_v2(Dataset):
         if self.num_classes is not None:
             # ordinal → one-hot
             raw = row[self.target_col]
-
-            
             y_int = int(raw)
-            print(f'y_int: {y_int}')
-            print(f'shape: {y_int.shape}')
-            
-            
-            
             y = F.one_hot(torch.tensor(y_int, dtype=torch.long),num_classes=self.num_classes).float()
+            
         else:
             # continuous or other
             y = torch.tensor(row[self.target_col], dtype=torch.float32)
@@ -195,6 +184,7 @@ class GenericDataset_v2(Dataset):
 
 
 def get_dataloader_v2(node, target_nodes, train_df, val_df, batch_size=32, verbose=False):
+    
     transform = transforms.Compose([
         transforms.Resize((128, 128)),
         transforms.ToTensor()

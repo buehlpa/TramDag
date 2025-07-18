@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-07-17 13:43:40",
+    "date_of_creation": "2025-07-18 07:12:04",
     "experiment_name": "tramdag_paper_exp_6_2_mixed",
     "PATHS": {
         "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdag_paper_exp_6_2_mixed",
@@ -94,8 +94,8 @@
                 "x1": "ls",
                 "x2": "ls"
             },
-            "min": 1.0,
-            "max": 4.0,
+            "min": 0.0,
+            "max": 3.0,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
                 "x2": "LinearShift"

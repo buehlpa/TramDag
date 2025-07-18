@@ -12,7 +12,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 from utils.tram_model_helpers import ordered_parents
 from utils.tram_model_helpers import *           
 from utils.loss_continous import *   
-from utils.tram_data import get_dataloader
+from utils.tram_data import get_dataloader,get_dataloader_v2
 
 class SamplingDataset(Dataset):
     def __init__(self, node,EXPERIMENT_DIR,number_of_samples=100,rootfinder='bisection', conf_dict=None, transform=None):
@@ -171,12 +171,14 @@ def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
             
             
 
-def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
+def show_hdag_for_source_nodes(target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
     verbose=False
     n=1000
-    for node in conf_dict:
+    for node in target_nodes:
+        
+        
         print(f'\n----*----------*-------------*--------Inspect TRAFO Node: {node} ------------*-----------------*-------------------*--')
-        if (conf_dict[node]['node_type'] != 'source'):
+        if (target_nodes[node]['node_type'] != 'source'):
             print("skipped.. since h does depend on parents and is different for every instance")
             continue
         
@@ -185,13 +187,13 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax
         
         ##### 1.  load model 
         model_path = os.path.join(NODE_DIR, "best_model.pt")
-        tram_model = get_fully_specified_tram_model(node, conf_dict, verbose=verbose)
+        tram_model = get_fully_specified_tram_model(node, target_nodes, verbose=verbose)
         tram_model = tram_model.to(device)
         tram_model.load_state_dict(torch.load(model_path))
-        _, ordered_transformation_terms_in_h, _=ordered_parents(node, conf_dict)
+        _, ordered_transformation_terms_in_h, _=ordered_parents(node, target_nodes)
         
         #### 2. Sampling Dataloader
-        dataset = SamplingDataset(node=node,EXPERIMENT_DIR=EXPERIMENT_DIR,number_of_samples=n, conf_dict=conf_dict, transform=None)
+        dataset = SamplingDataset(node=node,EXPERIMENT_DIR=EXPERIMENT_DIR,number_of_samples=n, target_nodes=conf_dict, transform=None)
         sample_loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
         output_list = []
         with torch.no_grad():
@@ -208,8 +210,8 @@ def show_hdag_for_source_nodes(conf_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax
         theta_single=transform_intercepts_continous(theta_single)
         thetas_expanded = theta_single.repeat(n, 1).to(device)  # Shape: (n, 20)
         
-        min_vals = torch.tensor(conf_dict[node]['min'], dtype=torch.float32).to(device)
-        max_vals = torch.tensor(conf_dict[node]['max'], dtype=torch.float32).to(device)
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32).to(device)
         min_max = torch.stack([min_vals, max_vals], dim=0)
         
         if xmin_plot==None:
@@ -306,6 +308,77 @@ def inspect_trafo_standart_logistic(conf_dict, EXPERIMENT_DIR, train_df, val_df,
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
 
+def inspect_single_standart_logistic(node,target_nodes, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
+        batch_size = 4112
+        #### 0. Paths
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        
+        ##### 1. Load model 
+        model_path = os.path.join(NODE_DIR, "best_model.pt")
+        tram_model = get_fully_specified_tram_model_v2(node, target_nodes, verbose=verbose)
+        tram_model = tram_model.to(device)
+        tram_model.load_state_dict(torch.load(model_path))
+        tram_model.eval()
+
+        ##### 2. Dataloader
+        train_loader, val_loader = get_dataloader_v2(node, target_nodes, train_df, val_df, batch_size=batch_size, verbose=verbose)
+        _, ordered_transformation_terms_in_h, _=ordered_parents(node, target_nodes)
+        #### 3. Forward Pass
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32).to(device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+
+        h_train_list, h_val_list = [], []
+        with torch.no_grad():
+            for x, y in tqdm(train_loader, desc=f"Train loader ({node})", total=len(train_loader)):
+                y = y.to(device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h.values(), device=device)
+                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                h_train, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
+                h_train_list.extend(h_train.cpu().numpy())
+
+            for x, y in tqdm(val_loader, desc=f"Val loader ({node})", total=len(val_loader)):
+                y = y.to(device)
+                int_input, shift_list = preprocess_inputs(x,ordered_transformation_terms_in_h.values(), device=device)
+                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                h_val, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
+                h_val_list.extend(h_val.cpu().numpy())
+
+        h_train_array = np.array(h_train_list)
+        h_val_array = np.array(h_val_list)
+
+        # Plotting
+        fig, axs = plt.subplots(1, 4, figsize=(22, 5))
+
+        # Train Histogram
+        axs[0].hist(h_train_array, bins=50)
+        axs[0].set_title(f'Train Histogram ({node})')
+
+        # Train QQ Plot with R-style Confidence Bands
+        probplot(h_train_array, dist="logistic", plot=axs[1])
+        add_r_style_confidence_bands(axs[1], h_train_array)
+
+        # Validation Histogram
+        axs[2].hist(h_val_array, bins=50)
+        axs[2].set_title(f'Val Histogram ({node})')
+
+        # Validation QQ Plot with R-style Confidence Bands
+        probplot(h_val_array, dist="logistic", plot=axs[3])
+        add_r_style_confidence_bands(axs[3], h_val_array)
+
+        plt.suptitle(f'Distribution Diagnostics for Node: {node}', fontsize=14)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        plt.show()
+    
+def inspect_trafo_standart_logistic_v2(target_nodes, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
+    for node in target_nodes:
+        print(f'----*----------*-------------*--------h(data) should be standard logistic: {node} ------------*-----------------*-------------------*--')
+        if target_nodes[node]['data_type']=='ord':
+            print('not defined for ordinal target variables')
+            continue
+        
+        else:
+            inspect_single_standart_logistic(node,target_nodes=target_nodes, EXPERIMENT_DIR=EXPERIMENT_DIR, train_df=train_df, val_df=val_df, device=device, verbose=verbose)
 
 
 def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95, simulations=1000):

@@ -450,7 +450,6 @@ def check_if_training_complete(node, NODE_DIR, epochs):
         print(f"Error checking training status for node {node}: {e}")
         return False
 
-
 def train_val_loop_v2(
                    node,
                    target_nodes,
@@ -620,10 +619,7 @@ def train_val_loop_v3(
     min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32).to(device)
     max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32).to(device)
     min_max = torch.stack([min_vals, max_vals], dim=0)
-    print(f"Min-Max values for {node}: {min_max}")
-    print(min_max.shape)
-    
-    
+
     ###### Load Model & History #####
     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
         print("Existing model found. Loading weights and history...")
