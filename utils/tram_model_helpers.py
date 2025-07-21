@@ -226,7 +226,7 @@ def get_fully_specified_tram_model_v2(node: str, target_nodes: dict, verbose=Tru
         if "ci" not in v['h_term'] and "si" not in v['h_term']
     }
 
-    # Build intercept network
+    ############################## INTERCEPT NETWORKS #####################################################
     intercept_groups = group_by_base(intercepts_dict, prefixes=("ci", "si"))
     if not intercept_groups:
 
@@ -249,7 +249,7 @@ def get_fully_specified_tram_model_v2(node: str, target_nodes: dict, verbose=Tru
             nn_int = globals()[base](n_features=len(feats))
         
 
-    # Build shift networks (handles both "cs" and "ls")
+    ############################### SHIFT NETWORKS ########################################################
     shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
     nn_shifts = []
     for feats in shift_groups.values():
