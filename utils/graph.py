@@ -2,6 +2,8 @@
 import numpy as np
 import seaborn as sns
 import networkx as nx
+import pandas as pd
+
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -582,6 +584,43 @@ def write_nodes_information_to_configuration_v2(CONF_DICT_PATH, min_vals, max_va
     else:
         print("Configuration updated successfully.")
 
+def create_levels_dict(df:pd.DataFrame,data_type:dict):
+    levels_dict={}
+    for key,val in data_type.items():
+        if val=='ord':
+            check_ordinal_variable_values(df,key)
+            levels_dict[key]=len(np.unique(df[key]))
+    return levels_dict   
+
+def check_ordinal_variable_values(df, var):
+    unique_vals = set(df[var].dropna().unique())
+    num_classes = len(unique_vals)
+
+    if num_classes < 2:
+        raise ValueError(
+            f"Variable '{var}' has fewer than 2 unique values: {unique_vals}. "
+            "Ordinal variables must have at least two distinct values."
+        )
+
+    if num_classes == 2:
+        if unique_vals != {0, 1}:
+            raise ValueError(
+                f"Variable '{var}' is marked as ordinal with 2 classes, "
+                f"but values are {unique_vals}. Please provide binary ordinal variables as 0 and 1."
+            )
+    else:
+        if not all(isinstance(val, (int, np.integer)) for val in unique_vals):
+            raise ValueError(
+                f"Variable '{var}' contains non-integer values: {unique_vals}. "
+                "Multiclass ordinal variables must contain only integer values."
+            )
+        expected_vals = set(range(num_classes))
+        if unique_vals != expected_vals:
+            raise ValueError(
+                f"Variable '{var}' has values {sorted(unique_vals)}, "
+                f"but expected values are {sorted(expected_vals)} (0 to {num_classes - 1}). "
+                "Multiclass ordinal variables must be zero-indexed and contiguous."
+            )
 
 
 
@@ -877,8 +916,6 @@ def merge_transformation_dicts(transformation_terms_in_h, transformation_term_nn
         for key in transformation_terms_in_h.keys()  # Iterate over keys from the first dict
     }
     return merged_dict
-
-
 
 
 

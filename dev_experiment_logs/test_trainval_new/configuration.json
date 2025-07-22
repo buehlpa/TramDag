@@ -1,0 +1,306 @@
+{
+    "date_of_creation": "2025-07-22 09:45:49",
+    "experiment_name": "test_trainval_new",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/test_trainval_new",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/test_trainval_new"
+    },
+    "data_type": {
+        "x1": "cont",
+        "x2": "cont",
+        "x3": "cont",
+        "x4": "cont",
+        "x5": "cont",
+        "x6": "cont",
+        "x7": "cont",
+        "x8": "cont"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10363289207947189,
+            "max": 1.8947268989877823,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.09617707721630775,
+            "max": 1.9152953885721604,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10217982588638876,
+            "max": 1.9121695544111015,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x4": {
+            "Modelnr": 3,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10121765000817616,
+            "max": 1.87272970393435,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x5": {
+            "Modelnr": 4,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": -3.3386044612808394,
+            "max": 3.3547190394766706,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x6": {
+            "Modelnr": 5,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10989701331700884,
+            "max": 1.9207715020591831,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x7": {
+            "Modelnr": 6,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": -3.4929763477347193,
+            "max": 3.3427869837409574,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x8": {
+            "Modelnr": 7,
+            "data_type": "cont",
+            "node_type": "sink",
+            "parents": [
+                "x1",
+                "x2",
+                "x3",
+                "x4",
+                "x5",
+                "x6",
+                "x7"
+            ],
+            "parents_datatype": {
+                "x1": "cont",
+                "x2": "cont",
+                "x3": "cont",
+                "x4": "cont",
+                "x5": "cont",
+                "x6": "cont",
+                "x7": "cont"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls",
+                "x2": "ls",
+                "x3": "ls",
+                "x4": "ls",
+                "x5": "ls",
+                "x6": "ls",
+                "x7": "ls"
+            },
+            "min": -4.653043115677375,
+            "max": 5.575859832945954,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift",
+                "x2": "LinearShift",
+                "x3": "LinearShift",
+                "x4": "LinearShift",
+                "x5": "LinearShift",
+                "x6": "LinearShift",
+                "x7": "LinearShift"
+            }
+        }
+    }
+}

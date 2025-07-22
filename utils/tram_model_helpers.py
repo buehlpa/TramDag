@@ -244,7 +244,10 @@ def get_fully_specified_tram_model_v2(node: str, target_nodes: dict, verbose=Tru
         
         
         if target_nodes[node]['data_type']=='ord':
+            
             nn_int = globals()[base](n_features=len(feats),n_thetas=int(target_nodes[node]['levels'])-1)
+            
+            
         else:    
             nn_int = globals()[base](n_features=len(feats))
         
@@ -262,6 +265,8 @@ def get_fully_specified_tram_model_v2(node: str, target_nodes: dict, verbose=Tru
     if verbose:
         print("Constructed TRAM model:", tram_model)
     return tram_model
+
+
 
 ## jsut for SI experiments
 def get_fully_specified_tram_model_hardcoded_init_weights_for_si(node, conf_dict, verbose=True):
