@@ -756,7 +756,7 @@ def create_nn_model_names(adj_matrix, data_type):
             'ls': 'LinearShift',
             'si': 'SimpleIntercept'
         },
-        'ordinal_Xc_Yn': {
+        'ordinal_Xc_Yo': {
             'cs': 'ComplexShiftDefaultTabular',
             'ci': 'ComplexInterceptDefaultTabular',
             'ls': 'LinearShift',
@@ -768,7 +768,7 @@ def create_nn_model_names(adj_matrix, data_type):
             'ls': 'LinearShift',
             'si': 'SimpleIntercept'
         },
-        'ordinal_Xn_Yn': {
+        'ordinal_Xn_Yo': {
             'cs': 'ComplexShiftDefaultTabular',
             'ci': 'ComplexInterceptDefaultTabular',
             'ls': 'LinearShift',
