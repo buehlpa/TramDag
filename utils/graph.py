@@ -163,9 +163,6 @@ def create_nx_graph(adj_matrix, node_labels=None):
                 edge_labels[(node_labels[i], node_labels[j])] = adj_matrix[i, j]
     return G, edge_labels
 
-
-
-
 def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
     
     data_type =  load_configuration_dict(CONF_DICT_PATH)['data_type']
@@ -336,7 +333,6 @@ def interactive_nn_names_matrix(CONF_DICT_PATH, seed=5):
 
 # configuration dicitonary utils
 
-
 def new_conf_dict(experiment_name,EXPERIMENT_DIR,DATA_PATH,LOG_DIR):
     """
     creates the empty_configuration_file for the experiment
@@ -402,7 +398,6 @@ def new_conf_dict(experiment_name,EXPERIMENT_DIR,DATA_PATH,LOG_DIR):
     configuration_dict['PATHS']['EXPERIMENT_DIR']=EXPERIMENT_DIR
     
     return configuration_dict
-
 
 def write_configuration_dict(configuration_dict, CONF_DICT_PATH):
     """
@@ -489,7 +484,6 @@ def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
     configuration_dict['adj_matrix'] = adj_matrix.tolist()  # Convert to list for JSON serialization
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
 
-
 def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> None:
     """
     Write the data type information to the configuration dictionary.
@@ -534,9 +528,6 @@ def write_nn_names_matrix_to_configuration(nn_names_matrix, CONF_DICT_PATH):
     configuration_dict['model_names'] = nn_names_matrix.tolist()  # Convert to list for JSON serialization
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
     
-    
-
-
 def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals):  
     """
     Write the nodes information to the configuration dictionary.
@@ -559,7 +550,6 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals)
         print("Failed to update configuration:", e)
     else:
         print("Configuration updated successfully.")
-
 
 def write_nodes_information_to_configuration_v2(CONF_DICT_PATH, min_vals, max_vals,levels_dict=None):  
     """
@@ -592,6 +582,24 @@ def create_levels_dict(df:pd.DataFrame,data_type:dict):
             levels_dict[key]=len(np.unique(df[key]))
     return levels_dict   
 
+def create_levels_dict_v2(df:pd.DataFrame,data_type:dict):
+    # creates the levels dictionary for variables which should be modelled ordinaly 
+    levels_dict={}
+    for variable,datatype in data_type.items():
+            if "ordinal" in datatype.lower():
+                unique_vals = set(df[variable].dropna().unique())
+                num_classes = len(unique_vals)
+
+                expected_vals = set(range(num_classes))
+                if unique_vals != expected_vals:
+                    raise ValueError(
+                        f"Variable '{variable}' has values {sorted(unique_vals)}, "
+                        f"but expected values are {sorted(expected_vals)} (0 to {num_classes - 1}). "
+                        "Multiclass ordinal variables must be zero-indexed and contiguous."
+                )
+                levels_dict[variable]=len(np.unique(df[variable]))
+    return levels_dict 
+
 def check_ordinal_variable_values(df, var):
     unique_vals = set(df[var].dropna().unique())
     num_classes = len(unique_vals)
@@ -621,8 +629,6 @@ def check_ordinal_variable_values(df, var):
                 f"but expected values are {sorted(expected_vals)} (0 to {num_classes - 1}). "
                 "Multiclass ordinal variables must be zero-indexed and contiguous."
             )
-
-
 
 def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals):
     """
@@ -718,6 +724,60 @@ def create_node_dict_v2(adj_matrix, nn_names_matrix, data_type, min_vals, max_va
         target_nodes[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
     return target_nodes
 
+def create_node_dict_v3(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,levels_dict=None):
+    """
+    Creates a configuration dictionary for TRAMADAG based on an adjacency matrix,
+    a neural network names matrix, and a data type dictionary.
+    """
+    if not validate_adj_matrix(adj_matrix):
+        raise ValueError("Invalid adjacency matrix. Please check the criteria.")
+    
+    if len(data_type) != adj_matrix.shape[0]:
+        raise ValueError("Data type dictionary should have the same length as the adjacency matrix.")
+    
+    target_nodes = {}
+    G, edge_labels = create_nx_graph(adj_matrix, node_labels=list(data_type.keys()))
+    
+    sources = [node for node in G.nodes if G.in_degree(node) == 0]
+    sinks = [node for node in G.nodes if G.out_degree(node) == 0]
+    
+    for i, node in enumerate(G.nodes):
+        parents = list(G.predecessors(node))
+        target_nodes[node] = {}
+        target_nodes[node]['Modelnr'] = i
+        target_nodes[node]['data_type'] = data_type[node]
+        
+        # write the levels of the ordinal outcome
+        if 'ordinal' in data_type[node]:
+            if levels_dict is None:
+                raise ValueError(
+                    "levels_dict must be provided for ordinal nodes; "
+                    "e.g. levels_dict={'x3': 3}"
+                )
+            if node not in levels_dict:
+                raise KeyError(
+                    f"levels_dict is missing an entry for node '{node}'. "
+                    f"Expected something like levels_dict['{node}'] = <num_levels>"
+                )
+            target_nodes[node]['levels'] = levels_dict[node]
+    
+        target_nodes[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
+        target_nodes[node]['parents'] = parents
+        target_nodes[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
+        target_nodes[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
+        target_nodes[node]['min'] = min_vals.iloc[i].tolist()   
+        target_nodes[node]['max'] = max_vals.iloc[i].tolist()
+
+        
+        transformation_term_nn_models = {}
+        for parent in parents:
+            parent_idx = list(data_type.keys()).index(parent)  
+            child_idx = list(data_type.keys()).index(node) 
+            
+            if nn_names_matrix[parent_idx, child_idx] != "0":
+                transformation_term_nn_models[parent] = nn_names_matrix[parent_idx, child_idx]
+        target_nodes[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
+    return target_nodes
 
 def create_nn_model_names(adj_matrix, data_type):
     """
@@ -808,8 +868,6 @@ def create_nn_model_names(adj_matrix, data_type):
 ## Adjcency matrix funcions
 import re
 
-
-
 def is_valid_column(col, col_idx):
     ci_pattern = re.compile(r"^ci(\d+)$")
     cs_pattern = re.compile(r"^cs(\d+)$")
@@ -863,7 +921,6 @@ def is_valid_column(col, col_idx):
 
     return True
 
-
 def validate_matrix_columns(adj_matrix):
     all_valid = True
     for i in range(adj_matrix.shape[1]):
@@ -871,9 +928,6 @@ def validate_matrix_columns(adj_matrix):
         if not is_valid_column(col, i):
             all_valid = False
     return all_valid
-
-
-
 
 def validate_adj_matrix(adj_matrix):
     """
@@ -907,7 +961,6 @@ def validate_adj_matrix(adj_matrix):
 
     return True
 
-
 def get_binary_matrix_from_adjmatrix(adj_matrix):
     """
     Convert the adjacency matrix to a binary matrix.
@@ -923,7 +976,6 @@ def get_binary_matrix_from_adjmatrix(adj_matrix):
     binary_matrix: 2D numpy array, binary matrix of the adjacency matrix
     """
     return (adj_matrix != "0").astype(int)
-
 
 def merge_transformation_dicts(transformation_terms_in_h, transformation_term_nn_models_in_h):
     """
@@ -947,8 +999,6 @@ def merge_transformation_dicts(transformation_terms_in_h, transformation_term_nn
     }
     return merged_dict
 
-
-
 def sort_dict_by_value_contains_i(model_dict):
     """
     Sorts a dictionary based on whether the values contain the letter 'i'.
@@ -960,7 +1010,6 @@ def sort_dict_by_value_contains_i(model_dict):
         dict: Sorted dictionary where values containing 'i' appear first.
     """
     return dict(sorted(model_dict.items(), key=lambda x: 'i' not in x[1]))
-
 
 def sort_second_dict_by_first_dict_keys(sort_by, to_sort):
     """
