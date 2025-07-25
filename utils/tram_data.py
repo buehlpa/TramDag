@@ -215,7 +215,8 @@ class GenericDataset_v5(Dataset):
         parents_dataype_dict=None,
         transformation_terms_in_h=None,
         return_intercept_shift=True,
-        transform=None
+        transform=None,
+        return_y=True
     ):
         """
         df: pd.DataFrame
@@ -227,6 +228,7 @@ class GenericDataset_v5(Dataset):
         transform: torchvision transform for images
         """
         self.return_intercept_shift = return_intercept_shift
+        self.return_y=return_y
         self.df = df.reset_index(drop=True)
         self.target_col = target_col
         self.target_nodes = target_nodes or {}
@@ -390,17 +392,26 @@ class GenericDataset_v5(Dataset):
                     img = self.transform(img)
                 x_data.append(img)
 
-        y = self._transform_y(row)
-
+        # only return the original data without separating them for int and shifts
         if not self.return_intercept_shift:
-            return tuple(x_data), y
-
+            if self.return_y:
+                y = self._transform_y(row)
+                return tuple(x_data), y
+            else:
+                return tuple(x_data)
         
-        batched = [x.unsqueeze(0) for x in x_data]
-        int_in, shifts = self._preprocess_inputs(batched)
-        int_in = int_in.squeeze(0)
-        shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
-        return (int_in, shifts), y
+        # returning already splitted int and shifts
+        else:    
+            batched = [x.unsqueeze(0) for x in x_data]
+            int_in, shifts = self._preprocess_inputs(batched)
+            int_in = int_in.squeeze(0)
+            shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
+            
+            if self.return_y:
+                y = self._transform_y(row)
+                return (int_in, shifts), y
+            else:
+                return (int_in, shifts)
 
 
 def get_dataloader_v5(node, target_nodes, train_df, val_df, batch_size=32,return_intercept_shift=False, verbose=False):
