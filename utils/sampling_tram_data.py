@@ -29,7 +29,7 @@ class SamplingDataset(Dataset):
         self.target_nodes = target_nodes
         self.transform = transform
         self.rootfinder=rootfinder
-        self.variables = None if target_nodes is None else self._ordered_keys()
+        self.predictors = None if target_nodes is None else self._ordered_keys()
         self.datatensors = self._get_sampled_parent_tensors()# shape: (num_parents, num_samples, dim)
         _,self.transformation_terms_in_h, _ = ordered_parents(self.node, self.target_nodes)
 
@@ -65,7 +65,7 @@ class SamplingDataset(Dataset):
             x = torch.tensor(1.0) 
             x_data.append(x)
 
-        for i, var in enumerate(self.variables):
+        for i, var in enumerate(self.predictors):
             if self.target_nodes[var]['data_type'] == "cont":
                 val = self.datatensors[i][idx]
                 x_data.append(val.unsqueeze(0))  # ensure shape (1,)
