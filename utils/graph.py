@@ -574,6 +574,32 @@ def write_nodes_information_to_configuration_v2(CONF_DICT_PATH, min_vals, max_va
     else:
         print("Configuration updated successfully.")
 
+
+def write_nodes_information_to_configuration_v3(CONF_DICT_PATH, min_vals, max_vals,levels_dict=None):  
+    """
+    Write the nodes information to the configuration dictionary.
+    
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    try:
+        adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+        nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+        data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
+        
+        configuration_dict = create_node_dict_v3(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,levels_dict=levels_dict)
+        print(configuration_dict)
+        conf = load_configuration_dict(CONF_DICT_PATH)
+        conf['nodes'] = configuration_dict
+    
+        write_configuration_dict(conf, CONF_DICT_PATH)
+        
+    except Exception as e:
+        print("Failed to update configuration:", e)
+    else:
+        print("Configuration updated successfully.")
+
+
+
 def create_levels_dict(df:pd.DataFrame,data_type:dict):
     levels_dict={}
     for key,val in data_type.items():
