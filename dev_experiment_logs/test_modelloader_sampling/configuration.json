@@ -189,8 +189,8 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.10363289207947189,
-            "max": 1.8947268989877823,
+            "min": 0.10363289207947188,
+            "max": 1.8947268989877821,
             "transformation_term_nn_models_in_h()": {}
         },
         "x2": {
@@ -200,7 +200,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.09617707721630775,
+            "min": 0.0961770772163077,
             "max": 1.9152953885721604,
             "transformation_term_nn_models_in_h()": {}
         },
@@ -211,8 +211,8 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.10217982588638876,
-            "max": 1.9121695544111015,
+            "min": 0.1021798258863887,
+            "max": 1.9121695544111017,
             "transformation_term_nn_models_in_h()": {}
         },
         "x4": {
@@ -222,7 +222,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.10121765000817616,
+            "min": 0.1012176500081761,
             "max": 1.87272970393435,
             "transformation_term_nn_models_in_h()": {}
         },
@@ -244,8 +244,8 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.10989701331700884,
-            "max": 1.9207715020591831,
+            "min": 0.10989701331700881,
+            "max": 1.920771502059183,
             "transformation_term_nn_models_in_h()": {}
         },
         "x7": {
