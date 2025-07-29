@@ -1045,7 +1045,7 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, debug=False):
 
 
 
-def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample, debug=False):
+def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample,device, debug=False):
     number_of_samples = len(latent_sample)
     output_list = []
 
@@ -1289,14 +1289,14 @@ def sample_full_dag_chandru_v2(target_nodes_dict,
                 
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
-                tram_model = get_fully_specified_tram_model_v5(node, target_nodes, verbose=True).to(device)
+                tram_model = get_fully_specified_tram_model_v5(node, target_nodes_dict, verbose=True).to(device)
                 tram_model.load_state_dict(torch.load(MODEL_PATH))
                 
                 # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
                 sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
                 
                 sample_dataset = GenericDataset_v6(sampled_df,target_col=node,
-                                                    target_nodes=target_nodes,
+                                                    target_nodes=target_nodes_dict,
                                                     return_intercept_shift=True,
                                                     return_y=False,
                                                     debug=debug)
@@ -1306,7 +1306,7 @@ def sample_full_dag_chandru_v2(target_nodes_dict,
                 ###*************************************************** Continous Modelled Outcome ************************************************
                 
                 if criteria_for_continous_modelled_outcome(node,target_nodes_dict):
-                    sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample, debug=debug)
+                    sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample,device=device, debug=debug)
                     
                 ###*************************************************** Ordinal Modelled Outcome ************************************************
                 

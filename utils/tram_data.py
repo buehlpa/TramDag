@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from utils.tram_model_helpers import ordered_parents
 import torch.nn.functional as F
-
+import pandas as pd
 class GenericDataset(Dataset):
     def __init__(self, df, target_col, conf_dict=None, transform=None, transformation_terms_in_h=None):
         #TODO if intercept is si but shifts are ci , intercept should return 1s
