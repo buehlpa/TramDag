@@ -820,7 +820,117 @@ def show_samples_vs_true_v2(
 
         plt.tight_layout()
         plt.show()
+        
+def show_samples_vs_true_v3(
+    df,
+    target_nodes,
+    experiment_dir,
+    *,
+    bins=100,
+    hist_true_color="blue",
+    hist_est_color="orange",
+    figsize=(14, 5),
+):
+    for node in target_nodes:
+        sample_path = os.path.join(experiment_dir, f"{node}/sampling/sampled.pt")
+        if not os.path.isfile(sample_path):
+            print(f"[WARNING] skip {node}: {sample_path} not found.")
+            continue
 
+        sampled = torch.load(sample_path).cpu().numpy()
+        sampled = sampled[np.isfinite(sampled)]
+
+        if node not in df.columns:
+            print(f"[WARNING] skip {node}: column not found in DataFrame.")
+            continue
+
+        true_vals = df[node].dropna().values
+        true_vals = true_vals[np.isfinite(true_vals)]
+
+        if sampled.size == 0 or true_vals.size == 0:
+            print(f"[WARNING] skip {node}: empty array after NaN/Inf removal.")
+            continue
+
+        fig, axs = plt.subplots(1, 2, figsize=figsize)
+
+        if criteria_for_continous_modelled_outcome(node, target_nodes):
+            # Continuous: histogram + QQ
+            axs[0].hist(
+                true_vals,
+                bins=bins,
+                density=True,
+                alpha=0.6,
+                color=hist_true_color,
+                label=f"True {node}",
+            )
+            axs[0].hist(
+                sampled,
+                bins=bins,
+                density=True,
+                alpha=0.6,
+                color=hist_est_color,
+                label="Sampled",
+            )
+            axs[0].set_xlabel("Value")
+            axs[0].set_ylabel("Density")
+            axs[0].set_title(f"Histogram overlay for {node}")
+            axs[0].legend()
+            axs[0].grid(True, ls="--", alpha=0.4)
+
+            qqplot_2samples(true_vals, sampled, line="45", ax=axs[1])
+            axs[1].set_xlabel("True quantiles")
+            axs[1].set_ylabel("Sampled quantiles")
+            axs[1].set_title(f"QQ plot for {node}")
+            axs[1].grid(True, ls="--", alpha=0.4)
+
+        elif criteria_for_ordinal_modelled_outcome(node, target_nodes):
+            # Ordinal: bar plot only
+            unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
+            unique_vals = np.sort(unique_vals)
+
+            true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
+            sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
+
+            axs[0].bar(unique_vals - 0.2, true_counts / true_counts.sum(),
+                       width=0.4, color=hist_true_color, alpha=0.7, label="True")
+            axs[0].bar(unique_vals + 0.2, sampled_counts / sampled_counts.sum(),
+                       width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
+
+            axs[0].set_xticks(unique_vals)
+            axs[0].set_xlabel("Ordinal Level")
+            axs[0].set_ylabel("Relative Frequency")
+            axs[0].set_title(f"Ordinal bar plot for {node}")
+            axs[0].legend()
+            axs[0].grid(True, ls="--", alpha=0.4)
+
+            axs[1].axis("off")  # No QQ for ordinal
+
+        else:
+            # Fallback: assume categorical
+            unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
+            unique_vals = sorted(unique_vals, key=str)
+
+            true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
+            sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
+
+            axs[0].bar(np.arange(len(unique_vals)) - 0.2, true_counts / true_counts.sum(),
+                       width=0.4, color=hist_true_color, alpha=0.7, label="True")
+            axs[0].bar(np.arange(len(unique_vals)) + 0.2, sampled_counts / sampled_counts.sum(),
+                       width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
+
+            axs[0].set_xticks(np.arange(len(unique_vals)))
+            axs[0].set_xticklabels(unique_vals, rotation=45)
+            axs[0].set_xlabel("Category")
+            axs[0].set_ylabel("Relative Frequency")
+            axs[0].set_title(f"Categorical bar plot for {node}")
+            axs[0].legend()
+            axs[0].grid(True, ls="--", alpha=0.4)
+
+            axs[1].axis("off")
+
+        plt.tight_layout()
+        plt.show()
+        
 def show_latent_sampling(EXPERIMENT_DIR,conf_dict):
     for node in conf_dict.keys():
         latents_path = os.path.join(EXPERIMENT_DIR,f'{node}/sampling/latents.pt')
