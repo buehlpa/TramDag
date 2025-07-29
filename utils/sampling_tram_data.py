@@ -1104,28 +1104,49 @@ def criteria_for_ordinal_modelled_outcome(node,target_nodes_dict):
     else:
         return False  
 
-def sample_ordinal_modelled_target(sample_loader, tram_model, debug=False):
-    output_list = []
+def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
+    all_outputs = []
+
     with torch.no_grad():
         for (int_input, shift_list) in sample_loader:
-            # Move everything to device
             int_input = int_input.to(device)
             shift_list = [s.to(device) for s in shift_list]
+
             model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
-            output_list.append(model_outputs)
+            all_outputs.append(model_outputs)
 
-        y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-        sampled = get_pdf_ordinal(get_cdf_ordinal(y_pred)).argmax(dim=1)
+            if debug:
+                print("[DEBUG] Batch model_outputs keys:", model_outputs.keys())
+                print("[DEBUG] int_out shape:", model_outputs['int_out'].shape)
+                if model_outputs['shift_out'] is not None:
+                    print("[DEBUG] shift_out shapes:", [s.shape for s in model_outputs['shift_out']])
 
-        if debug:
-            print("[DEBUG] sample_ordinal_modelled_target: int_input shape:", int_input.shape)
-            print("[DEBUG] sample_ordinal_modelled_target: shift_list shapes:", [s.shape for s in shift_list])
-            print("[DEBUG] sample_ordinal_modelled_target: y_pred shape:", y_pred.shape)
-            print("[DEBUG] sample_ordinal_modelled_target: y_pred (first 5 rows):", y_pred[:5])
-            print("[DEBUG] sample_ordinal_modelled_target: sampled labels (first 10):", sampled[:10])
-            print("[DEBUG] sample_ordinal_modelled_target: sampled shape:", sampled.shape)
+    # Concatenate all 'int_out' and 'shift_out' elements across batches
+    int_out_all = torch.cat([out['int_out'] for out in all_outputs], dim=0)
 
-        return sampled
+    # If shift_out is present, we assume it's a list of tensors
+    if all_outputs[0]['shift_out'] is not None:
+        shift_out_all = []
+        for i in range(len(all_outputs[0]['shift_out'])):
+            shift_i = torch.cat([out['shift_out'][i] for out in all_outputs], dim=0)
+            shift_out_all.append(shift_i)
+    else:
+        shift_out_all = None
+
+    merged_outputs = {
+        'int_out': int_out_all,
+        'shift_out': shift_out_all
+    }
+
+    cdf = get_cdf_ordinal(merged_outputs)
+    pdf = get_pdf_ordinal(cdf)
+    sampled = pdf.argmax(dim=1)
+
+    if debug:
+        print("[DEBUG] Final sampled shape:", sampled.shape)
+        print("[DEBUG] Sampled labels (first 3):", sampled[:3])
+
+    return sampled
 
 
 
@@ -1395,7 +1416,7 @@ def sample_full_dag_chandru_v2(target_nodes_dict,
                 ###*************************************************** Ordinal Modelled Outcome ************************************************
                 
                 elif criteria_for_ordinal_modelled_outcome(node,target_nodes_dict):
-                    sampled=sample_ordinal_modelled_target(sample_loader,tram_model, debug=debug)
+                    sampled=sample_ordinal_modelled_target(sample_loader,tram_model,device=device, debug=debug)
                 
                 else:
                     raise ValueError(f"Unsupported data_type '{target_nodes_dict[node]['data_type']}' for node '{node}' in sampling.")

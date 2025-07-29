@@ -487,6 +487,9 @@ class GenericDataset_v6(Dataset):
         self._check_multiclass_predictors_of_df()
         self._check_ordinal_levels()
 
+        if self.debug:
+            print(f"[DEBUG] ------ Initalized all attributes of Genericdataset V6------")
+            
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
         
@@ -512,7 +515,7 @@ class GenericDataset_v6(Dataset):
             raise TypeError(f"debug must be bool, got {type(debug)}")
         self.debug = debug
         if self.debug:
-            print(f"[DEBUG] Set debug: type={type(self.debug)}, value={self.debug}")
+            print(f"[DEBUG] ------ Starting Debug Mode GenericDataset_v6 ------")
 
     def _set_df(self, df):
         if not isinstance(df, pd.DataFrame):
@@ -703,6 +706,9 @@ class GenericDataset_v6(Dataset):
                     raise ValueError(
                         f"Ordinal predictor '{v}' must be zero‑indexed; got {sorted(vals)}"
                     )
+        if self.debug:
+            print(f"[DEBUG] _check_multiclass_predictors_of_df: checked multiclass_predicitors passed")
+                
 
     def _check_ordinal_levels(self):
         ords = []
@@ -714,6 +720,10 @@ class GenericDataset_v6(Dataset):
             and 'xn' in self.parents_datatype_dict[v].lower()
         ]
         for v in ords:
+            if v not in self.df.columns:
+                if self.debug:
+                    print(f"[DEBUG] _check_ordinal_levels: Skipping '{v}' as it's not in the DataFrame")
+                continue
             lvl = self.target_nodes[v].get('levels')
             if lvl is None:
                 raise ValueError(f"Ordinal '{v}' missing 'levels' metadata.")
@@ -722,7 +732,8 @@ class GenericDataset_v6(Dataset):
                 raise ValueError(
                     f"Ordinal '{v}' values {uniq} != expected 0…{lvl-1}."
                 )
-
+        if self.debug:
+            print(f"[DEBUG] _check_ordinal_levels: checked ordinal levels passed")
 
 
     def __len__(self):
