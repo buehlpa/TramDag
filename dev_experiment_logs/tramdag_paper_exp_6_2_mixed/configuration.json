@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-07-29 09:36:31",
+    "date_of_creation": "2025-07-29 14:08:04",
     "experiment_name": "tramdag_paper_exp_6_2_mixed",
     "PATHS": {
         "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdag_paper_exp_6_2_mixed",
@@ -54,7 +54,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.12157964485414735,
+            "min": 0.12157964485414742,
             "max": 0.794303998711493,
             "transformation_term_nn_models_in_h()": {}
         },
