@@ -960,3 +960,373 @@ def sample_full_dag_chandru(conf_dict,
                 
                 processed_nodes.append(node)
         
+        
+from utils.loss_ordinal import get_pdf_ordinal, get_cdf_ordinal
+
+def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR, debug=False):
+    sampling_dict = {}
+    if debug:
+        print("[DEBUG] create_df_from_sampled: initializing sampling dictionary with dummy variable")
+        
+    # Add dummy variable
+    sampling_dict["DUMMY"] = torch.zeros(num_samples)
+
+    # Try loading sampled values for each parent
+    for parent in target_nodes_dict[node].get('parents', []):
+        path = os.path.join(EXPERIMENT_DIR, parent, "sampling", "sampled.pt")
+        if os.path.exists(path):
+            if debug:
+                print(f"[DEBUG] create_df_from_sampled: loading sampled data for parent '{parent}' from {path}")
+            sampling_dict[parent] = torch.load(path)
+        else:
+            if debug:
+                print(f"[DEBUG] create_df_from_sampled: no sampled data found for parent '{parent}' at {path}")
+
+    # Remove dummy if we have real variables
+    if len(sampling_dict) > 1:
+        if debug:
+            print("[DEBUG] create_df_from_sampled: removing dummy variable since real variables are present")
+        sampling_dict.pop("DUMMY")
+    else:
+        if debug:
+            print("[DEBUG] create_df_from_sampled: only dummy variable present")
+
+    # Move all tensors to CPU before creating the DataFrame
+    sampling_dict_cpu = {k: v.cpu().numpy() for k, v in sampling_dict.items()}
+    if debug:
+        print("[DEBUG] create_df_from_sampled: creating DataFrame from variables:", list(sampling_dict_cpu.keys()))
+        for k, v in sampling_dict_cpu.items():
+            print(f"[DEBUG] create_df_from_sampled: {k} shape: {v.shape}")
+
+    sampling_df = pd.DataFrame(sampling_dict_cpu)
+    
+    if debug:
+        print("[DEBUG] create_df_from_sampled: final DataFrame shape:", sampling_df.shape)
+    
+    return sampling_df
+
+
+
+
+def criteria_for_continous_modelled_outcome(node,target_nodes_dict):
+    if 'yc'in target_nodes_dict[node]['data_type'].lower() or 'continous' in target_nodes_dict[node]['data_type'].lower():
+        return True
+    else:
+        return False
+
+def criteria_for_ordinal_modelled_outcome(node,target_nodes_dict):
+    if 'yo'in target_nodes_dict[node]['data_type'].lower() and 'ordinal' in target_nodes_dict[node]['data_type'].lower():
+        return True
+    else:
+        return False  
+
+def sample_ordinal_modelled_target(sample_loader, tram_model, debug=False):
+    output_list = []
+    with torch.no_grad():
+        for (int_input, shift_list) in sample_loader:
+            # Move everything to device
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+            model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+            output_list.append(model_outputs)
+
+        y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+        sampled = get_pdf_ordinal(get_cdf_ordinal(y_pred)).argmax(dim=1)
+
+        if debug:
+            print("[DEBUG] sample_ordinal_modelled_target: int_input shape:", int_input.shape)
+            print("[DEBUG] sample_ordinal_modelled_target: shift_list shapes:", [s.shape for s in shift_list])
+            print("[DEBUG] sample_ordinal_modelled_target: y_pred shape:", y_pred.shape)
+            print("[DEBUG] sample_ordinal_modelled_target: y_pred (first 5 rows):", y_pred[:5])
+            print("[DEBUG] sample_ordinal_modelled_target: sampled labels (first 10):", sampled[:10])
+            print("[DEBUG] sample_ordinal_modelled_target: sampled shape:", sampled.shape)
+
+        return sampled
+
+
+
+def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample, debug=False):
+    number_of_samples = len(latent_sample)
+    output_list = []
+
+    with torch.no_grad():
+        for (int_input, shift_list) in sample_loader:
+            # Move everything to device
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+            model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+            output_list.append(model_outputs)
+
+    if not output_list:
+        raise RuntimeError("sample_continous_modelled_target: Model output list is empty. Check the sample_loader or model.")
+
+    if target_nodes_dict[node]['node_type'] == 'source':
+        if debug:
+            print("[DEBUG] sample_continous_modelled_target: source node, defaults to SI and 1 as inputs")
+        if 'int_out' not in output_list[0]:
+            raise KeyError("Missing 'int_out' in model output for source node.")
+        theta_single = output_list[0]['int_out'][0]
+        theta_single = transform_intercepts_continous(theta_single)
+        thetas_expanded = theta_single.repeat(number_of_samples, 1)
+        shifts = torch.zeros(number_of_samples, device=device)
+    else:
+        if debug:
+            print("[DEBUG] sample_continous_modelled_target: node has parents, previously sampled data is loaded for each pa(node)")
+        y_pred = merge_outputs(output_list, skip_nan=True)
+
+        if 'int_out' not in y_pred:
+            raise KeyError("Missing 'int_out' in merged model output.")
+        if 'shift_out' not in y_pred:
+            raise KeyError("Missing 'shift_out' in merged model output.")
+
+        thetas = y_pred['int_out']
+        shifts = y_pred['shift_out']
+        if shifts is None:
+            if debug:
+                print("[DEBUG] sample_continous_modelled_target: shift_out was None; defaulting to zeros.")
+            shifts = torch.zeros(number_of_samples, device=device)
+
+        thetas_expanded = transform_intercepts_continous(thetas).squeeze()
+        shifts = shifts.squeeze()
+
+    # Validate shapes
+    if thetas_expanded.shape[0] != number_of_samples:
+        raise ValueError(f"Mismatch in sample count: thetas_expanded has shape {thetas_expanded.shape}, expected {number_of_samples} rows.")
+
+    if debug:
+        print("[DEBUG] sample_continous_modelled_target: beginning root finding")
+        print("[DEBUG] sample_continous_modelled_target: thetas_expanded shape:", thetas_expanded.shape)
+        print("[DEBUG] sample_continous_modelled_target: shifts shape:", shifts.shape)
+        print("[DEBUG] sample_continous_modelled_target: latent_sample shape:", latent_sample.shape)
+
+    # Root bounds
+    low = torch.full((number_of_samples,), -1e5, device=device)
+    high = torch.full((number_of_samples,), 1e5, device=device)
+
+    try:
+        min_vals = torch.tensor(target_nodes_dict[node]['min'], dtype=torch.float32).to(device)
+        max_vals = torch.tensor(target_nodes_dict[node]['max'], dtype=torch.float32).to(device)
+    except KeyError as e:
+        raise KeyError(f"Missing 'min' or 'max' value in target_nodes_dict for node '{node}': {e}")
+
+    min_max = torch.stack([min_vals, max_vals], dim=0)
+
+    # Vectorized root-finding function
+    def f_vectorized(targets):
+        return vectorized_object_function(
+            thetas_expanded,
+            targets,
+            shifts,
+            latent_sample,
+            k_min=min_max[0],
+            k_max=min_max[1]
+        )
+
+    # Root finding
+    sampled = chandrupatla_root_finder(
+        f_vectorized,
+        low,
+        high,
+        max_iter=10_000,
+        tol=1e-9
+    )
+
+    if sampled is None or torch.isnan(sampled).any():
+        raise RuntimeError("Root finding failed: returned None or contains NaNs.")
+
+    if debug:
+        print("[DEBUG] sample_continous_modelled_target: root finding complete. Sampled shape:", sampled.shape)
+
+    return sampled
+
+
+
+def check_sampled_and_latents_v2(NODE_DIR, debug=True):
+    sampling_dir = os.path.join(NODE_DIR, 'sampling')
+    root_path = os.path.join(sampling_dir, 'sampled.pt')
+    latents_path = os.path.join(sampling_dir, 'latents.pt')
+
+    if not os.path.exists(root_path):
+        raise FileNotFoundError(f"'sampled.pt' not found in {sampling_dir}")
+    if not os.path.exists(latents_path):
+        raise FileNotFoundError(f"'latents.pt' not found in {sampling_dir}")
+
+    if debug:
+        print(f"[DEBUG] check_sampled_and_latents_v2: Found 'sampled.pt' in {sampling_dir}")
+        print(f"[DEBUG] check_sampled_and_latents_v2: Found 'latents.pt' in {sampling_dir}")
+
+    return True
+
+    
+    
+def sample_full_dag_chandru_v2(target_nodes_dict,
+                            EXPERIMENT_DIR,
+                            device,
+                            do_interventions={},
+                            number_of_samples= 10_000,
+                            batch_size = 32,
+                            delete_all_previously_sampled=True,
+                            verbose=True,
+                            debug=False):
+    """
+    Samples data for all nodes in a DAG defined by `conf_dict`, ensuring that each node's
+    parents are sampled before the node itself. Supports interventions on any subset of nodes.
+
+    Parameters
+    ----------
+    conf_dict : dict
+        Dictionary defining the DAG. Each key is a node name, and each value is a config
+        dict that includes at least:
+            - 'node_type': str, either 'source' or other
+            - 'parents': list of parent node names
+            - 'min': float, minimum allowed value for the node
+            - 'max': float, maximum allowed value for the node
+
+    EXPERIMENT_DIR : str
+        Base directory where all per-node directories are located.
+
+    device : torch.device
+        The device to run computations on (e.g., 'cuda' or 'cpu').
+
+    do_interventions : dict, optional
+        A dictionary specifying interventions for some nodes. Keys are node names (str),
+        values are floats. For each intervened node, the specified value is used as the
+        sampled value for all samples, and the model is bypassed. e.g. {'x1':1.0}
+
+    n : int, optional
+        Number of samples to draw for each node (default is 10_000).
+
+    batch_size : int, optional
+        Batch size for model evaluation during sampling (default is 32).
+
+    delete_all_previously_sampled : bool, optional
+        If True, removes previously sampled data before starting (default is True).
+
+    verbose : bool, optional
+        If True, prints debug/status information (default is True).
+
+    Notes
+    -----
+    - The function ensures that nodes are only sampled after their parents.
+    - Nodes with `node_type='source'` are treated as having no parents.
+    - If a node is in `do_interventions`, `sampled_chandrupatla.pt` and a dummy `latents.pt`
+      are created, enabling downstream nodes to proceed.
+    - Sampling is done using a vectorized root-finding method (Chandrupatla's algorithm).
+    """
+
+    if delete_all_previously_sampled:
+        if verbose or debug:
+            print("[INFO] Deleting all previously sampled data.")
+        delete_all_samplings(target_nodes_dict, EXPERIMENT_DIR)
+    
+    max_iterations,iteration=200,0
+    processed_nodes=[] # log the processed nodes in this list
+    
+    # repeat process until all nodes are sampled
+    while set(processed_nodes) != set(target_nodes_dict.keys()): 
+        iteration += 1
+        if iteration > max_iterations:
+            raise RuntimeError("Too many iterations in sampling loop, possible infinite loop.")
+        
+        for node in target_nodes_dict: # for each node in the target_nodes_dict
+            if node in processed_nodes:
+                if verbose :
+                    print(f"[INFO] Node '{node}' already processed.")
+                continue
+                        
+            print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--') 
+            
+            ## 1. Paths 
+            NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+            SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
+            os.makedirs(SAMPLING_DIR, exist_ok=True)
+            SAMPLED_PATH = os.path.join(SAMPLING_DIR, "sampled.pt")
+            LATENTS_PATH = os.path.join(SAMPLING_DIR, "latents.pt")
+            
+            ## 2. Check if sampled and latents already exist 
+            try:
+                if check_sampled_and_latents_v2(NODE_DIR, debug=debug):
+                    processed_nodes.append(node)
+                    continue
+            except FileNotFoundError:
+                pass
+            
+            ## 3. logic to make sure parents are always sampled first
+            skipping_node = False
+            if target_nodes_dict[node]['node_type'] != 'source':
+                for parent in target_nodes_dict[node]['parents']:
+                    parent_dir = os.path.join(EXPERIMENT_DIR, parent)
+                    try:
+                        check_sampled_and_latents_v2(parent_dir, debug=debug)
+                    except FileNotFoundError:
+                        skipping_node = True
+                        if verbose or debug:
+                            print(f"[INFO] Skipping {node} as parent '{parent}' is not sampled yet.")
+                        break
+
+            if skipping_node:
+                continue
+            
+            ## INTERVENTION, if node is to be intervened on , data is just saved
+            if do_interventions and node in do_interventions.keys():
+                    # For interventions make all the values the same for 
+                    intervention_value = do_interventions[node]
+                    if verbose or debug:
+                        print(f"[INFO] Applying intervention for node '{node}' with value {intervention_value}")
+                    intervention_vals = torch.full((number_of_samples,), intervention_value)
+                    torch.save(intervention_vals, SAMPLED_PATH)
+                    
+                    ### dummy latents jsut for the check , not needed
+                    dummy_latents = torch.full((number_of_samples,), float('nan'))  
+                    torch.save(dummy_latents, LATENTS_PATH)
+                    processed_nodes.append(node)
+                    print(f'Interventional data for node {node} is saved')
+                    continue  
+                ##### %%%%%%% no intervention, based on the sampled data from the parents though the latents for each node the observational distribution is generated    
+            else:
+                ### sampling latents
+                latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
+                
+                ### load modelweights
+                MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
+                tram_model = get_fully_specified_tram_model_v5(node, target_nodes, verbose=True).to(device)
+                tram_model.load_state_dict(torch.load(MODEL_PATH))
+                
+                # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
+                sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
+                
+                sample_dataset = GenericDataset_v6(sampled_df,target_col=node,
+                                                    target_nodes=target_nodes,
+                                                    return_intercept_shift=True,
+                                                    return_y=False,
+                                                    debug=debug)
+                
+                sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=True,num_workers=4, pin_memory=True)
+                
+                ###*************************************************** Continous Modelled Outcome ************************************************
+                
+                if criteria_for_continous_modelled_outcome(node,target_nodes_dict):
+                    sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample, debug=debug)
+                    
+                ###*************************************************** Ordinal Modelled Outcome ************************************************
+                
+                elif criteria_for_ordinal_modelled_outcome(node,target_nodes_dict):
+                    sampled=sample_ordinal_modelled_target(sample_loader,tram_model, debug=debug)
+                
+                else:
+                    raise ValueError(f"Unsupported data_type '{target_nodes_dict[node]['data_type']}' for node '{node}' in sampling.")
+                    
+                ###*************************************************** Saving the latenst and sampled  ************************************************
+                if torch.isnan(sampled).any():
+                    print(f"[WARNING] NaNs detected in sampled output for node '{node}'")
+                    
+                torch.save(sampled, SAMPLED_PATH)
+                torch.save(latent_sample, LATENTS_PATH)
+                
+                if verbose:
+                    print(f"[INFO] Completed sampling for node '{node}'")
+                
+                processed_nodes.append(node)          
+        
+    if verbose:
+        print("[INFO] DAG sampling completed successfully for all nodes.")
