@@ -737,6 +737,90 @@ def show_samples_vs_true(
         plt.tight_layout()
         plt.show()
 
+
+def show_samples_vs_true_v2(
+    df,
+    conf_dict,
+    experiment_dir,
+    *,
+    bins=100,
+    hist_true_color="blue",
+    hist_est_color="orange",
+    figsize=(14, 5),
+):
+    """
+    Overlay histogram (true vs. estimated) + standard QQ plot for every node.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Columns hold the true values.
+    conf_dict : dict
+        Keys are node names.
+    experiment_dir : str
+        Path that contains <node>/sampling/roots_<rootfinder>.pt per node.
+    rootfinder : str, default 'chandrupatla'
+        Root-finding method tag in the filename.
+    bins : int, default 100
+        Histogram bins.
+    hist_true_color / hist_est_color : str
+        Colours for the two histograms.
+    figsize : tuple, default (14, 5)
+        Figure size (hist, QQ).
+    """
+    for node in conf_dict:
+        # -------- Load data --------------------------------------------------
+        root_path = os.path.join(
+            experiment_dir, f"{node}/sampling/sampled.pt"
+        )
+        if not os.path.isfile(root_path):
+            print(f"[skip] {node}: {root_path} not found.")
+            continue
+
+        roots = torch.load(root_path).cpu().numpy()
+        roots = roots[~np.isnan(roots)]
+        true_vals = df[node].dropna().values
+
+        if roots.size == 0 or true_vals.size == 0:
+            print(f"[skip] {node}: empty array after NaN removal.")
+            continue
+
+        # -------- Plot -------------------------------------------------------
+        fig, axs = plt.subplots(1, 2, figsize=figsize)
+
+        # Histogram (left)
+        axs[0].hist(
+            true_vals,
+            bins=bins,
+            density=True,
+            alpha=0.6,
+            color=hist_true_color,
+            label=f"True {node}",
+        )
+        axs[0].hist(
+            roots,
+            bins=bins,
+            density=True,
+            alpha=0.6,
+            color=hist_est_color,
+            label="Sampled",
+        )
+        axs[0].set_xlabel("Value")
+        axs[0].set_ylabel("Density")
+        axs[0].set_title(f"Histogram overlay for {node}")
+        axs[0].legend()
+        axs[0].grid(True, ls="--", alpha=0.4)
+
+        # Standard QQ plot (right)
+        qqplot_2samples(true_vals, roots, line="45", ax=axs[1])
+        axs[1].set_xlabel("True quantiles")
+        axs[1].set_ylabel("Estimated quantiles")
+        axs[1].set_title(f"QQ plot for {node}")
+        axs[1].grid(True, ls="--", alpha=0.4)
+
+        plt.tight_layout()
+        plt.show()
+
 def show_latent_sampling(EXPERIMENT_DIR,conf_dict):
     for node in conf_dict.keys():
         latents_path = os.path.join(EXPERIMENT_DIR,f'{node}/sampling/latents.pt')
