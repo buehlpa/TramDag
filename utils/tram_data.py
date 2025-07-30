@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from PIL import Image
 import pandas as pd
+from collections import OrderedDict, defaultdict
 
 
 
@@ -68,7 +69,7 @@ class GenericDataset(Dataset):
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
         
-        ordered_parents_datatype, ordered_transformation_terms_in_h, _ =ordered_parents(self.target_col, self.target_nodes)
+        ordered_parents_datatype, ordered_transformation_terms_in_h, _ =self._ordered_parents(self.target_col, self.target_nodes)
         if not isinstance(ordered_parents_datatype, dict):
             raise TypeError(f"parents_datatype_dict must be dict, got {type(ordered_parents_datatype)}")
         self.parents_datatype_dict = ordered_parents_datatype
@@ -199,7 +200,7 @@ class GenericDataset(Dataset):
             else:
                 return (len(order), digits)  # unknown terms go last
 
-    def ordered_parents(self,node, target_dict) -> dict:
+    def _ordered_parents(self,node, target_dict) -> dict:
         
         """
         Orders the transformation terms and their corresponding data types and nn models used for the models and the dataloader

@@ -107,7 +107,7 @@ for node in target_nodes:
 
         ###################### DATALOADERS ######################
         print("Setting up dataloaders...")
-        train_loader, val_loader = get_dataloader_v6(
+        train_loader, val_loader = get_dataloader(
             node, target_nodes, train_df, val_df, batch_size=batch_size,
             return_intercept_shift=True, verbose=False
         )
@@ -120,6 +120,7 @@ for node in target_nodes:
         ###################### TRAINING #########################
         print("Starting training loop...")
         train_val_loop_v5(
+            
             node,
             target_nodes,
             NODE_DIR,
