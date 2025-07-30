@@ -1,5 +1,6 @@
 from utils.tram_models import *
 from utils.loss_continous import contram_nll
+from utils.loss_continous_optimized import contram_nll_optimized
 from utils.loss_ordinal import ontram_nll
 
 
@@ -731,7 +732,6 @@ def train_val_loop_v5(
             )
 
 
-from torch.cuda.amp import autocast, GradScaler
 
 def train_val_loop_v6(
     node,
@@ -748,24 +748,14 @@ def train_val_loop_v6(
     verbose: int = 1,
     device: str = 'cpu'
 ):
-    # Resolve device
     device = torch.device(device)
-    use_amp = device.type == 'cuda'
-    scaler = GradScaler(enabled=use_amp)
-
-    # Paths for saving
     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
-
-    # Move model to device and compile
     tram_model = tram_model.to(device)
-    
 
-    # Prepare min/max tensors for contram scaling
     min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
     max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
     min_max = torch.stack([min_vals, max_vals], dim=0)
 
-    # Load old training state if it exists
     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
         if verbose:
             print("Existing model found. Loading weights and history...")
@@ -782,32 +772,43 @@ def train_val_loop_v6(
         train_loss_hist, val_loss_hist = [], []
         start_epoch = 0
         best_val_loss = float('inf')
-        
-    tram_model = torch.compile(tram_model)
-    # Main loop
+
     for epoch in range(start_epoch, epochs):
         epoch_start = time.time()
-
-        # --- Training ---
         tram_model.train()
         train_loss = 0.0
-        train_start = time.time()
+
+        # Time accumulators
+        t_data, t_fwd, t_loss, t_bwd, t_opt = 0, 0, 0, 0, 0
+
         for (int_input, shift_list), y in train_loader:
+            t0 = time.time()
             int_input = int_input.to(device)
             shift_list = [s.to(device) for s in shift_list]
             y = y.to(device)
+            t_data += time.time() - t0
 
             optimizer.zero_grad()
-            with autocast(enabled=use_amp):
-                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-                if 'yo' in target_nodes[node]['data_type'].lower():
-                    loss = ontram_nll(y_pred, y)
-                else:
-                    loss = contram_nll(y_pred, y, min_max=min_max)
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            t1 = time.time()
+            y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+            t_fwd += time.time() - t1
+
+            t2 = time.time()
+            if 'yo' in target_nodes[node]['data_type'].lower():
+                loss = ontram_nll(y_pred, y)
+            else:
+                loss = contram_nll_optimized(y_pred, y, min_max=min_max)
+            t_loss += time.time() - t2
+
+            t3 = time.time()
+            loss.backward()
+            t_bwd += time.time() - t3
+
+            t4 = time.time()
+            optimizer.step()
+            t_opt += time.time() - t4
+
             train_loss += loss.item()
 
         if use_scheduler and scheduler is not None:
@@ -815,31 +816,30 @@ def train_val_loop_v6(
 
         avg_train_loss = train_loss / len(train_loader)
         train_loss_hist.append(avg_train_loss)
-        train_time = time.time() - train_start
 
         # --- Validation ---
         tram_model.eval()
         val_loss = 0.0
-        val_start = time.time()
+        t_val = time.time()
         with torch.no_grad():
             for (int_input, shift_list), y in val_loader:
                 int_input = int_input.to(device)
                 shift_list = [s.to(device) for s in shift_list]
                 y = y.to(device)
 
-                with autocast(enabled=use_amp):
-                    y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-                    if 'yo' in target_nodes[node]['data_type'].lower():
-                        loss = ontram_nll(y_pred, y)
-                    else:
-                        loss = contram_nll(y_pred, y, min_max=min_max)
+                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                if 'yo' in target_nodes[node]['data_type'].lower():
+                    loss = ontram_nll(y_pred, y)
+                else:
+                    loss = contram_nll_optimized(y_pred, y, min_max=min_max)
                 val_loss += loss.item()
+        t_val = time.time() - t_val
 
         avg_val_loss = val_loss / len(val_loader)
         val_loss_hist.append(avg_val_loss)
-        val_time = time.time() - val_start
 
-        # --- Save linear shifts if requested ---
+        # --- Save linear shifts ---
+        t_save = time.time()
         if save_linear_shifts and hasattr(tram_model, 'nn_shift') and tram_model.nn_shift:
             shift_path = os.path.join(NODE_DIR, "linear_shifts_all_epochs.json")
             if os.path.exists(shift_path):
@@ -852,35 +852,39 @@ def train_val_loop_v6(
             for i, shift_layer in enumerate(tram_model.nn_shift):
                 if hasattr(shift_layer, 'fc') and hasattr(shift_layer.fc, 'weight'):
                     epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
-                else:
-                    if verbose > 1:
-                        print(f"shift_{i}: missing 'fc.weight'")
             all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
             with open(shift_path, 'w') as f:
                 json.dump(all_shift_weights, f)
-            if verbose > 1:
-                print(f"Appended linear shift weights for epoch {epoch+1}")
 
-        # --- Checkpointing ---
+        # --- Save model + logs ---
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             torch.save(tram_model.state_dict(), MODEL_PATH)
             if verbose:
                 print("Saved new best model.")
+
         torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
         with open(TRAIN_HIST_PATH, 'w') as f:
             json.dump(train_loss_hist, f)
         with open(VAL_HIST_PATH, 'w') as f:
             json.dump(val_loss_hist, f)
+        t_save = time.time() - t_save
 
-        # --- Epoch summary ---
+        total_time = time.time() - epoch_start
+
         if verbose:
-            total_time = time.time() - epoch_start
-            print(
-                f"Epoch {epoch+1}/{epochs}  "
-                f"Train Loss: {avg_train_loss:.4f}  Val Loss: {avg_val_loss:.4f}  "
-                f"[Train: {train_time:.2f}s  Val: {val_time:.2f}s  Total: {total_time:.2f}s]"
-            )
+            print(f"\nEpoch {epoch+1}/{epochs}")
+            print(f"  Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+            print("  Time breakdown:")
+            print(f"    Data transfer : {t_data:.2f}s")
+            print(f"    Forward pass  : {t_fwd:.2f}s")
+            print(f"    Loss compute  : {t_loss:.2f}s")
+            print(f"    Backward pass : {t_bwd:.2f}s")
+            print(f"    Optimizer step: {t_opt:.2f}s")
+            print(f"    Validation    : {t_val:.2f}s")
+            print(f"    Saving/checks : {t_save:.2f}s")
+            print(f"    Total epoch   : {total_time:.2f}s")
+
 
 
 
