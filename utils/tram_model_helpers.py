@@ -1,11 +1,11 @@
 from utils.tram_models import *
 from utils.loss_continous import contram_nll
-from utils.loss_continous_optimized import contram_nll_optimized
+from utils.archive.loss_continous_optimized import contram_nll_optimized
 from utils.loss_ordinal import ontram_nll
 
 
 
-from utils.graph import *
+from utils.archive.configuration_old import *
 import os
 import re
 from collections import OrderedDict, defaultdict

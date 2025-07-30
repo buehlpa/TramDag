@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Own utils
-from utils.graph import *
+from utils.archive.configuration_old import *
 from utils.tram_models import *
 from utils.tram_model_helpers import *
 from utils.tram_data import *
@@ -119,7 +119,7 @@ for node in target_nodes:
 
         ###################### TRAINING #########################
         print("Starting training loop...")
-        train_val_loop_v6(
+        train_val_loop_v5(
             node,
             target_nodes,
             NODE_DIR,
