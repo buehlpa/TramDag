@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Own utils
-from utils.archive.configuration_old import *
+from utils.configuration import *
 from utils.tram_models import *
 from utils.tram_model_helpers import *
 from utils.tram_data import *
@@ -107,7 +107,7 @@ for node in target_nodes:
 
         ###################### DATALOADERS ######################
         print("Setting up dataloaders...")
-        train_loader, val_loader = get_dataloader_v5(
+        train_loader, val_loader = get_dataloader_v6(
             node, target_nodes, train_df, val_df, batch_size=batch_size,
             return_intercept_shift=True, verbose=False
         )
