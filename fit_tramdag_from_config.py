@@ -88,9 +88,8 @@ for node in target_nodes:
             print(f"Skipping node {node} (not in train list)")
             continue
 
-        node_type = target_nodes[node].get('node_type', None)
-        if node_type in ['source', 'other']:
-            print(f"Skipping unsupported node type '{node_type}' for node {node}")
+        if (target_nodes[node]['node_type'] == 'source') and (target_nodes[node]['data_type'] == 'other'):# Skip unsupported types
+            print(f"Node type : other , is not supported yet")
             continue
 
         ###################### SETUP PATHS ######################
@@ -120,7 +119,7 @@ for node in target_nodes:
 
         ###################### TRAINING #########################
         print("Starting training loop...")
-        train_val_loop_v5(
+        train_val_loop_v6(
             node,
             target_nodes,
             NODE_DIR,
