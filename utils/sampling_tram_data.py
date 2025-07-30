@@ -15,17 +15,6 @@ from utils.tram_data import *
 
 # helpers
 
-def check_sampled_and_latents(NODE_DIR,rootfinder='bisection',verbose=True):
-    root_path = os.path.join(NODE_DIR, 'sampling',f"sampled_{rootfinder}.pt")
-    latents_path=os.path.join(NODE_DIR, 'sampling', "latents.pt")
-    if os.path.exists(root_path) and os.path.exists(latents_path):
-        return True
-    else:
-        if verbose:
-            print(f'Root or latent files not found in {os.path.join(NODE_DIR,"sampling")}')
-        return False
-
-
 def merge_outputs(dict_list, skip_nan=True):
     int_outs = []
     shift_outs = []
@@ -619,7 +608,7 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
 
 
 
-def check_sampled_and_latents_v2(NODE_DIR, debug=True):
+def check_sampled_and_latents(NODE_DIR, debug=True):
     sampling_dir = os.path.join(NODE_DIR, 'sampling')
     root_path = os.path.join(sampling_dir, 'sampled.pt')
     latents_path = os.path.join(sampling_dir, 'latents.pt')
@@ -630,22 +619,22 @@ def check_sampled_and_latents_v2(NODE_DIR, debug=True):
         raise FileNotFoundError(f"'latents.pt' not found in {sampling_dir}")
 
     if debug:
-        print(f"[DEBUG] check_sampled_and_latents_v2: Found 'sampled.pt' in {sampling_dir}")
-        print(f"[DEBUG] check_sampled_and_latents_v2: Found 'latents.pt' in {sampling_dir}")
+        print(f"[DEBUG] check_sampled_and_latents: Found 'sampled.pt' in {sampling_dir}")
+        print(f"[DEBUG] check_sampled_and_latents: Found 'latents.pt' in {sampling_dir}")
 
     return True
 
     
     
-def sample_full_dag_chandru_v2(target_nodes_dict,
-                            EXPERIMENT_DIR,
-                            device,
-                            do_interventions={},
-                            number_of_samples= 10_000,
-                            batch_size = 32,
-                            delete_all_previously_sampled=True,
-                            verbose=True,
-                            debug=False):
+def sample_full_dag(target_nodes_dict,
+                    EXPERIMENT_DIR,
+                    device,
+                    do_interventions={},
+                    number_of_samples= 10_000,
+                    batch_size = 32,
+                    delete_all_previously_sampled=True,
+                    verbose=True,
+                    debug=False):
     """
     Samples data for all nodes in a DAG defined by `conf_dict`, ensuring that each node's
     parents are sampled before the node itself. Supports interventions on any subset of nodes.
@@ -723,7 +712,7 @@ def sample_full_dag_chandru_v2(target_nodes_dict,
             
             ## 2. Check if sampled and latents already exist 
             try:
-                if check_sampled_and_latents_v2(NODE_DIR, debug=debug):
+                if check_sampled_and_latents(NODE_DIR, debug=debug):
                     processed_nodes.append(node)
                     continue
             except FileNotFoundError:
@@ -735,7 +724,7 @@ def sample_full_dag_chandru_v2(target_nodes_dict,
                 for parent in target_nodes_dict[node]['parents']:
                     parent_dir = os.path.join(EXPERIMENT_DIR, parent)
                     try:
-                        check_sampled_and_latents_v2(parent_dir, debug=debug)
+                        check_sampled_and_latents(parent_dir, debug=debug)
                     except FileNotFoundError:
                         skipping_node = True
                         if verbose or debug:
