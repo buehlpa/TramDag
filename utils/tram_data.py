@@ -8,7 +8,7 @@ from PIL import Image
 import pandas as pd
 from collections import OrderedDict, defaultdict
 import re
-
+import numpy as np
 
 class GenericDataset(Dataset):
     def __init__(
@@ -286,30 +286,77 @@ class GenericDataset(Dataset):
             print(f"[DEBUG] _check_multiclass_predictors_of_df: checked multiclass_predicitors passed")
                 
 
+    # def _check_ordinal_levels(self):
+    #     ords = []
+    #     if 'ordinal' in self.target_nodes.get(self.target_col, {}).get('data_type', '').lower():
+    #         ords.append(self.target_col)
+    #     ords += [
+    #         v for v in self.predictors
+    #         if 'ordinal' in self.parents_datatype_dict[v].lower()
+    #         and 'xn' in self.parents_datatype_dict[v].lower()
+    #     ]
+    #     for v in ords:
+    #         if v not in self.df.columns:
+    #             if self.debug:
+    #                 print(f"[DEBUG] _check_ordinal_levels: Skipping '{v}' as it's not in the DataFrame")
+    #             continue
+    #         lvl = self.target_nodes[v].get('levels')
+    #         if lvl is None:
+    #             raise ValueError(f"Ordinal '{v}' missing 'levels' metadata.")
+    #         uniq = sorted(self.df[v].dropna().unique())
+    #         if uniq != list(range(lvl)):
+    #             raise ValueError(
+    #                 f"Ordinal '{v}' values {uniq} != expected 0…{lvl-1}."
+    #             )
+    #     if self.debug:
+    #         print(f"[DEBUG] _check_ordinal_levels: checked ordinal levels passed")
+
     def _check_ordinal_levels(self):
         ords = []
+        # include target if it’s ordinal
         if 'ordinal' in self.target_nodes.get(self.target_col, {}).get('data_type', '').lower():
             ords.append(self.target_col)
+        # include any xn‐encoded predictors
         ords += [
             v for v in self.predictors
             if 'ordinal' in self.parents_datatype_dict[v].lower()
             and 'xn' in self.parents_datatype_dict[v].lower()
         ]
+
         for v in ords:
             if v not in self.df.columns:
                 if self.debug:
                     print(f"[DEBUG] _check_ordinal_levels: Skipping '{v}' as it's not in the DataFrame")
                 continue
+
             lvl = self.target_nodes[v].get('levels')
             if lvl is None:
                 raise ValueError(f"Ordinal '{v}' missing 'levels' metadata.")
-            uniq = sorted(self.df[v].dropna().unique())
-            if uniq != list(range(lvl)):
+
+            # grab unique values as floats
+            uniq = np.array(sorted(self.df[v].dropna().unique()), dtype=float)
+
+            # expected patterns
+            expected_int    = np.arange(lvl, dtype=float)         # 0,1,...,n-1
+            expected_scaled = np.arange(lvl, dtype=float) / lvl   # 0/n,1/n,...,(n-1)/n
+
+            # allow either exact ints or approximate scaled floats
+            if np.array_equal(uniq, expected_int):
+                # integer‐indexed: OK
+                continue
+            elif np.allclose(uniq, expected_scaled, atol=1e-8):
+                # scaled floats: OK
+                continue
+            else:
                 raise ValueError(
-                    f"Ordinal '{v}' values {uniq} != expected 0…{lvl-1}."
+                    f"Ordinal '{v}' values {uniq.tolist()} do not match expected "
+                    f"integers {expected_int.tolist()} or scaled floats {expected_scaled.tolist()}."
                 )
+
         if self.debug:
             print(f"[DEBUG] _check_ordinal_levels: checked ordinal levels passed")
+
+
 
 
     def __len__(self):

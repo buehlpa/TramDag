@@ -24,8 +24,6 @@ from datetime import datetime
 
 
 
-
-
 # Utility: Generate N shades of green
 def generate_green_shades(n):
     return [
@@ -502,7 +500,13 @@ def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> No
     try:
         configuration_dict = load_configuration_dict(CONF_DICT_PATH)
         configuration_dict['data_type'] = data_type
+        if validate_data_types(data_type):
+            pass
+        else:
+            raise ValueError("Invalid data types in the provided dictionary.")
+        
         write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+        
     except Exception as e:
         print(f"Failed to update configuration: {e}")
     else:
@@ -564,23 +568,46 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals,
 
 
 
-def create_levels_dict(df:pd.DataFrame,data_type:dict):
-    # creates the levels dictionary for variables which should be modelled ordinaly 
-    levels_dict={}
-    for variable,datatype in data_type.items():
-            if "ordinal" in datatype.lower():
-                unique_vals = set(df[variable].dropna().unique())
-                num_classes = len(unique_vals)
+def create_levels_dict(df: pd.DataFrame, data_type: dict):
+    """
+    Creates a levels_dict for variables that should be modelled ordinally.
+    Supports both integer labels (0,1,...,n-1) and scaled floats (0.0, 1/n, ..., (n-1)/n).
+    
+    Returns:
+        levels_dict: dict mapping variable name -> number of classes (n)
+    """
+    levels_dict = {}
+    
+    for variable, dtype in data_type.items():
+        if "ordinal" in dtype.lower():
+            col = df[variable].dropna()
+            unique_vals = np.unique(col)
+            num_classes = unique_vals.shape[0]
 
-                expected_vals = set(range(num_classes))
-                if unique_vals != expected_vals:
-                    raise ValueError(
-                        f"Variable '{variable}' has values {sorted(unique_vals)}, "
-                        f"but expected values are {sorted(expected_vals)} (0 to {num_classes - 1}). "
-                        "Multiclass ordinal variables must be zero-indexed and contiguous."
-                )
-                levels_dict[variable]=len(np.unique(df[variable]))
-    return levels_dict 
+            # 1) Check for scaled floats: 0/num, 1/num, ..., (n-1)/num
+            expected_scaled = np.arange(num_classes) / num_classes
+            if np.allclose(unique_vals.astype(float), expected_scaled, atol=1e-8):
+                levels_dict[variable] = num_classes
+                continue
+
+            # 2) Check for integer labels: 0, 1, ..., n-1
+            expected_ints = np.arange(num_classes)
+            if np.array_equal(unique_vals.astype(int), expected_ints):
+                levels_dict[variable] = num_classes
+                continue
+
+            # Neither pattern matched → error
+            raise ValueError(
+                f"Variable '{variable}' has values {list(unique_vals)}, but expected either:\n"
+                f"  • integer labels 0 to {num_classes-1}\n"
+                f"  • or scaled floats {list(expected_scaled)}\n"
+                "Make sure your ordinal features are zero-indexed and either left as integers "
+                "or scaled by num_classes."
+            )
+
+    return levels_dict
+
+
 
 def check_ordinal_variable_values(df, var):
     unique_vals = set(df[var].dropna().unique())
@@ -816,6 +843,29 @@ def validate_matrix_columns(adj_matrix):
         if not is_valid_column(col, i):
             all_valid = False
     return all_valid
+
+def validate_data_types(data_type):
+    """
+    Validates the data types dictionary against known types.
+    
+    Parameters
+    ----------
+    data_type : dict
+        Dictionary with keys as column names and values as data types.
+    
+    Returns
+    -------
+    bool
+        True if all data types are valid, False otherwise.
+    """
+    valid_types = {'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo', 'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'}
+    for dtype in data_type.values():
+        if dtype not in valid_types:
+            print(f"Invalid data type: {dtype}")
+            print(f"valid data_types are : {valid_types}")
+            return False
+    return True
+
 
 def validate_adj_matrix(adj_matrix):
     """

@@ -102,7 +102,7 @@ for node in target_nodes:
 
         ###################### CREATE MODEL #####################
         print("Creating model...")
-        tram_model = get_fully_specified_tram_model_v5(node, target_nodes, verbose=True)
+        tram_model = get_fully_specified_tram_model(node, target_nodes, verbose=True)
         tram_model.to(device)
 
         ###################### DATALOADERS ######################
@@ -119,7 +119,7 @@ for node in target_nodes:
 
         ###################### TRAINING #########################
         print("Starting training loop...")
-        train_val_loop_v5(
+        train_val_loop(
             
             node,
             target_nodes,

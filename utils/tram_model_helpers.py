@@ -12,7 +12,7 @@ import json
 import time
 from functools import wraps
 import shutil
-from scipy.stats import logistic, kstest, anderson,probplot
+from scipy.stats import logistic, kstest, anderson, probplot
 
 
 
