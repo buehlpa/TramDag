@@ -16,7 +16,6 @@ class GenericDataset(Dataset):
         df,
         target_col,
         target_nodes=None,
-
         transform=None,
         return_intercept_shift=True,
         return_y=True,
@@ -425,15 +424,15 @@ class GenericDataset(Dataset):
 
 
 
-def get_dataloader(node, target_nodes, train_df, val_df, batch_size=32,return_intercept_shift=False, verbose=False):
+def get_dataloader(node, target_nodes, train_df, val_df, batch_size=32,return_intercept_shift=False, verbose=False,debug=False):
     
     transform = transforms.Compose([
         transforms.Resize((128, 128)),
         transforms.ToTensor()
     ])
 
-    train_ds = GenericDataset(train_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift)
-    val_ds = GenericDataset(val_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift)
+    train_ds = GenericDataset(train_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift,debug=debug)
+    val_ds = GenericDataset(val_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift,debug=debug)
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
