@@ -585,7 +585,13 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals,
         print("Configuration updated successfully.")
 
 
-
+def get_hyperparameters_for_node(node,node_list):
+    batch_size=node_list[node].get('batch_size')
+    epochs=node_list[node].get('epochs')
+    learning_rate=node_list[node].get('learning_rate')
+    use_scheduler=node_list[node].get('use_scheduler')
+    
+    return batch_size, epochs, learning_rate, use_scheduler
 
 
 def create_levels_dict(df: pd.DataFrame, data_type: dict):
@@ -703,6 +709,11 @@ def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,
         target_nodes[node]['min'] = min_vals.iloc[i].tolist()   
         target_nodes[node]['max'] = max_vals.iloc[i].tolist()
 
+        target_nodes[node]['batch_size'] = 512
+        target_nodes[node]['epochs'] = 100
+        target_nodes[node]['learning_rate'] = 0.01
+        target_nodes[node]['use_scheduler'] = False
+        
         
         transformation_term_nn_models = {}
         for parent in parents:

@@ -63,7 +63,7 @@ class GenericDataset(Dataset):
         self._check_ordinal_levels()
 
         if self.debug:
-            print(f"[DEBUG] ------ Initalized all attributes of Genericdataset V6------")
+            print(f"[INFO] ------ Initalized all attributes of Genericdataset V6------")
             
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
@@ -90,7 +90,7 @@ class GenericDataset(Dataset):
             raise TypeError(f"debug must be bool, got {type(debug)}")
         self.debug = debug
         if self.debug:
-            print(f"[DEBUG] ------ Starting Debug Mode GenericDataset_v6 ------")
+            print(f"[INFO] ------ Starting Debug Mode GenericDataset_v6 ------")
 
     def _set_df(self, df):
         if not isinstance(df, pd.DataFrame):

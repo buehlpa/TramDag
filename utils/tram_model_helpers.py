@@ -145,8 +145,41 @@ def group_by_base(term_dict, prefixes):
 
     return groups
 
+@torch.no_grad()
+def init_last_layer_increasing(module: nn.Module, start: float = -2.0, end: float = 2.0):
+    """
+    Initialize the weights of the last nn.Linear in `module` so that the outputs
+    are linearly increasing between [start, end].
 
-def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True):
+    Assumes the last layer is nn.Linear with shape (n_thetas, in_features).
+    """
+    # Find last Linear layer
+    last_linear = None
+    for m in reversed(list(module.modules())):
+        if isinstance(m, nn.Linear):
+            last_linear = m
+            break
+    if last_linear is None:
+        raise ValueError("No nn.Linear layer found in module.")
+
+    n_thetas = last_linear.out_features
+    in_features = last_linear.in_features
+
+    # Desired increasing values
+    values = torch.linspace(start, end, steps=n_thetas)
+
+    # If in_features > 1, just repeat values / distribute across input dims
+    w = torch.zeros((n_thetas, in_features))
+    w[:, 0] = values  # put increasing sequence in first input channel
+
+    last_linear.weight.copy_(w)
+
+    if last_linear.bias is not None:
+        last_linear.bias.zero_()  # optional: reset bias to 0
+
+    return last_linear
+
+def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, set_initial_weights=True) -> TramModel:
     """
     returns a Trammodel fully specified , according to CI groups and CS groups , for ordinal outcome and inputs
 
@@ -199,6 +232,12 @@ def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True):
     else:
         theta_count = compute_n_thetas(target_nodes[node])
         nn_int = SimpleIntercept(n_thetas=theta_count) if theta_count is not None else SimpleIntercept()
+        
+    # set initial weights to be increasing for Intercept Model
+    if set_initial_weights and nn_int is not None:
+        init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
+        if verbose:
+            print(f"Initialized intercept model with increasing weights: {nn_int}")
 
     # Build shift networks
     shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
@@ -341,6 +380,7 @@ def check_if_training_complete(node, NODE_DIR, epochs):
     except Exception as e:
         print(f"Error checking training status for node {node}: {e}")
         return False
+    
 def train_val_loop(
     node,
     target_nodes,
