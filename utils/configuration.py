@@ -233,7 +233,7 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
 
         gridbox = create_grid()
         ui = widgets.VBox([
-            widgets.Label("Fill in the adjacency matrix (upper triangle only). Use 'ls', 'cs', etc."),
+            widgets.Label("Fill in the adjacency matrix (upper triangle only). Use 'ls', 'cs', etc. row:FROM → column:TO."),
             gridbox,
             generate_btn,
             output
@@ -489,6 +489,23 @@ def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
     configuration_dict['adj_matrix'] = adj_matrix.tolist()  # Convert to list for JSON serialization
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
 
+def print_data_type_modeling_setting(data_type):    
+        for variable, dtype in data_type.items():
+            if dtype == 'continous':
+                print(f"Variable '{variable}' is modeled as a continuous variable. for target and predictor.")
+            if dtype == 'ordinal_Xn_Yc':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: OneHot and TARGET: continous.")
+            if dtype == 'ordinal_Xn_Yo':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: OneHot and TARGET: OneHot.")
+            if dtype == 'ordinal_Xc_Yc':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: continous and TARGET: continous.")
+            if dtype == 'ordinal_Xc_Yo':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: continous and TARGET: OneHot.")
+            if dtype == 'other':
+                print(f"Variable '{variable}' is modeled as a variable with other modeling settings.")
+            
+
+    
 def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> None:
     """
     Write the data type information to the configuration dictionary.
@@ -504,6 +521,9 @@ def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> No
             pass
         else:
             raise ValueError("Invalid data types in the provided dictionary.")
+        
+        
+        print_data_type_modeling_setting(data_type)
         
         write_configuration_dict(configuration_dict, CONF_DICT_PATH)
         
@@ -856,14 +876,20 @@ def validate_data_types(data_type):
     Returns
     -------
     bool
-        True if all data types are valid, False otherwise.
+        True if all data types are valid and keys are unique, False otherwise.
     """
-    valid_types = {'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo', 'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'}
-    for dtype in data_type.values():
+    valid_types = {
+        'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo',
+        'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'
+    }
+    
+    # --- check valid types ---
+    for col, dtype in data_type.items():
         if dtype not in valid_types:
-            print(f"Invalid data type: {dtype}")
-            print(f"valid data_types are : {valid_types}")
+            print(f"Invalid data type for '{col}': {dtype}")
+            print(f"Valid data_types are: {valid_types}")
             return False
+
     return True
 
 

@@ -474,7 +474,7 @@ def train_val_loop(
             total_time = time.time() - epoch_start
             print(
                 f"Epoch {epoch+1}/{epochs}  "
-                f"Train Loss: {avg_train_loss:.4f}  Val Loss: {avg_val_loss:.4f}  "
+                f"Train NLL: {avg_train_loss:.4f}  Val NLL: {avg_val_loss:.4f}  "
                 f"[Train: {train_time:.2f}s  Val: {val_time:.2f}s  Total: {total_time:.2f}s]"
             )
 
