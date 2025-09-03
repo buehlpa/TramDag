@@ -199,7 +199,8 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
     #      [  4.8985,  -0.2014,  -1.0680, -17.7275,   0.5565,  -1.6440, -17.7275,
     #     -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
     #     -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
-
+    
+    # TODO get thetas from : thetas=fit_r_model_subprocess(target, dtype, data_path,verbose=False)
 
     hardcoded = torch.tensor([-2.0079,  0.8893, -0.5046], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
     ############################################################################################
@@ -223,7 +224,48 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
 
     return last_linear
 
+@torch.no_grad()
+def init_last_layer_COLR_POLR(module: nn.Module): # TEMPORRALY FUNCTION
+    """
+    Initialize the weights of the last nn.Linear in `module`
+    with a fixed hardcoded vector (theta_tilde).
+    """
+    last_linear = None
+    for m in reversed(list(module.modules())):
+        if isinstance(m, nn.Linear):
+            last_linear = m
+            break
+    if last_linear is None:
+        raise ValueError("No nn.Linear layer found in module.")
 
+
+
+    dtype='continous'
+    data_path=EXP_DATA_PATH
+    target="x1"
+
+    thetas_R=fit_r_model_subprocess(target, dtype, data_path,verbose=False)
+    
+    thetas = torch.tensor(thetas_R, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+
+    if thetas.numel() != last_linear.out_features:
+        raise ValueError(
+            f"Hardcoded vector has {thetas.numel()} elements, "
+            f"but last layer expects {last_linear.out_features}"
+        )
+
+    # Expand to (out_features, in_features)
+    w = torch.zeros((last_linear.out_features, last_linear.in_features),
+                    dtype=last_linear.weight.dtype,
+                    device=last_linear.weight.device)
+    w[:, 0] = thetas  # fill the first input channel
+
+    # Copy into the model
+    last_linear.weight.copy_(w)
+    if last_linear.bias is not None:
+        last_linear.bias.zero_()
+
+    return last_linear
 
 def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, set_initial_weights=False) -> TramModel:
     """
@@ -282,6 +324,7 @@ def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, 
     # set initial weights to be increasing for Intercept Model
     if set_initial_weights and nn_int is not None:
         # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
+        
         init_last_layer_hardcoded(nn_int)
         
         if verbose:
