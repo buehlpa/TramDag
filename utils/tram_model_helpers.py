@@ -193,10 +193,16 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
     if last_linear is None:
         raise ValueError("No nn.Linear layer found in module.")
 
-    hardcoded = torch.tensor(    ############## <- this stems from inverser transform of COlr thetas for the weights inint experiment in R TEM
-         [  4.8985,  -0.2014,  -1.0680, -17.7275,   0.5565,  -1.6440, -17.7275,
-        -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
-        -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+
+    ###########################EXAMPLE HARDCODED ONLY EXPERIMENTAL MUST BE REMOVE OR CLCULCATED BY A POLR / COLR BEFOREHAND FOR THE VARS##########################
+    # hardcoded = torch.tensor(    ############## <- this stems from inverser transform of COlr thetas for the weights inint experiment in R TEM
+    #      [  4.8985,  -0.2014,  -1.0680, -17.7275,   0.5565,  -1.6440, -17.7275,
+    #     -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
+    #     -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+
+
+    hardcoded = torch.tensor([-2.0079,  0.8893, -0.5046], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+    ############################################################################################
 
     if hardcoded.numel() != last_linear.out_features:
         raise ValueError(
@@ -219,7 +225,7 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
 
 
 
-def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, set_initial_weights=True) -> TramModel:
+def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, set_initial_weights=False) -> TramModel:
     """
     returns a Trammodel fully specified , according to CI groups and CS groups , for ordinal outcome and inputs
 
@@ -279,7 +285,7 @@ def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, 
         init_last_layer_hardcoded(nn_int)
         
         if verbose:
-            print(f"Initialized intercept model with increasing weights: {nn_int}")
+            print(f"Initialized intercept model with weights: {nn_int}")
 
     # Build shift networks
     shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
