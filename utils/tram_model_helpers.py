@@ -179,6 +179,46 @@ def init_last_layer_increasing(module: nn.Module, start: float = -2.0, end: floa
 
     return last_linear
 
+@torch.no_grad()
+def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
+    """
+    Initialize the weights of the last nn.Linear in `module`
+    with a fixed hardcoded vector (theta_tilde).
+    """
+    last_linear = None
+    for m in reversed(list(module.modules())):
+        if isinstance(m, nn.Linear):
+            last_linear = m
+            break
+    if last_linear is None:
+        raise ValueError("No nn.Linear layer found in module.")
+
+    hardcoded = torch.tensor(    ############## <- this stems from inverser transform of COlr thetas for the weights inint experiment in R TEM
+         [  4.8985,  -0.2014,  -1.0680, -17.7275,   0.5565,  -1.6440, -17.7275,
+        -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
+        -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+
+    if hardcoded.numel() != last_linear.out_features:
+        raise ValueError(
+            f"Hardcoded vector has {hardcoded.numel()} elements, "
+            f"but last layer expects {last_linear.out_features}"
+        )
+
+    # Expand to (out_features, in_features)
+    w = torch.zeros((last_linear.out_features, last_linear.in_features),
+                    dtype=last_linear.weight.dtype,
+                    device=last_linear.weight.device)
+    w[:, 0] = hardcoded  # fill the first input channel
+
+    # Copy into the model
+    last_linear.weight.copy_(w)
+    if last_linear.bias is not None:
+        last_linear.bias.zero_()
+
+    return last_linear
+
+
+
 def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, set_initial_weights=True) -> TramModel:
     """
     returns a Trammodel fully specified , according to CI groups and CS groups , for ordinal outcome and inputs
@@ -235,7 +275,9 @@ def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, 
         
     # set initial weights to be increasing for Intercept Model
     if set_initial_weights and nn_int is not None:
-        init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
+        # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
+        init_last_layer_hardcoded(nn_int)
+        
         if verbose:
             print(f"Initialized intercept model with increasing weights: {nn_int}")
 
