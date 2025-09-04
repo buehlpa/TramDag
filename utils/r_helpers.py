@@ -1,18 +1,74 @@
-# utils/r_helpers.py
-
 
 import subprocess
 import tempfile
 import textwrap
 
-def fit_r_model_subprocess(target, dtype, data_path, verbose=False):
+def fit_r_model_subprocess(target, dtype,theta_count, data_path, debug=False):
     
-    # make sure that a valid R version is installed and Rscript is in PATH
-    # make sure that the R packages MASS, tram, readr are installed
-    # You can install them in R with:
-    # install.packages(c("MASS", "tram", "readr"))
+    """
+    Fit a simple R model (POLR for ordinal or COLR for continuous outcomes)
+    using a subprocess call to Rscript and return the estimated intercept/theta
+    parameters as floats.
+
+    This function:
+    - Generates an R script dynamically for the specified target variable.
+    - Writes the script to a temporary file.
+    - Executes the script via `Rscript` as a subprocess.
+    - Parses the resulting coefficients printed by the R model into Python floats.
+
+    Parameters
+    ----------
+    target : str
+        Name of the target column in the CSV file.
+    dtype : str
+        Type of the target variable. Must be one of:
+          - "ordinal" (fits an ordered logistic regression using `MASS::polr`)
+          - "continuous" or "continous" (fits a COLR model using `tram::Colr`)
+    data_path : str
+        Path to the CSV file containing the dataset. Must be readable by
+        `readr::read_csv` in R.
+    debug : bool, optional (default=False)
+        If True, prints debug information including the generated R script,
+        the Rscript command output, and intermediate states.
+
+    Returns
+    -------
+    list of float
+        Extracted numeric parameters (intercepts/thetas) from the fitted R model.
+
+    Raises
+    ------
+    ValueError
+        If `dtype` is not recognized.
+    RuntimeError
+        If the R subprocess fails to execute successfully.
+    ValueError
+        If the R output cannot be parsed into floats.
+
+    Notes
+    -----
+    - Requires a valid R installation with `Rscript` available in the PATH.
+    - The following R packages must be installed:
+        * MASS
+        * tram
+        * readr
+    - For ordinal targets, the function fits a logistic regression using
+      `MASS::polr` and extracts `zeta`.
+    - For continuous targets, the function fits a `tram::Colr` model and
+      extracts `theta`.
+
+    Examples
+    --------
+    >>> values = fit_r_model_subprocess(
+    ...     target="y",
+    ...     dtype="ordinal",
+    ...     data_path="data/train.csv",
+    ...     debug=True
+    ... )
+    >>> print(values)
+    [-0.42, 0.15, 0.87]
+    """
     
-    # normalize dtype spelling
     dtype = dtype.lower().strip()
     if dtype in ["continous", "continuous"]:  # handle both spellings
         dtype = "continuous"
@@ -37,7 +93,7 @@ def fit_r_model_subprocess(target, dtype, data_path, verbose=False):
         library(readr)
 
         data <- read_csv("{data_path}")
-        model <- Colr({target} ~ 1, data=data, order=19)
+        model <- Colr({target} ~ 1, data=data, order={theta_count-1})
         cat(model$theta, sep="\\n")
         """)
 
@@ -46,7 +102,7 @@ def fit_r_model_subprocess(target, dtype, data_path, verbose=False):
         f.write(r_code)
         script_path = f.name
 
-    if verbose:
+    if debug:
         print("[DEBUG] R script written to:", script_path)
         print("[DEBUG] R code:\n", r_code)
 
@@ -63,7 +119,7 @@ def fit_r_model_subprocess(target, dtype, data_path, verbose=False):
         print("[DEBUG] STDERR:\n", result.stderr)
         raise RuntimeError("Rscript execution failed, see STDERR above")
 
-    if verbose:
+    if debug:
         print("[DEBUG] Rscript succeeded")
         print("[DEBUG] STDOUT:\n", result.stdout)
 

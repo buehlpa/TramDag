@@ -1,8 +1,4 @@
 
-# utils/tram_data_helpers.py
-
-
-
 import torch
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
@@ -13,10 +9,9 @@ import shutil
 from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic
 
-from utils.tram_model_helpers import *           
+from utils.tram_model_helpers import *        
 from utils.loss_continous import *   
 from utils.tram_data import *
-
 
 # helpers
 
@@ -63,7 +58,9 @@ def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
             print(f'Directory does not exist: {SAMPLING_DIR}')
 
 
-def show_hdag_for_single_source_node_continous(node,target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5,verbose=False,debug=False):
+def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5,verbose=False,debug=False):
+        target_nodes=configuration_dict["nodes"]
+        
         verbose=False
         n=1000
         #### 0.  paths
@@ -71,7 +68,7 @@ def show_hdag_for_single_source_node_continous(node,target_nodes,EXPERIMENT_DIR,
         
         ##### 1.  load model 
         model_path = os.path.join(NODE_DIR, "best_model.pt")
-        tram_model = get_fully_specified_tram_model(node, target_nodes, verbose=verbose)
+        tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, set_initial_weights=False)
         tram_model = tram_model.to(device)
         tram_model.load_state_dict(torch.load(model_path))
         
@@ -133,7 +130,8 @@ def show_hdag_for_single_source_node_continous(node,target_nodes,EXPERIMENT_DIR,
         plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
 
 
-def show_hdag_for_source_nodes(target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
+def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
+    target_nodes=configuration_dict["nodes"]
     for node in target_nodes:
 
         print(f'\n----*----------*-------------*--------Inspect TRAFO Node: {node} ------------*-----------------*-------------------*--')
@@ -143,24 +141,25 @@ def show_hdag_for_source_nodes(target_nodes,EXPERIMENT_DIR,device,xmin_plot=-5,x
             continue
         else:
             if is_outcome_modelled_continous(node, target_nodes):
-                show_hdag_for_single_source_node_continous(node=node,target_nodes=target_nodes,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
+                show_hdag_for_single_source_node_continous(node=node,configuration_dict=configuration_dict,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
             
             if is_outcome_modelled_ordinal(node, target_nodes):
                 print('not implemeneted yet for ordinal (nominally encoded)')
 
         
-def inspect_trafo_standart_logistic(target_nodes, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
+def inspect_trafo_standart_logistic(configuration_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
+    target_nodes=configuration_dict["nodes"]
     for node in target_nodes:
         print(f'----*----------*-------------*--------h(data) should be standard logistic: {node} ------------*-----------------*-------------------*--')
         if is_outcome_modelled_ordinal(node, target_nodes):
             print('not defined for ordinal target variables')
             continue
         else:
-            inspect_single_standart_logistic(node,target_nodes, EXPERIMENT_DIR, train_df, val_df, device, verbose=False)
+            inspect_single_standart_logistic(node,configuration_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=verbose)
 
 def inspect_single_standart_logistic(
     node,
-    target_nodes,
+    configuration_dict,
     EXPERIMENT_DIR,
     train_df,
     val_df,
@@ -168,12 +167,15 @@ def inspect_single_standart_logistic(
     return_intercept_shift: bool = True,
     verbose: bool = False
 ):
+    
+    target_nodes=configuration_dict["nodes"]
+    
     #### 0. Paths
     NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
     
     ##### 1. Load model 
     model_path = os.path.join(NODE_DIR, "best_model.pt")
-    tram_model = get_fully_specified_tram_model(node, target_nodes, verbose=verbose)
+    tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, set_initial_weights=False)
     tram_model = tram_model.to(device)
     tram_model.load_state_dict(torch.load(model_path, map_location=device))
     tram_model.eval()
@@ -186,7 +188,7 @@ def inspect_single_standart_logistic(
         val_df,
         batch_size=4112,
         return_intercept_shift=return_intercept_shift,
-        verbose=False
+        debug=verbose
     )
     
     #### 3. Forward Pass
@@ -631,7 +633,7 @@ def check_sampled_and_latents(NODE_DIR, debug=True):
 
     
     
-def sample_full_dag(target_nodes_dict,
+def sample_full_dag(configuration_dict,
                     EXPERIMENT_DIR,
                     device,
                     do_interventions={},
@@ -685,6 +687,8 @@ def sample_full_dag(target_nodes_dict,
       are created, enabling downstream nodes to proceed.
     - Sampling is done using a vectorized root-finding method (Chandrupatla's algorithm).
     """
+    target_nodes_dict=configuration_dict["nodes"]
+
 
     if delete_all_previously_sampled:
         if verbose or debug:
@@ -761,7 +765,7 @@ def sample_full_dag(target_nodes_dict,
                 
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
-                tram_model = get_fully_specified_tram_model(node, target_nodes_dict, verbose=True).to(device)
+                tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=True).to(device)
                 tram_model.load_state_dict(torch.load(MODEL_PATH))
                 
                 # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
