@@ -250,6 +250,9 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
     DATA_PATH=os.path.join(configuration_dict['PATHS']['DATA_PATH'],configuration_dict['experiment_name']+'_train.csv')
 
     thetas_R=fit_r_model_subprocess(node, dtype, DATA_PATH, verbose=verbose)
+    
+    theta_tilde=
+    
     thetas = torch.tensor(thetas_R, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
 
     if thetas.numel() != last_linear.out_features:
@@ -273,8 +276,66 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
 
 def get_fully_specified_tram_model(node: str, configuration_dict: dict, verbose=True, set_initial_weights=False) -> TramModel:
     """
-    returns a Trammodel fully specified , according to CI groups and CS groups , for ordinal outcome and inputs
+    Construct and return a fully specified TramModel for a given node based on
+    its configuration (ordinal or continuous outcome) and parent inputs.
 
+    This function:
+    - Analyzes the metadata of the target node and its parents.
+    - Builds an intercept network (handling ordinal or continuous cases).
+    - Builds shift networks for covariate-dependent terms.
+    - Optionally initializes the intercept network with increasing weights
+      using R-based estimates (via COLR/POLR).
+    - Returns the combined TramModel consisting of intercept and shift parts.
+
+    Parameters
+    ----------
+    node : str
+        The target node for which the TramModel is constructed.
+    configuration_dict : dict
+        Dictionary describing all nodes and their metadata. Expected to contain:
+        - 'nodes': dict mapping node names to metadata, including:
+            - 'data_type': str (e.g., 'ordinal_yo', 'continuous')
+            - 'levels': int (for ordinal variables)
+            - 'parents_datatype': dict mapping parent names to data types
+    verbose : bool, optional (default=True)
+        If True, prints debug information during model construction and
+        initialization.
+    set_initial_weights : bool, optional (default=False)
+        If True, initializes the intercept model with increasing weights based
+        on COLR/POLR fits obtained from R.
+
+    Returns
+    -------
+    TramModel
+        A fully specified TramModel object with:
+        - Intercept component (SimpleIntercept or a learned intercept network).
+        - Shift components (one per parent group).
+
+    Raises
+    ------
+    ValueError
+        If multiple complex intercept groups are detected, or if an unknown
+        data type is encountered.
+
+    Notes
+    -----
+    - Ordinal outcomes use (levels - 1) thetas.
+    - Continuous outcomes default to 20 thetas unless otherwise specified.
+    - Intercept and shift networks are grouped by transformation prefixes
+      (ci/si for intercepts, cs/ls for shifts).
+    - Initialization requires R and the 'tram' package if
+      `set_initial_weights=True`.
+
+    Examples
+    --------
+    >>> tram_model = get_fully_specified_tram_model(
+    ...     node="y",
+    ...     configuration_dict=config,
+    ...     verbose=True,
+    ...     set_initial_weights=True
+    ... )
+    >>> print(tram_model)
+    TramModel(intercept=..., shifts=[...])
     """
     
     target_nodes = configuration_dict['nodes']
