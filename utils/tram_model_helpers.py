@@ -2,8 +2,8 @@ from utils.tram_models import *
 from utils.loss_continous import contram_nll
 from utils.loss_ordinal import ontram_nll
 from utils.configuration import *
-
-
+from utils.r_helpers import fit_r_model_subprocess
+from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
 
 import os
 import re
@@ -225,11 +225,14 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
     return last_linear
 
 @torch.no_grad()
-def init_last_layer_COLR_POLR(module: nn.Module): # TEMPORRALY FUNCTION
+def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dict,verbose=False): # TEMPORRALY FUNCTION
     """
     Initialize the weights of the last nn.Linear in `module`
     with a fixed hardcoded vector (theta_tilde).
     """
+    
+    target_nodes_dict=configuration_dict['nodes']
+    
     last_linear = None
     for m in reversed(list(module.modules())):
         if isinstance(m, nn.Linear):
@@ -238,14 +241,15 @@ def init_last_layer_COLR_POLR(module: nn.Module): # TEMPORRALY FUNCTION
     if last_linear is None:
         raise ValueError("No nn.Linear layer found in module.")
 
-
-
-    dtype='continous'
-    data_path=EXP_DATA_PATH
-    target="x1"
-
-    thetas_R=fit_r_model_subprocess(target, dtype, data_path,verbose=False)
+    if is_outcome_modelled_continous(node,target_nodes_dict):
+        dtype='continous'
+    if is_outcome_modelled_ordinal(node,target_nodes_dict):
+        dtype='ordinal'
     
+
+    DATA_PATH=os.path.join(configuration_dict['PATHS']['DATA_PATH'],configuration_dict['experiment_name']+'_train.csv')
+
+    thetas_R=fit_r_model_subprocess(node, dtype, DATA_PATH, verbose=verbose)
     thetas = torch.tensor(thetas_R, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
 
     if thetas.numel() != last_linear.out_features:
@@ -267,11 +271,15 @@ def init_last_layer_COLR_POLR(module: nn.Module): # TEMPORRALY FUNCTION
 
     return last_linear
 
-def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, set_initial_weights=False) -> TramModel:
+def get_fully_specified_tram_model(node: str, configuration_dict: dict, verbose=True, set_initial_weights=False) -> TramModel:
     """
     returns a Trammodel fully specified , according to CI groups and CS groups , for ordinal outcome and inputs
 
     """
+    
+    target_nodes = configuration_dict['nodes']
+    
+    
     # Helper to detect ordinal with 'yo'
     def is_ordinal_yo(data_type: str) -> bool:
         return 'ordinal' in data_type and 'yo' in data_type.lower()
@@ -324,9 +332,9 @@ def get_fully_specified_tram_model(node: str, target_nodes: dict, verbose=True, 
     # set initial weights to be increasing for Intercept Model
     if set_initial_weights and nn_int is not None:
         # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
+        # init_last_layer_hardcoded(nn_int)
         
-        init_last_layer_hardcoded(nn_int)
-        
+        init_last_layer_COLR_POLR(nn_int,node,configuration_dict,verbose)
         if verbose:
             print(f"Initialized intercept model with weights: {nn_int}")
 

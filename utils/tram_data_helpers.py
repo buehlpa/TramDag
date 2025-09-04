@@ -1,3 +1,8 @@
+
+# utils/tram_data_helpers.py
+
+
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
@@ -6,7 +11,7 @@ import warnings
 import os
 import shutil
 from statsmodels.graphics.gofplots import qqplot_2samples
-
+from scipy.stats import logistic
 
 from utils.tram_model_helpers import *           
 from utils.loss_continous import *   
