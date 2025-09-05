@@ -1,0 +1,55 @@
+{
+    "x1": {
+        "Modelnr": 0,
+        "data_type": "cont",
+        "node_type": "source",
+        "parents": [],
+        "parents_datatype": {},
+        "transformation_terms_in_h()": {},
+        "transformation_term_nn_models_in_h()": {},
+        "min": -1.458614706993103,
+        "max": 1.1991177797317505
+    },
+    "x2": {
+        "Modelnr": 1,
+        "data_type": "cont",
+        "node_type": "internal",
+        "parents": [
+            "x1"
+        ],
+        "parents_datatype": {
+            "x1": "cont"
+        },
+        "transformation_terms_in_h()": {
+            "x1": "ls"
+        },
+        "transformation_term_nn_models_in_h()": {
+            "x1": "LinearShift"
+        },
+        "min": -1.6191695928573608,
+        "max": 1.6220766305923462
+    },
+    "x3": {
+        "Modelnr": 2,
+        "data_type": "cont",
+        "node_type": "sink",
+        "parents": [
+            "x1",
+            "x2"
+        ],
+        "parents_datatype": {
+            "x1": "cont",
+            "x2": "cont"
+        },
+        "transformation_terms_in_h()": {
+            "x1": "cs",
+            "x2": "ci"
+        },
+        "transformation_term_nn_models_in_h()": {
+            "x1": "ComplexShiftDefaultTabular",
+            "x2": "ComplexInterceptDefaultTabular"
+        },
+        "min": -1.6023576259613037,
+        "max": 1.5367051362991333
+    }
+}

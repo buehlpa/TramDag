@@ -1,0 +1,92 @@
+{
+    "x1": {
+        "Modelnr": 0,
+        "data_type": "cont",
+        "node_type": "source",
+        "parents": [],
+        "parents_datatype": {},
+        "transformation_terms_in_h()": {},
+        "transformation_term_nn_models_in_h()": {},
+        "min": 2.0,
+        "max": 2.0
+    },
+    "x2": {
+        "Modelnr": 1,
+        "data_type": "cont",
+        "node_type": "source",
+        "parents": [],
+        "parents_datatype": {},
+        "transformation_terms_in_h()": {},
+        "transformation_term_nn_models_in_h()": {},
+        "min": 3.0,
+        "max": 3.0
+    },
+    "x3": {
+        "Modelnr": 2,
+        "data_type": "cont",
+        "node_type": "source",
+        "parents": [],
+        "parents_datatype": {},
+        "transformation_terms_in_h()": {},
+        "transformation_term_nn_models_in_h()": {},
+        "min": 4.0,
+        "max": 4.0
+    },
+    "x4": {
+        "Modelnr": 3,
+        "data_type": "cont",
+        "node_type": "source",
+        "parents": [],
+        "parents_datatype": {},
+        "transformation_terms_in_h()": {},
+        "transformation_term_nn_models_in_h()": {},
+        "min": 5.0,
+        "max": 5.0
+    },
+    "x5": {
+        "Modelnr": 4,
+        "data_type": "cont",
+        "node_type": "source",
+        "parents": [],
+        "parents_datatype": {},
+        "transformation_terms_in_h()": {},
+        "transformation_term_nn_models_in_h()": {},
+        "min": 6.0,
+        "max": 6.0
+    },
+    "x6": {
+        "Modelnr": 5,
+        "data_type": "cont",
+        "node_type": "sink",
+        "parents": [
+            "x1",
+            "x2",
+            "x3",
+            "x4",
+            "x5"
+        ],
+        "parents_datatype": {
+            "x1": "cont",
+            "x2": "cont",
+            "x3": "cont",
+            "x4": "cont",
+            "x5": "cont"
+        },
+        "transformation_terms_in_h()": {
+            "x1": "cs12",
+            "x2": "ci12",
+            "x3": "ci11",
+            "x4": "cs",
+            "x5": "cs11"
+        },
+        "transformation_term_nn_models_in_h()": {
+            "x1": "ComplexShiftDefaultTabular12",
+            "x2": "ComplexInterceptDefaultTabular12",
+            "x3": "ComplexInterceptDefaultTabular11",
+            "x4": "ComplexShiftDefaultTabular",
+            "x5": "ComplexShiftDefaultTabular11"
+        },
+        "min": 7.0,
+        "max": 7.0
+    }
+}

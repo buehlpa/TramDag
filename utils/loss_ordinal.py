@@ -21,32 +21,6 @@ def transform_intercepts_ordinal(int_in):
 
     return int_out
 
-def inverse_transform_intercepts_ordinal(int_out: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
-    """
-    Inverse of transform_intercepts_ordinal (numerically stable).
-    Recovers int_in from int_out.
-
-    Parameters
-    ----------
-    int_out : torch.Tensor
-        Tensor of shape (B, K+1) with -inf at [:,0] and +inf at [:,-1].
-    eps : float, optional
-        Small value to clamp diffs, avoids log(0) -> -inf.
-
-    Returns
-    -------
-    int_in : torch.Tensor
-        Tensor of shape (B, K-1).
-    """
-    bs, Kp1 = int_out.shape
-    first = int_out[:, 1:2]
-
-    # Consecutive differences (skip -inf at [:,0] and +inf at [:,-1])
-    diffs = int_out[:, 2:-1] - int_out[:, 1:-2]
-    rest = torch.log(torch.clamp(diffs, min=eps))
-
-    return torch.cat([first, rest], dim=1)
-
 def ontram_nll(outputs, targets):
     int_in = outputs['int_out']
     shift_in = outputs['shift_out']

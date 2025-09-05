@@ -1,0 +1,130 @@
+{
+    "date_of_creation": "2025-07-03 06:35:16",
+    "experiment_name": "modelling_interactions5_std",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/modelling_interactions5_std",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/modelling_interactions5_std"
+    },
+    "data_type": {
+        "x1": "cont",
+        "x2": "cont",
+        "x3": "cont",
+        "x4": "cont"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "0",
+            "0",
+            "cs11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "cs12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.1023280003906143,
+            "max": 1.895380529733125,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.09848326169895154,
+            "max": 1.9048444463462053,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "cont",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.10592383041862734,
+            "max": 1.9012680218740785,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x4": {
+            "Modelnr": 3,
+            "data_type": "cont",
+            "node_type": "sink",
+            "parents": [
+                "x1",
+                "x2",
+                "x3"
+            ],
+            "parents_datatype": {
+                "x1": "cont",
+                "x2": "cont",
+                "x3": "cont"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "cs11",
+                "x2": "cs12",
+                "x3": "ls"
+            },
+            "min": -0.12226040936337483,
+            "max": 3.151805121764784,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "ComplexShiftDefaultTabular11",
+                "x2": "ComplexShiftDefaultTabular12",
+                "x3": "LinearShift"
+            }
+        }
+    }
+}

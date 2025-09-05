@@ -1,0 +1,106 @@
+{
+    "date_of_creation": "2025-07-21 14:21:07",
+    "experiment_name": "ordinal_dev",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/ordinal_dev",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/ordinal_dev"
+    },
+    "data_type": {
+        "x1": "ord",
+        "x2": "ord",
+        "x3": "cont"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "ls",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "LinearShift",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "ord",
+            "levels": 2,
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "min": 0.0,
+            "max": 1.0,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "ord",
+            "levels": 2,
+            "node_type": "internal",
+            "parents": [
+                "x1"
+            ],
+            "parents_datatype": {
+                "x1": "ord"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls"
+            },
+            "min": 0.0,
+            "max": 1.0,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift"
+            }
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "cont",
+            "node_type": "sink",
+            "parents": [
+                "x1",
+                "x2"
+            ],
+            "parents_datatype": {
+                "x1": "ord",
+                "x2": "ord"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls",
+                "x2": "ls"
+            },
+            "min": -0.8829760308059689,
+            "max": 2.7365581647527457,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift",
+                "x2": "LinearShift"
+            }
+        }
+    }
+}
