@@ -233,7 +233,7 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
 
         gridbox = create_grid()
         ui = widgets.VBox([
-            widgets.Label("Fill in the adjacency matrix (upper triangle only). Use 'ls', 'cs', etc."),
+            widgets.Label("Fill in the adjacency matrix (upper triangle only). Use 'ls', 'cs', etc. row:FROM → column:TO."),
             gridbox,
             generate_btn,
             output
@@ -489,6 +489,23 @@ def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
     configuration_dict['adj_matrix'] = adj_matrix.tolist()  # Convert to list for JSON serialization
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
 
+def print_data_type_modeling_setting(data_type):    
+        for variable, dtype in data_type.items():
+            if dtype == 'continous':
+                print(f"Variable '{variable}' is modeled as a continuous variable. for target and predictor.")
+            if dtype == 'ordinal_Xn_Yc':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: OneHot and TARGET: continous.")
+            if dtype == 'ordinal_Xn_Yo':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: OneHot and TARGET: OneHot.")
+            if dtype == 'ordinal_Xc_Yc':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: continous and TARGET: continous.")
+            if dtype == 'ordinal_Xc_Yo':
+                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: continous and TARGET: OneHot.")
+            if dtype == 'other':
+                print(f"Variable '{variable}' is modeled as a variable with other modeling settings.")
+            
+
+    
 def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> None:
     """
     Write the data type information to the configuration dictionary.
@@ -504,6 +521,9 @@ def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> No
             pass
         else:
             raise ValueError("Invalid data types in the provided dictionary.")
+        
+        
+        print_data_type_modeling_setting(data_type)
         
         write_configuration_dict(configuration_dict, CONF_DICT_PATH)
         
@@ -565,7 +585,13 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals,
         print("Configuration updated successfully.")
 
 
-
+def get_hyperparameters_for_node(node,node_list):
+    batch_size=node_list[node].get('batch_size')
+    epochs=node_list[node].get('epochs')
+    learning_rate=node_list[node].get('learning_rate')
+    use_scheduler=node_list[node].get('use_scheduler')
+    
+    return batch_size, epochs, learning_rate, use_scheduler
 
 
 def create_levels_dict(df: pd.DataFrame, data_type: dict):
@@ -683,6 +709,11 @@ def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,
         target_nodes[node]['min'] = min_vals.iloc[i].tolist()   
         target_nodes[node]['max'] = max_vals.iloc[i].tolist()
 
+        target_nodes[node]['batch_size'] = 512
+        target_nodes[node]['epochs'] = 100
+        target_nodes[node]['learning_rate'] = 0.01
+        target_nodes[node]['use_scheduler'] = False
+        
         
         transformation_term_nn_models = {}
         for parent in parents:
@@ -856,14 +887,20 @@ def validate_data_types(data_type):
     Returns
     -------
     bool
-        True if all data types are valid, False otherwise.
+        True if all data types are valid and keys are unique, False otherwise.
     """
-    valid_types = {'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo', 'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'}
-    for dtype in data_type.values():
+    valid_types = {
+        'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo',
+        'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'
+    }
+    
+    # --- check valid types ---
+    for col, dtype in data_type.items():
         if dtype not in valid_types:
-            print(f"Invalid data type: {dtype}")
-            print(f"valid data_types are : {valid_types}")
+            print(f"Invalid data type for '{col}': {dtype}")
+            print(f"Valid data_types are: {valid_types}")
             return False
+
     return True
 
 

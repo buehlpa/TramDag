@@ -22,15 +22,82 @@ class GenericDataset(Dataset):
         debug=False
     ):
         """
-        df: pd.DataFrame
-        target_col: str
-        target_nodes: dict mapping each node → metadata (including 'data_type', 'levels', 'node_type')
-        parents_datatype_dict: dict var_name → "cont"|"ord"|"other"
-        transformation_terms_in_h: dict for intercept logic
-        return_intercept_shift: whether to return (int_input, shift_list) or raw features
-        transform: torchvision transform for images
-        return_y: whether to return target y
-        debug: bool to enable debug logging and attribute printouts
+            A flexible PyTorch Dataset for TRAM-style models, supporting continuous,
+            ordinal, and image predictors, with optional intercept/shift decomposition.
+
+            This dataset:
+            - Loads samples from a pandas DataFrame.
+            - Extracts predictors according to metadata in `target_nodes`.
+            - Encodes ordinal/continuous variables, and applies torchvision transforms to images.
+            - Optionally splits predictors into intercept and shift groups for TRAM models.
+            - Returns (X, y) pairs or just X, depending on configuration.
+
+            Parameters
+            ----------
+            df : pd.DataFrame
+                DataFrame containing predictor and target columns.
+            target_col : str
+                Name of the target column in `df`.
+            target_nodes : dict, optional
+                Mapping node_name → metadata dict with keys such as:
+                - 'data_type': str (e.g., "ordinal_yo", "continuous", "source")
+                - 'levels': int (for ordinal variables, number of levels)
+                - 'node_type': str (e.g., "source", "internal")
+                - 'parents_datatype': dict mapping parent names → data types
+                - 'transformation_terms_in_h()': dict of transformation terms
+                - 'transformation_term_nn_models_in_h()': dict of nn model classes
+                Used for determining predictors and encoding logic.
+            transform : callable, optional
+                A torchvision-style transform applied to image predictors.
+            return_intercept_shift : bool, default=True
+                If True, returns predictors split into:
+                - `int_inputs`: intercept features
+                - `shifts`: list of shift feature groups
+                If False, returns raw feature tuple instead.
+            return_y : bool, default=True
+                Whether to return the target variable `y` along with the predictors.
+            debug : bool, default=False
+                Enables verbose logging and attribute inspection during initialization.
+
+            Returns
+            -------
+            __getitem__ : tuple
+                Depending on configuration:
+                - If `return_intercept_shift=True` and `return_y=True`:
+                ((int_inputs, shifts), y)
+                - If `return_intercept_shift=True` and `return_y=False`:
+                (int_inputs, shifts)
+                - If `return_intercept_shift=False` and `return_y=True`:
+                (features, y)
+                - If `return_intercept_shift=False` and `return_y=False`:
+                features
+
+            Features
+            --------
+            - Continuous predictors are returned as float tensors.
+            - Ordinal predictors (with 'xn' in data type) are one-hot encoded.
+            - Image predictors are loaded via PIL and passed through `transform` if given.
+            - Source nodes can return a simple intercept (constant 1.0).
+
+            Notes
+            -----
+            - Validates target column existence, data types, and ordinal encoding.
+            - Ensures ordinal predictors are zero-indexed or properly scaled.
+            - Automatically inserts a simple intercept if no explicit intercept term is found.
+            - Groups transformation terms into intercept and shift components.
+
+            Examples
+            --------
+            >>> dataset = GenericDataset(
+            ...     df=my_df,
+            ...     target_col="y",
+            ...     target_nodes=config["nodes"],
+            ...     transform=my_transform,
+            ...     return_intercept_shift=True,
+            ...     debug=True
+            ... )
+            >>> (int_in, shifts), y = dataset[0]
+            >>> int_in.shape, [s.shape for s in shifts], y.shape
         """
         # initialize debug 
         self._set_debug(debug)
@@ -63,7 +130,7 @@ class GenericDataset(Dataset):
         self._check_ordinal_levels()
 
         if self.debug:
-            print(f"[DEBUG] ------ Initalized all attributes of Genericdataset V6------")
+            print(f"[INFO] ------ Initalized all attributes of Genericdataset V6------")
             
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
@@ -90,7 +157,7 @@ class GenericDataset(Dataset):
             raise TypeError(f"debug must be bool, got {type(debug)}")
         self.debug = debug
         if self.debug:
-            print(f"[DEBUG] ------ Starting Debug Mode GenericDataset_v6 ------")
+            print(f"[INFO] ------ Starting Debug Mode GenericDataset_v6 ------")
 
     def _set_df(self, df):
         if not isinstance(df, pd.DataFrame):
@@ -285,31 +352,6 @@ class GenericDataset(Dataset):
             print(f"[DEBUG] _check_multiclass_predictors_of_df: checked multiclass_predicitors passed")
                 
 
-    # def _check_ordinal_levels(self):
-    #     ords = []
-    #     if 'ordinal' in self.target_nodes.get(self.target_col, {}).get('data_type', '').lower():
-    #         ords.append(self.target_col)
-    #     ords += [
-    #         v for v in self.predictors
-    #         if 'ordinal' in self.parents_datatype_dict[v].lower()
-    #         and 'xn' in self.parents_datatype_dict[v].lower()
-    #     ]
-    #     for v in ords:
-    #         if v not in self.df.columns:
-    #             if self.debug:
-    #                 print(f"[DEBUG] _check_ordinal_levels: Skipping '{v}' as it's not in the DataFrame")
-    #             continue
-    #         lvl = self.target_nodes[v].get('levels')
-    #         if lvl is None:
-    #             raise ValueError(f"Ordinal '{v}' missing 'levels' metadata.")
-    #         uniq = sorted(self.df[v].dropna().unique())
-    #         if uniq != list(range(lvl)):
-    #             raise ValueError(
-    #                 f"Ordinal '{v}' values {uniq} != expected 0…{lvl-1}."
-    #             )
-    #     if self.debug:
-    #         print(f"[DEBUG] _check_ordinal_levels: checked ordinal levels passed")
-
     def _check_ordinal_levels(self):
         ords = []
         # include target if it’s ordinal
@@ -354,8 +396,6 @@ class GenericDataset(Dataset):
 
         if self.debug:
             print(f"[DEBUG] _check_ordinal_levels: checked ordinal levels passed")
-
-
 
 
     def __len__(self):
@@ -424,7 +464,7 @@ class GenericDataset(Dataset):
 
 
 
-def get_dataloader(node, target_nodes, train_df, val_df, batch_size=32,return_intercept_shift=False, verbose=False,debug=False):
+def get_dataloader(node, target_nodes, train_df, val_df, batch_size=32,return_intercept_shift=False, debug=False):
     
     transform = transforms.Compose([
         transforms.Resize((128, 128)),

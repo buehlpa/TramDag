@@ -76,6 +76,34 @@ def transform_intercepts_continous(theta_tilde:torch.Tensor) -> torch.Tensor:
     # Return the cumulative sum minus the shift
     return torch.cumsum(widths, dim=-1) - shift
 
+def inverse_transform_intercepts_continous(theta: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+    """
+    Inverse of transform_intercepts_continous.
+    Recovers theta_tilde from theta with numerical stability.
+    Uses float64 internally, but returns the same dtype as input.
+    """
+    # Store original dtype and cast to float64 for precision
+    orig_dtype = theta.dtype
+    theta = theta.to(torch.float64)
+
+    last_dim_size = theta.shape[-1]
+    shift = torch.log(torch.tensor(2.0, dtype=torch.float64)) * last_dim_size / 2
+
+    # Undo shift
+    theta_shifted = theta + shift
+
+    # Recover widths
+    widths = torch.empty_like(theta_shifted)
+    widths[..., 0] = theta_shifted[..., 0]
+    widths[..., 1:] = theta_shifted[..., 1:] - theta_shifted[..., :-1]
+
+    # Invert softplus (with clamp for numerical stability)
+    theta_tilde = torch.empty_like(theta_shifted)
+    theta_tilde[..., 0] = widths[..., 0]
+    theta_tilde[..., 1:] = torch.log(torch.expm1(torch.clamp(widths[..., 1:], min=eps)))
+
+    return theta_tilde.to(orig_dtype)
+
 
 def bernstein_basis(tensor, M):
     """
