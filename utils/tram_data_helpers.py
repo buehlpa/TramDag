@@ -286,13 +286,20 @@ def show_samples_vs_true(
     hist_est_color="orange",
     figsize=(14, 5),
 ):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     for node in target_nodes:
         sample_path = os.path.join(experiment_dir, f"{node}/sampling/sampled.pt")
         if not os.path.isfile(sample_path):
             print(f"[WARNING] skip {node}: {sample_path} not found.")
             continue
 
-        sampled = torch.load(sample_path).cpu().numpy()
+        try:
+            sampled = torch.load(sample_path, map_location=device).cpu().numpy()
+        except Exception as e:
+            print(f"[ERROR] Could not load {sample_path}: {e}")
+            continue
+
         sampled = sampled[np.isfinite(sampled)]
 
         if node not in df.columns:

@@ -56,6 +56,10 @@
             "transformation_terms_in_h()": {},
             "min": 0.12157964485414735,
             "max": 0.794303998711493,
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {}
         },
         "x2": {
@@ -73,6 +77,10 @@
             },
             "min": -0.8069206639187695,
             "max": 0.418925659248077,
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift"
             }
@@ -95,6 +103,10 @@
             },
             "min": -4.4354394138675595,
             "max": 4.9162449184293,
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
                 "x2": "LinearShift"
