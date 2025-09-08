@@ -70,7 +70,7 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMEN
         model_path = os.path.join(NODE_DIR, "best_model.pt")
         tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, set_initial_weights=False)
         tram_model = tram_model.to(device)
-        tram_model.load_state_dict(torch.load(model_path))
+        tram_model.load_state_dict(torch.load(model_path, map_location=device))
         
         sampled_df=create_df_from_sampled(node, target_nodes, num_samples=n, EXPERIMENT_DIR=EXPERIMENT_DIR)
 
@@ -396,7 +396,7 @@ def show_samples_vs_true(
 def show_latent_sampling(EXPERIMENT_DIR,conf_dict):
     for node in conf_dict.keys():
         latents_path = os.path.join(EXPERIMENT_DIR,f'{node}/sampling/latents.pt')
-        latents = torch.load(latents_path).cpu().numpy()
+        latents = torch.load(latents_path, map_location="cpu").cpu().numpy()
         fig, axs = plt.subplots(1, 2, figsize=(8, 3))
         # Histogram
         axs[0].hist(latents, bins=100)
@@ -437,7 +437,7 @@ def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR,
         if os.path.exists(path):
             if debug:
                 print(f"[DEBUG] create_df_from_sampled: loading sampled data for parent '{parent}' from {path}")
-            sampling_dict[parent] = torch.load(path)
+            sampling_dict[parent] = torch.load(path, map_location="cpu")
         else:
             if debug:
                 print(f"[DEBUG] create_df_from_sampled: no sampled data found for parent '{parent}' at {path}")
@@ -773,7 +773,7 @@ def sample_full_dag(configuration_dict,
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
                 tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=True).to(device)
-                tram_model.load_state_dict(torch.load(MODEL_PATH))
+                tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
                 
                 # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
                 sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
