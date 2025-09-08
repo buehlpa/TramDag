@@ -141,21 +141,33 @@ def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plo
             continue
         else:
             if is_outcome_modelled_continous(node, target_nodes):
-                show_hdag_for_single_source_node_continous(node=node,configuration_dict=configuration_dict,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
+                return show_hdag_for_single_source_node_continous(node=node,configuration_dict=configuration_dict,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
             
             if is_outcome_modelled_ordinal(node, target_nodes):
                 print('not implemeneted yet for ordinal (nominally encoded)')
 
         
 def inspect_trafo_standart_logistic(configuration_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
-    target_nodes=configuration_dict["nodes"]
+    target_nodes = configuration_dict["nodes"]
+    h_train_outputs = []
+    h_val_outputs = []
     for node in target_nodes:
         print(f'----*----------*-------------*--------h(data) should be standard logistic: {node} ------------*-----------------*-------------------*--')
         if is_outcome_modelled_ordinal(node, target_nodes):
             print('not defined for ordinal target variables')
             continue
         else:
-            inspect_single_standart_logistic(node,configuration_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=verbose)
+            # Get h_train and h_val for this node
+            h_train, h_val = inspect_single_standart_logistic(
+                node, configuration_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=verbose, return_intercept_shift=True
+            )
+            h_train_outputs.append(h_train)
+            h_val_outputs.append(h_val)
+    # Stack outputs into arrays with shape (n_samples, n_nodes)
+    # Each h_train/h_val is a 1D array for a node; stack as columns
+    h_train_arr = np.column_stack(h_train_outputs) if h_train_outputs else np.array([])
+    h_val_arr = np.column_stack(h_val_outputs) if h_val_outputs else np.array([])
+    return h_train_arr, h_val_arr
 
 def inspect_single_standart_logistic(
     node,
@@ -244,6 +256,8 @@ def inspect_single_standart_logistic(
     plt.suptitle(f"Distribution Diagnostics for Node: {node}", fontsize=14)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
+
+    return h_train_array, h_val_array
 
 
 
@@ -696,6 +710,10 @@ def sample_full_dag(configuration_dict,
     """
     target_nodes_dict=configuration_dict["nodes"]
 
+    # Collect results for direct use in notebooks
+    sampled_by_node = {}
+    latents_by_node = {}
+
 
     if delete_all_previously_sampled:
         if verbose or debug:
@@ -762,6 +780,9 @@ def sample_full_dag(configuration_dict,
                     ### dummy latents jsut for the check , not needed
                     dummy_latents = torch.full((number_of_samples,), float('nan'))  
                     torch.save(dummy_latents, LATENTS_PATH)
+                    # Store for immediate use
+                    sampled_by_node[node] = intervention_vals
+                    latents_by_node[node] = dummy_latents
                     processed_nodes.append(node)
                     print(f'Interventional data for node {node} is saved')
                     continue  
@@ -805,6 +826,9 @@ def sample_full_dag(configuration_dict,
                     
                 torch.save(sampled, SAMPLED_PATH)
                 torch.save(latent_sample, LATENTS_PATH)
+                # Store CPU copies for immediate use
+                sampled_by_node[node] = sampled.detach().cpu()
+                latents_by_node[node] = latent_sample.detach().cpu()
                 
                 if verbose:
                     print(f"[INFO] Completed sampling for node '{node}'")
@@ -813,3 +837,5 @@ def sample_full_dag(configuration_dict,
         
     if verbose:
         print("[INFO] DAG sampling completed successfully for all nodes.")
+
+    return sampled_by_node, latents_by_node
