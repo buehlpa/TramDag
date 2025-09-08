@@ -463,18 +463,36 @@ class GenericDataset(Dataset):
         return int_in, shifts
 
 
-
-def get_dataloader(node, target_nodes, train_df, val_df, batch_size=32,return_intercept_shift=False, debug=False):
+def get_dataloader( node,
+                    target_nodes,
+                    train_df=None,
+                    val_df=None,
+                    batch_size=32,
+                    return_intercept_shift=False,
+                    debug=False,
+                    transform=None,
+                    ):
     
-    transform = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.ToTensor()
-    ])
+        if transform is None:
+            transform = transforms.Compose([
+                transforms.Resize((128, 128)),
+                transforms.ToTensor()
+            ])
+        train_loader, val_loader = None, None
 
-    train_ds = GenericDataset(train_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift,debug=debug)
-    val_ds = GenericDataset(val_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift,debug=debug)
+        if train_df is not None:
+            train_ds = GenericDataset(train_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift,debug=debug)
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,num_workers=4, pin_memory=True)
+        else:
+            print("[INFO] train_df is None → skipping train dataloader.")
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        if val_df is not None:
+            val_ds = GenericDataset(val_df,target_col=node,target_nodes=target_nodes,transform=transform,return_intercept_shift=return_intercept_shift,debug=debug)
+            val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        else:
+            print("[INFO] val_df is None → skipping val dataloader.")
 
-    return train_loader, val_loader
+        if train_loader is None and val_loader is None:
+            raise ValueError("[ERROR] Both train_df and val_df are None → no dataloaders created.")
+
+        return train_loader, val_loader
