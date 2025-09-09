@@ -1,10 +1,10 @@
 {
-    "date_of_creation": "2025-09-08 08:20:33",
-    "experiment_name": "tramdagpaper_exp6_1_linearDGP_cs_new",
+    "date_of_creation": "2025-09-09 09:23:18",
+    "experiment_name": "tramdagpaper_exp6_1_complexDGP_cs_new",
     "PATHS": {
-        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_linearDGP_cs_new",
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_complexDGP_cs_new",
         "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
-        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_linearDGP_cs_new"
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_complexDGP_cs_new"
     },
     "data_type": {
         "x1": "continous",
@@ -101,8 +101,8 @@
                 "x1": "ls",
                 "x2": "cs"
             },
-            "min": -4.4354394138675595,
-            "max": 4.9162449184293,
+            "min": -5.0085370918109335,
+            "max": 4.899694288782983,
             "batch_size": 512,
             "epochs": 100,
             "learning_rate": 0.01,

@@ -1,10 +1,10 @@
 {
-    "date_of_creation": "2025-09-04 13:03:36",
-    "experiment_name": "tramdagpaper_exp6_1_linearDGP_ls_new",
+    "date_of_creation": "2025-09-08 08:20:33",
+    "experiment_name": "tramdagpaper_exp6_1_linearDGP_cs",
     "PATHS": {
-        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_linearDGP_ls_new",
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_linearDGP_cs",
         "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
-        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_linearDGP_ls_new"
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_linearDGP_cs"
     },
     "data_type": {
         "x1": "continous",
@@ -20,7 +20,7 @@
         [
             "0",
             "0",
-            "ls"
+            "cs"
         ],
         [
             "0",
@@ -37,7 +37,7 @@
         [
             "0",
             "0",
-            "LinearShift"
+            "ComplexShiftDefaultTabular"
         ],
         [
             "0",
@@ -99,7 +99,7 @@
             },
             "transformation_terms_in_h()": {
                 "x1": "ls",
-                "x2": "ls"
+                "x2": "cs"
             },
             "min": -4.4354394138675595,
             "max": 4.9162449184293,
@@ -109,7 +109,7 @@
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
-                "x2": "LinearShift"
+                "x2": "ComplexShiftDefaultTabular"
             }
         }
     }
