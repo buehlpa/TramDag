@@ -1,10 +1,10 @@
 {
     "date_of_creation": "2025-09-09 09:23:18",
-    "experiment_name": "tramdagpaper_exp6_1_complexDGP_cs_new",
+    "experiment_name": "tramdagpaper_exp6_1_complexDGP_cs",
     "PATHS": {
-        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_complexDGP_cs_new",
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_complexDGP_cs",
         "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
-        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_complexDGP_cs_new"
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/tramdagpaper_exp6_1_complexDGP_cs"
     },
     "data_type": {
         "x1": "continous",
