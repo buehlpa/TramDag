@@ -1,5 +1,8 @@
 ## TramDAG Minimal API (draft)
 
+NUR EIN VORSCHLAG ZUR API. TBC
+
+
 Input: NumPy/Pandas data frames `df_train`, `df_val`.
 
 ### 1) Load or create config (typed; no I/O unless you call .save)
