@@ -54,7 +54,7 @@
             "parents": [],
             "parents_datatype": {},
             "transformation_terms_in_h()": {},
-            "min": 0.12064138174529282,
+            "min": 0.1206413817452928,
             "max": 0.7927992044799329,
             "batch_size": 512,
             "epochs": 100,

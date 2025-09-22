@@ -173,7 +173,7 @@ class GenericDataset(Dataset):
         
         if target_col not in self.df.columns:
             print(
-                f"[WARNING] target_col '{target_col}' not in DataFrame columns — is this intended for use as a Sampler?")
+                f"[WARNING] target_col '{target_col}' not in DataFrame columns — is this intended to be used as a Sampler?")
             if self.debug:
                 print(f"[DEBUG] target_col '{target_col}' not found in DataFrame columns")
             # Still set it in case it's needed for Sampler or other logic

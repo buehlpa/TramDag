@@ -496,7 +496,7 @@ def is_outcome_modelled_ordinal(node,target_nodes_dict):
 
 def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
     all_outputs = []
-
+    tram_model.eval()
     with torch.no_grad():
         for (int_input, shift_list) in sample_loader:
             int_input = int_input.to(device)
@@ -543,7 +543,7 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
 def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample,device, debug=False):
     number_of_samples = len(latent_sample)
     output_list = []
-
+    tram_model.eval()
     with torch.no_grad():
         for (int_input, shift_list) in sample_loader:
             # Move everything to device
@@ -791,6 +791,9 @@ def sample_full_dag(configuration_dict,
                 ### sampling latents
                 latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
                 
+                
+                
+                
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
                 tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=True).to(device)
@@ -826,6 +829,7 @@ def sample_full_dag(configuration_dict,
                     
                 torch.save(sampled, SAMPLED_PATH)
                 torch.save(latent_sample, LATENTS_PATH)
+                
                 # Store CPU copies for immediate use
                 sampled_by_node[node] = sampled.detach().cpu()
                 latents_by_node[node] = latent_sample.detach().cpu()
