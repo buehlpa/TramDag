@@ -652,6 +652,108 @@ def check_sampled_and_latents(NODE_DIR, debug=True):
 
     return True
 
+def provide_latents_for_input_data(
+    node,
+    configuration_dict,
+    EXPERIMENT_DIR,
+    data_loader,
+    base_df,
+    verbose=False
+):
+    """
+    Compute latent representations for each observation in base_df
+    and return a DataFrame with columns [node, "_U"] aligned with base_df.
+    """
+    
+    target_nodes = configuration_dict["nodes"]
+    if is_outcome_modelled_ordinal(node, target_nodes):
+        raise ValueError("Not yet defined for ordinal target variables")
+
+    #### 0. Paths
+    NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+
+    ##### 1. Load model 
+    model_path = os.path.join(NODE_DIR, "best_model.pt")
+    tram_model = get_fully_specified_tram_model(
+        node, configuration_dict, debug=verbose, set_initial_weights=False
+    )
+    tram_model = tram_model.to(device)
+    tram_model.load_state_dict(torch.load(model_path, map_location=device))
+    tram_model.eval()
+
+    #### 2. Forward Pass
+    min_vals = torch.tensor(target_nodes[node]["min"], dtype=torch.float32, device=device)
+    max_vals = torch.tensor(target_nodes[node]["max"], dtype=torch.float32, device=device)
+    min_max = torch.stack([min_vals, max_vals], dim=0)
+
+    latents_list = []
+    with torch.no_grad():
+        for (int_input, shift_list), y in data_loader:
+            # Move everything to device
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+            y = y.to(device)  # targets to device
+            y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+
+            latents, _ = contram_nll(y_pred, y, min_max=min_max, return_h=True)
+            latents_list.extend(latents.cpu().numpy())
+
+    # Turn into DataFrame aligned with base_df
+    latents_df = pd.DataFrame({
+        node: base_df[node].values,
+        f"{node}_U": latents_list
+    }, index=base_df.index)
+
+    return latents_df
+
+
+def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, train_df, verbose=False):
+
+    all_latents_dfs = []
+
+    for node in configuration_dict["nodes"]:
+        # Skip ordinal outcomes if not supported
+        if is_outcome_modelled_ordinal(node, configuration_dict["nodes"]):
+            print(f"[INFO] Skipping node '{node}' (ordinal targets not yet supported).")
+            continue
+
+        if verbose:
+            print(f"[INFO] Processing node '{node}'")
+
+        # Build dataset and dataloader for this node
+        node_dataset = GenericDataset(
+            train_df,
+            target_col=node,
+            target_nodes=configuration_dict["nodes"]
+        )
+        node_loader = DataLoader(
+            node_dataset,
+            batch_size=4096,   # you can tune this
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True
+        )
+
+        # Compute latents
+        node_latents_df = provide_latents_for_input_data(
+            node=node,
+            configuration_dict=configuration_dict,
+            EXPERIMENT_DIR=EXPERIMENT_DIR,
+            data_loader=node_loader,
+            base_df=train_df,
+            verbose=verbose
+        )
+
+        all_latents_dfs.append(node_latents_df)
+
+    # Concatenate all node-specific latent dataframes
+    all_latents_df = pd.concat(all_latents_dfs, axis=1)
+
+    # Remove duplicate index columns (if multiple nodes included their own target col)
+    all_latents_df = all_latents_df.loc[:, ~all_latents_df.columns.duplicated()]
+
+    print("[INFO] Final latent DataFrame shape:", all_latents_df.shape)
+    return all_latents_df
     
     
 def sample_full_dag(configuration_dict,
