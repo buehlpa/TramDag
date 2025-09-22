@@ -623,7 +623,7 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
         low,
         high,
         max_iter=10_000,
-        tol=1e-9
+        tol=1e-12
     )
 
     if sampled is None or torch.isnan(sampled).any():
@@ -658,56 +658,78 @@ def sample_full_dag(configuration_dict,
                     EXPERIMENT_DIR,
                     device,
                     do_interventions={},
-                    number_of_samples= 10_000,
-                    batch_size = 32,
-                    delete_all_previously_sampled=True,
-                    verbose=True,
-                    debug=False):
+                    predefined_latent_samples_df: pd.DataFrame = None,
+                    number_of_samples: int = 10_000,
+                    batch_size: int = 32,
+                    delete_all_previously_sampled: bool = True,
+                    verbose: bool = True,
+                    debug: bool = False):
     """
-    Samples data for all nodes in a DAG defined by `conf_dict`, ensuring that each node's
-    parents are sampled before the node itself. Supports interventions on any subset of nodes.
+    Sample values for all nodes in a DAG given trained TRAM models, respecting
+    parental ordering. Supports both generative sampling (new U's) and
+    reconstruction sampling (predefined U's), as well as node-level interventions.
 
     Parameters
     ----------
-    conf_dict : dict
-        Dictionary defining the DAG. Each key is a node name, and each value is a config
-        dict that includes at least:
+    configuration_dict : dict
+        Full experiment configuration. Must contain a "nodes" entry where each node
+        has metadata including:
             - 'node_type': str, either 'source' or other
             - 'parents': list of parent node names
             - 'min': float, minimum allowed value for the node
             - 'max': float, maximum allowed value for the node
-
+            - 'data_type': str, e.g. "continuous" or "ordinal"
     EXPERIMENT_DIR : str
-        Base directory where all per-node directories are located.
-
+        Base directory where per-node models and sampling results are stored.
     device : torch.device
-        The device to run computations on (e.g., 'cuda' or 'cpu').
-
+        Device for model evaluation (e.g., 'cuda' or 'cpu').
     do_interventions : dict, optional
-        A dictionary specifying interventions for some nodes. Keys are node names (str),
-        values are floats. For each intervened node, the specified value is used as the
-        sampled value for all samples, and the model is bypassed. e.g. {'x1':1.0}
+        Mapping of node names to fixed values. For intervened nodes, the model is
+        bypassed and all samples are set to the specified value. Example:
+        {'x1': 1.0}.
+    predefined_latent_samples_df : pd.DataFrame, optional
+        DataFrame of predefined latent variables (U's) for reconstruction. Must
+        contain one column per node in the form "{node}_U". If provided, the number
+        of samples is set to the number of rows in this DataFrame.
+    number_of_samples : int, default=10_000
+        Number of samples to draw per node when no predefined latent samples are given.
+    batch_size : int, default=32
+        Batch size for DataLoader evaluation during sampling.
+    delete_all_previously_sampled : bool, default=True
+        If True, deletes all existing sampled.pt/latents.pt files before starting.
+    verbose : bool, default=True
+        If True, print progress information.
+    debug : bool, default=False
+        If True, print detailed debug information for troubleshooting.
 
-    n : int, optional
-        Number of samples to draw for each node (default is 10_000).
-
-    batch_size : int, optional
-        Batch size for model evaluation during sampling (default is 32).
-
-    delete_all_previously_sampled : bool, optional
-        If True, removes previously sampled data before starting (default is True).
-
-    verbose : bool, optional
-        If True, prints debug/status information (default is True).
+    Returns
+    -------
+    sampled_by_node : dict
+        Mapping from node name to a tensor of sampled values (on CPU).
+    latents_by_node : dict
+        Mapping from node name to the latent variables (U's) used to generate
+        those samples (on CPU).
 
     Notes
     -----
-    - The function ensures that nodes are only sampled after their parents.
-    - Nodes with `node_type='source'` are treated as having no parents.
-    - If a node is in `do_interventions`, `sampled_chandrupatla.pt` and a dummy `latents.pt`
-      are created, enabling downstream nodes to proceed.
-    - Sampling is done using a vectorized root-finding method (Chandrupatla's algorithm).
+    - The function respects DAG ordering by ensuring parents are sampled before
+      their children.
+    - In generative mode (no predefined_latent_samples_df), latent U's are sampled
+      from a standard logistic distribution and parents are taken from sampled.pt.
+    - In reconstruction mode (with predefined_latent_samples_df), latent U's are
+      read from the DataFrame, but parent values are still loaded from sampled.pt
+      unless explicitly overridden upstream.
+    - Models are loaded from "best_model.pt" in each node's directory and applied
+      in eval mode with no gradient tracking.
+    - Continuous outcomes are sampled via vectorized root finding
+      (Chandrupatla's algorithm), while ordinal outcomes use categorical sampling.
     """
+    
+    if predefined_latent_samples_df is not None:
+        print(f'[INFO] Using predefined latents samples from dataframe -> therefore n_samples is set to the number of rows in the dataframe: {len(predefined_latent_samples_df)}')
+        number_of_samples = len(predefined_latent_samples_df)
+        
+    
     target_nodes_dict=configuration_dict["nodes"]
 
     # Collect results for direct use in notebooks
@@ -780,19 +802,36 @@ def sample_full_dag(configuration_dict,
                     ### dummy latents jsut for the check , not needed
                     dummy_latents = torch.full((number_of_samples,), float('nan'))  
                     torch.save(dummy_latents, LATENTS_PATH)
+                    
                     # Store for immediate use
                     sampled_by_node[node] = intervention_vals
                     latents_by_node[node] = dummy_latents
+                    
                     processed_nodes.append(node)
                     print(f'Interventional data for node {node} is saved')
                     continue  
-                ##### %%%%%%% no intervention, based on the sampled data from the parents though the latents for each node the observational distribution is generated    
+                
+            ##### NO INTERVENTION, based on the sampled data from the parents the latents for each node the observational distribution is generated    
             else:
-                ### sampling latents
-                latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
-                
-                
-                
+                # if latents are predefined use them
+                if predefined_latent_samples_df is not None:
+                    predefinded_sample_name = node + "_U"
+
+                    if predefinded_sample_name not in predefined_latent_samples_df.columns:
+                        raise ValueError(
+                            f"Predefined latent samples for node '{node}' not found in dataframe columns. "
+                            f"Must be named '{predefinded_sample_name}'.")
+                        
+                    predefinded_sample = predefined_latent_samples_df[predefinded_sample_name].values
+                    print(f'[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}')
+                    
+                    latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
+                    
+                    ### sampling new latents
+                else:
+                    print(f'[INFO] Sampling new latents for node {node} from standard logistic distribution')
+                    latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
+                    
                 
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
@@ -808,7 +847,7 @@ def sample_full_dag(configuration_dict,
                                                     return_y=False,
                                                     debug=debug)
                 
-                sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=True,num_workers=4, pin_memory=True)
+                sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=False,num_workers=4, pin_memory=True)
                 
                 ###*************************************************** Continous Modelled Outcome ************************************************
                 
