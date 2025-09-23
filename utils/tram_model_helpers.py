@@ -280,7 +280,7 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
 
     Examples
     --------
-    >>> model = SomeTramModule(...)
+    >>> model = TramDag(...)
     >>> last_layer = init_last_layer_COLR_POLR(
     ...     model, node="y", configuration_dict=config, debug=True
     ... )
@@ -304,15 +304,49 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
         dtype='ordinal'
 
     DATA_PATH=os.path.join(configuration_dict['PATHS']['DATA_PATH'],configuration_dict['experiment_name']+'_train.csv')
-    thetas_R=fit_r_model_subprocess(node, dtype,theta_count, DATA_PATH, debug=debug)
+    thetas_R=fit_r_model_subprocess(node, dtype, theta_count, DATA_PATH, debug=debug)
     thetas_R=torch.tensor(thetas_R)
 
+
+
+
     if dtype=='continous':
-        theta_tilde=inverse_transform_intercepts_continous(thetas_R)
-    if dtype=='ordinal':
-        theta_tilde=inverse_transform_intercepts_ordinal(thetas_R)
-    
+        if debug:
+            print(f"[DEBUG] R-estimated thetas for node '{node}': {thetas_R.numpy()}")
+            print(f"[DEBUG] R-estimated thetas shape: {thetas_R.shape}")
+            print(f"[DEBUG] Expected number of thetas: {theta_count}")
+            print(f"[DEBUG] Last linear layer shape: {last_linear.weight.shape}")
+            print(f"[DEBUG] Inverse transforming thetas for continuous outcome...")
+        try:
+            theta_tilde=inverse_transform_intercepts_continous(thetas_R)
+        except Exception as e:
+            raise RuntimeError(f"Error in inverse_transform_intercepts_continous: {e}")
         
+        
+    if dtype == 'ordinal':
+        if debug:
+            print(f"[DEBUG] R-estimated thetas for node '{node}': {thetas_R.numpy()}")
+            print(f"[DEBUG] Expected number of thetas: {theta_count}")
+            print(f"[DEBUG] Last linear layer shape: {last_linear.weight.shape}")
+            print(f"[DEBUG] Inverse transforming thetas for ordinal outcome...")
+
+        try:
+            # Add -inf and +inf around thetas_R
+            int_out = torch.cat([
+                torch.full((1, 1), -float("inf"), dtype=thetas_R.dtype),
+                thetas_R.unsqueeze(0) if thetas_R.ndim == 1 else thetas_R,
+                torch.full((1, 1), float("inf"), dtype=thetas_R.dtype)
+            ], dim=1)
+
+            theta_tilde = inverse_transform_intercepts_ordinal(int_out)
+        except Exception as e:
+            raise RuntimeError(f"Error in inverse_transform_intercepts_ordinal: {e}")
+    
+    if debug:
+        print(f"[DEBUG] Transformed theta_tilde: {theta_tilde.numpy()}")
+        print(f"[DEBUG] Transformed theta_tilde shape: {theta_tilde.shape}")
+    
+    
     theta_tilde = torch.tensor(theta_tilde, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
 
     if theta_tilde.numel() != last_linear.out_features:
@@ -407,7 +441,7 @@ def get_fully_specified_tram_model(node: str, configuration_dict: dict, debug=Tr
         if is_outcome_modelled_continous(node,target_nodes):
             return default_number_thetas
         if is_outcome_modelled_ordinal(node,target_nodes):
-            return target_nodes['levels'] - 1 
+            return target_nodes[node]['levels'] - 1 
 
     # Compute number of input features for a given feature set
     def compute_n_features(feats, parents_datatype):

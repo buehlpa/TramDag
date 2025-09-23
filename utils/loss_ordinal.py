@@ -29,23 +29,28 @@ def inverse_transform_intercepts_ordinal(int_out: torch.Tensor, eps: float = 1e-
     Parameters
     ----------
     int_out : torch.Tensor
-        Tensor of shape (B, K+1) with -inf at [:,0] and +inf at [:,-1].
+        Tensor of shape (B, K+1) with -inf at [:,0] and +inf at [:,-1],
+        or shape (K+1,) for a single sample.
     eps : float, optional
         Small value to clamp diffs, avoids log(0) -> -inf.
 
     Returns
     -------
     int_in : torch.Tensor
-        Tensor of shape (B, K-1).
+        Tensor of shape (B, K-1) or (K-1,) if input was 1D.
     """
-    bs, Kp1 = int_out.shape
-    first = int_out[:, 1:2]
+    squeezed = False
+    if int_out.ndim == 1:
+        int_out = int_out.unsqueeze(0)  # make it (1, K+1)
+        squeezed = True
 
-    # Consecutive differences (skip -inf at [:,0] and +inf at [:,-1])
+    first = int_out[:, 1:2]
     diffs = int_out[:, 2:-1] - int_out[:, 1:-2]
     rest = torch.log(torch.clamp(diffs, min=eps))
 
-    return torch.cat([first, rest], dim=1)
+    out = torch.cat([first, rest], dim=1)
+    return out.squeeze(0) if squeezed else out
+
 
 def ontram_nll(outputs, targets):
     int_in = outputs['int_out']
