@@ -1,0 +1,44 @@
+{
+    "date_of_creation": "2025-09-23 07:40:12",
+    "experiment_name": "create_configration_test",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/create_configration_test",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/create_configration_test"
+    },
+    "data_type": {
+        "x1": "ordinal_Xn_Yo",
+        "x2": "ordinal_Xc_Yc",
+        "x3": "ordinal_Xn_Yc",
+        "x4": "continous"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "0",
+            "0",
+            "ci"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": null,
+    "seed": null,
+    "nodes": null
+}

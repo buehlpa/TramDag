@@ -665,6 +665,8 @@ def provide_latents_for_input_data(
     and return a DataFrame with columns [node, "_U"] aligned with base_df.
     """
     
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     target_nodes = configuration_dict["nodes"]
     if is_outcome_modelled_ordinal(node, target_nodes):
         raise ValueError("Not yet defined for ordinal target variables")
@@ -707,7 +709,7 @@ def provide_latents_for_input_data(
     return latents_df
 
 
-def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, train_df, verbose=False):
+def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbose=False):
 
     all_latents_dfs = []
 
@@ -722,7 +724,7 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, train_df, 
 
         # Build dataset and dataloader for this node
         node_dataset = GenericDataset(
-            train_df,
+            df,
             target_col=node,
             target_nodes=configuration_dict["nodes"]
         )
@@ -740,7 +742,7 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, train_df, 
             configuration_dict=configuration_dict,
             EXPERIMENT_DIR=EXPERIMENT_DIR,
             data_loader=node_loader,
-            base_df=train_df,
+            base_df=df,
             verbose=verbose
         )
 
