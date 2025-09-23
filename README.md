@@ -25,7 +25,7 @@ Original Paper with R Code: https://arxiv.org/abs/2503.16206
 Reproduced experiments from the orignal paper §Section 6.1 under /reproducing_tramdag_experiments
 
 
-### specify models
+# How to Use
 
 ## Encoding of Ordinal and Continuous Variables in TramDAG
 
@@ -66,6 +66,7 @@ The figure below shows an example where nodes `X1`–`X4` are **ordinal**, and `
 
 ---
 
+<img width="1637" height="997" alt="example _Xn_Yo" src="https://github.com/user-attachments/assets/93fada9c-cfcd-4507-b214-7f657c9b906d" />
 
 
 
