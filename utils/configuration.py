@@ -561,7 +561,7 @@ def write_nn_names_matrix_to_configuration(nn_names_matrix, CONF_DICT_PATH):
     
 
 
-def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals,levels_dict=None):  
+def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals=None, max_vals=None,levels_dict=None):  
     """
     Write the nodes information to the configuration dictionary.
     
@@ -572,12 +572,13 @@ def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals, max_vals,
         nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
         data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
         
-        configuration_dict = create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,levels_dict=levels_dict)
-        print(configuration_dict)
+        node_dict = create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals=min_vals, max_vals=max_vals,levels_dict=levels_dict)
+        print(node_dict)
         conf = load_configuration_dict(CONF_DICT_PATH)
-        conf['nodes'] = configuration_dict
+        conf['nodes'] = node_dict
     
         write_configuration_dict(conf, CONF_DICT_PATH)
+        
         
     except Exception as e:
         print("Failed to update configuration:", e)
@@ -688,26 +689,31 @@ def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,
         target_nodes[node]['Modelnr'] = i
         target_nodes[node]['data_type'] = data_type[node]
         
-        # write the levels of the ordinal outcome
-        if 'ordinal' in data_type[node]:
-            if levels_dict is None:
-                raise ValueError(
-                    "levels_dict must be provided for ordinal nodes; "
-                    "e.g. levels_dict={'x3': 3}"
-                )
-            if node not in levels_dict:
-                raise KeyError(
-                    f"levels_dict is missing an entry for node '{node}'. "
-                    f"Expected something like levels_dict['{node}'] = <num_levels>"
-                )
-            target_nodes[node]['levels'] = levels_dict[node]
+        
+        
+        if levels_dict is not None and node in levels_dict:
+            # write the levels of the ordinal outcome
+            if 'ordinal' in data_type[node]:
+                if levels_dict is None:
+                    raise ValueError(
+                        "levels_dict must be provided for ordinal nodes; "
+                        "e.g. levels_dict={'x3': 3}"
+                    )
+                if node not in levels_dict:
+                    raise KeyError(
+                        f"levels_dict is missing an entry for node '{node}'. "
+                        f"Expected something like levels_dict['{node}'] = <num_levels>"
+                    )
+                target_nodes[node]['levels'] = levels_dict[node]
     
         target_nodes[node]['node_type'] = "source" if node in sources else "sink" if node in sinks else "internal"
         target_nodes[node]['parents'] = parents
         target_nodes[node]['parents_datatype'] = {parent:data_type[parent] for parent in parents}
         target_nodes[node]['transformation_terms_in_h()'] = {parent: edge_labels[(parent, node)] for parent in parents if (parent, node) in edge_labels}
-        target_nodes[node]['min'] = min_vals.iloc[i].tolist()   
-        target_nodes[node]['max'] = max_vals.iloc[i].tolist()
+        
+        if min_vals is not None and max_vals is not None:
+            target_nodes[node]['min'] = min_vals.iloc[i].tolist()   
+            target_nodes[node]['max'] = max_vals.iloc[i].tolist()
 
         target_nodes[node]['batch_size'] = 512
         target_nodes[node]['epochs'] = 100
