@@ -10,22 +10,26 @@ Input: NumPy/Pandas data frames `df_train`, `df_val`.
 
 ### 1) Load or create config (typed; no I/O unless you call .save)
 ```python
-cfg = TramConfig.load("config.yaml") 
+cfg = TramConfig.load("config.json")  # which nodes are which type should be already known here 
 ```
 
 ### 2) Build dataset explicitly 
 ```python
-train = TramDataset.from_dataframe(df_train, cfg)
+train = TramDataset.from_dataframe(df_train, cfg) # first time data is introduced therefore write : levels, min max vals to the cfg when this function is called for trainset
 val   = TramDataset.from_dataframe(df_val,  cfg)
 ```
 
 ### 3) Build the TRAM‑DAG model from configuration
 ```python
-model = TramDAG.from_config(cfg)  # holds all node specs
+tramdag = TramDAG.from_config(cfg)  # holds all node specs
 ```
 
 ### 4) Train with an explicit trainer; returns history and best model
+
+
+
 ```python
+# here should be lists of hyperparams posisble since every model is trained indepentely
 trainer = Trainer(epochs=100, lr=1e-2, scheduler="cosine", device="auto")
 best_model, history = trainer.fit(model, train, val, callbacks=[])
 ```
