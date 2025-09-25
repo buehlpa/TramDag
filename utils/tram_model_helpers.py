@@ -225,7 +225,7 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
     return last_linear
 
 @torch.no_grad()
-def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dict,theta_count:int ,debug=False): # TEMPORRALY FUNCTION
+def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dict,theta_count:int ,debug=False): 
     """
     Initialize the last linear layer of a PyTorch module with intercept weights
     estimated from an equivalent R model (COLR for continuous, POLR for ordinal).
@@ -302,8 +302,17 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
         dtype='continous'
     if is_outcome_modelled_ordinal(node,target_nodes_dict):
         dtype='ordinal'
-
+        
+    ## TODO generalize the data loading path , or maybe  pass as argument to init_last_layer_COLR_POLR
+    
     DATA_PATH=os.path.join(configuration_dict['PATHS']['DATA_PATH'],configuration_dict['experiment_name']+'_train.csv')
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(
+            f"[ERROR] train_df does not exist.\n"
+            f"Please provide it under: {configuration_dict['PATHS']['DATA_PATH']}\n"
+            f"Expected filename: {configuration_dict['experiment_name'] + '_train.csv'}"
+        )
+    
     thetas_R=fit_r_model_subprocess(node, dtype, theta_count, DATA_PATH, debug=debug)
     thetas_R=torch.tensor(thetas_R)
 
