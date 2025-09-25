@@ -347,7 +347,8 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
         print(f"[DEBUG] Transformed theta_tilde shape: {theta_tilde.shape}")
     
     
-    theta_tilde = torch.tensor(theta_tilde, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+    # theta_tilde = torch.tensor(theta_tilde, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+    theta_tilde = theta_tilde.to(dtype=last_linear.weight.dtype,device=last_linear.weight.device)
 
     if theta_tilde.numel() != last_linear.out_features:
         raise ValueError(
