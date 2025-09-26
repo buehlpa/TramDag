@@ -390,7 +390,7 @@ def get_dataloader(
 
     if "debug" in kwargs:
         logger.warning( 
-            "' get_dataloader debug' argument is deprecated and ignored. "
+            " get_dataloader: 'debug' argument is deprecated and ignored. "
             "Use global logger.debug instead."
         )
 

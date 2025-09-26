@@ -26,6 +26,10 @@ class Logger:
         if self.debug:
             print(f"[DEBUG] {msg}")
 
+    def debug(self, msg: str):
+        if self.debug:
+            print(f"[DEBUG] {msg}")
+            
     def warning(self, msg: str):
         print(f"[WARNING] {msg}")
 
