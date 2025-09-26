@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 from utils.archive.configuration_old import *
 from utils.tram_models import *
 from utils.tram_model_helpers import *
-from utils.tram_data import *
+from archive.utils.tram_data import *
 from utils.loss_continous import *
 from utils.sampling_tram_data import *
 

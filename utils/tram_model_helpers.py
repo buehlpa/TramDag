@@ -287,7 +287,7 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
     >>> print(last_layer.weight)
     tensor([...])  # initialized intercept weights
     """
-    from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
+    from archive.utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
     target_nodes_dict=configuration_dict['nodes']
     
     last_linear = None
@@ -441,7 +441,7 @@ def get_fully_specified_tram_model(node: str, configuration_dict: dict, debug=Tr
     >>> print(tram_model)
     TramModel(intercept=..., shifts=[...])
     """
-    from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
+    from archive.utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
     
     target_nodes = configuration_dict['nodes']
     default_number_thetas = 20  # default for continuous outcomes
