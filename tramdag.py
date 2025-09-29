@@ -72,7 +72,7 @@ class TramDagConfig:
                 
                 
 import inspect
-from archive.utils.tram_data import GenericDataset
+from utils.tram_data import GenericDataset
 from torch.utils.data import Dataset, DataLoader
 
 class TramDagDataset(Dataset):
@@ -235,7 +235,7 @@ class TramDagDataset(Dataset):
                 
 
 from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
-from archive.utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag
+from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag
 from torch.optim import Adam
 import torch
 import os

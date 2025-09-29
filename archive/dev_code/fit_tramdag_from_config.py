@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from utils.configuration import *
 from utils.tram_models import *
 from utils.tram_model_helpers import *
-from archive.utils.tram_data import *
+from utils.tram_data import *
 from utils.loss_continous import *
 from utils.sampling_tram_data import *
 
