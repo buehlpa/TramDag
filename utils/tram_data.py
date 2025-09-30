@@ -104,6 +104,8 @@ class GenericDataset(Dataset):
         """
         # set kwargs to class attributes
         for k, v in kwargs.items():
+            if hasattr(self, k):  # optional safeguard
+                raise ValueError(f"{k} is already an explicit argument, pass it directly")
             setattr(self, k, v)
 
         
@@ -139,7 +141,7 @@ class GenericDataset(Dataset):
         self._check_ordinal_levels()
 
         if self.debug or self.verbose:
-            print(f"[INFO] ------ Initalized all attributes of Genericdataset V6------")
+            print(f"[INFO] ------ Initalized all attributes of Genericdataset ------")
             
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
@@ -512,6 +514,8 @@ def get_dataloader(
             target_nodes=target_nodes,
             transform=transform,
             return_intercept_shift=return_intercept_shift,
+            debug=debug,
+            verbose=verbose,
             **kwargs
         )
         train_loader = DataLoader(
@@ -531,8 +535,11 @@ def get_dataloader(
             target_nodes=target_nodes,
             transform=transform,
             return_intercept_shift=return_intercept_shift,
+            debug=debug,
+            verbose=verbose,
             **kwargs
         )
+        
         val_loader = DataLoader(
             val_ds,
             batch_size=batch_size,

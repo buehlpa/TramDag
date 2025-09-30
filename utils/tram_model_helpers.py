@@ -87,11 +87,11 @@ def preprocess_inputs(x, transformation_terms, device='cuda'):
                 shift_groups.append(current_group)
                 current_key = None
         else:
-            raise ValueError(f"Unknown transformation term: {term}")
+            raise ValueError(f"[ERROR] Unknown transformation term: {term}")
 
     # Intercept: should be exactly one group
     if len(int_tensors) == 0:
-        raise ValueError("No intercept tensors found!")
+        raise ValueError("[ERROR] No intercept tensors found!")
     int_inputs = torch.cat(
         [t.to(device, non_blocking=True).view(t.shape[0], -1) for t in int_tensors],
         dim=1
@@ -225,7 +225,7 @@ def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
     return last_linear
 
 @torch.no_grad()
-def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dict,theta_count:int ,debug=False): 
+def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dict,theta_count:int, debug=False,TRAIN_DATA_PATH): 
     """
     Initialize the last linear layer of a PyTorch module with intercept weights
     estimated from an equivalent R model (COLR for continuous, POLR for ordinal).
@@ -302,18 +302,16 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
         dtype='continous'
     if is_outcome_modelled_ordinal(node,target_nodes_dict):
         dtype='ordinal'
-        
-    ## TODO generalize the data loading path , or maybe  pass as argument to init_last_layer_COLR_POLR
+            
     
-    DATA_PATH=os.path.join(configuration_dict['PATHS']['DATA_PATH'],configuration_dict['experiment_name']+'_train.csv')
-    if not os.path.exists(DATA_PATH):
+    if not os.path.exists(TRAIN_DATA_PATH):
         raise FileNotFoundError(
             f"[ERROR] train_df does not exist.\n"
-            f"Please provide it under: {configuration_dict['PATHS']['DATA_PATH']}\n"
-            f"Expected filename: {configuration_dict['experiment_name'] + '_train.csv'}"
+            f"Please provide it under attribute: TRAIN_DATA_PATH= \n"
+            f"Expected type: {'*.csv'}"
         )
     
-    thetas_R=fit_r_model_subprocess(node, dtype, theta_count, DATA_PATH, debug=debug)
+    thetas_R=fit_r_model_subprocess(node, dtype, theta_count, TRAIN_DATA_PATH, debug=debug)
     thetas_R=torch.tensor(thetas_R)
 
 
