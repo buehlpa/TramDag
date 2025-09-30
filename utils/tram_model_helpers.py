@@ -583,16 +583,18 @@ def train_val_loop(
     save_linear_shifts: bool = False,
     verbose: bool = True,
     device: str = 'cpu',
-    debug: bool = False
+    debug: bool = False,
+    min_max=None,
 ):
     device = torch.device(device)
 
     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
     tram_model = tram_model.to(device)
 
-    min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
-    max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
-    min_max = torch.stack([min_vals, max_vals], dim=0)
+    if min_max is None:
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
 
     if debug:
         print("[DEBUG] Device:", device)

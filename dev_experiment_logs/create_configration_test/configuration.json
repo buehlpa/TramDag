@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-09-23 07:40:12",
+    "date_of_creation": "2025-09-30 08:29:13",
     "experiment_name": "create_configration_test",
     "PATHS": {
         "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/create_configration_test",
@@ -7,38 +7,80 @@
         "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/create_configration_test"
     },
     "data_type": {
-        "x1": "ordinal_Xn_Yo",
-        "x2": "ordinal_Xc_Yc",
-        "x3": "ordinal_Xn_Yc",
-        "x4": "continous"
+        "x1": "continous",
+        "x2": "continous",
+        "x3": "continous"
     },
     "adj_matrix": [
         [
             "0",
-            "0",
-            "0",
-            "ci"
+            "ls",
+            "0"
         ],
         [
             "0",
             "0",
-            "0",
-            "ls"
+            "0"
         ],
         [
-            "0",
-            "0",
-            "0",
-            "ls"
-        ],
-        [
-            "0",
             "0",
             "0",
             "0"
         ]
     ],
-    "model_names": null,
+    "model_names": [
+        [
+            "0",
+            "LinearShift",
+            "0"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
     "seed": null,
-    "nodes": null
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "continous",
+            "node_type": "sink",
+            "parents": [
+                "x1"
+            ],
+            "parents_datatype": {
+                "x1": "continous"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls"
+            },
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift"
+            }
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "transformation_term_nn_models_in_h()": {}
+        }
+    }
 }

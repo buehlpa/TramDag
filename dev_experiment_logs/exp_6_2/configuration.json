@@ -102,12 +102,7 @@
                 "x1": "ls",
                 "x2": "ls"
             },
-            "min": 0.0,
-            "max": 3.0,
-            "batch_size": 512,
-            "epochs": 100,
-            "learning_rate": 0.01,
-            "use_scheduler": false,
+
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
                 "x2": "LinearShift"
