@@ -78,6 +78,7 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMEN
                                             target_nodes=target_nodes,
                                             return_intercept_shift=True,
                                             return_y=False,
+                                            verbose=verbose,
                                             debug=debug)
         
         sample_loader = DataLoader(sample_dataset, batch_size=1, shuffle=True,num_workers=4, pin_memory=True)
@@ -433,6 +434,9 @@ def truncated_logistic_sample(n, low, high, device='cpu'):
         samples.extend(valid)
     return torch.tensor(samples, dtype=torch.float32).to(device)
 
+
+
+################################### SAMPLING HELPERS #####################################
 
         
 from utils.loss_ordinal import get_pdf_ordinal, get_cdf_ordinal

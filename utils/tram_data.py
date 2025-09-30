@@ -104,8 +104,8 @@ class GenericDataset(Dataset):
         """
         # set kwargs to class attributes
         for k, v in kwargs.items():
-            if hasattr(self, k):  # optional safeguard
-                raise ValueError(f"{k} is already an explicit argument, pass it directly")
+            if k in ["debug", "verbose"]:
+                raise ValueError(f"{k} is an explicit argument; pass it directly.")
             setattr(self, k, v)
 
         
@@ -488,26 +488,22 @@ def get_dataloader(
     batch_size=32,
     return_intercept_shift=False,
     transform=None,
-    **kwargs
+    debug=False,
+    verbose=False,
+    **kwargs,
 ):
     """
     Build train/val dataloaders for TRAM models.
     """
 
     if transform is None:
-        transform = transforms.Compose([
-            transforms.Resize((128, 128)),
-            transforms.ToTensor()
-        ])
-
-    debug = kwargs.get("debug", False)
-    verbose = kwargs.get("verbose", False)
+        transform = transforms.Compose([transforms.Resize((128, 128)), transforms.ToTensor()])
 
     train_loader, val_loader = None, None
 
     if train_df is not None:
-        if verbose:
-            print("Building training dataset...")
+        if verbose or debug:
+            print("[INFO] Building training dataset...")
         train_ds = GenericDataset(
             train_df,
             target_col=node,
@@ -516,18 +512,14 @@ def get_dataloader(
             return_intercept_shift=return_intercept_shift,
             debug=debug,
             verbose=verbose,
-            **kwargs
+            **kwargs,
         )
         train_loader = DataLoader(
-            train_ds,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=4,
-            pin_memory=True
+            train_ds, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True
         )
 
     if val_df is not None:
-        if verbose:
+        if verbose or debug:
             print("[INFO] Building validation dataset...")
         val_ds = GenericDataset(
             val_df,
@@ -537,23 +529,20 @@ def get_dataloader(
             return_intercept_shift=return_intercept_shift,
             debug=debug,
             verbose=verbose,
-            **kwargs
+            **kwargs,
         )
-        
         val_loader = DataLoader(
-            val_ds,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True
+            val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
         )
 
     if train_loader is None and val_loader is None:
         raise ValueError("Both train_df and val_df are None → no dataloaders created.")
 
-    if debug :
-        print("[DEBUG] get_dataloader finished. "
-              f"Train loader: {train_loader is not None}, "
-              f"Val loader: {val_loader is not None}")
+    if debug:
+        print(
+            "[DEBUG] get_dataloader finished. "
+            f"Train loader: {train_loader is not None}, "
+            f"Val loader: {val_loader is not None}"
+        )
 
     return train_loader, val_loader

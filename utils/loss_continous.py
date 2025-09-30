@@ -146,7 +146,6 @@ def bernstein_basis(tensor, M):
     return torch.exp(log_bernstein)
 
 
-
 def h_dag(targets: torch.Tensor, thetas: torch.Tensor) -> torch.Tensor:
     """
     Args:
@@ -218,7 +217,6 @@ def h_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_
 
 
 ## sampling
-import torch
 
 def h_dash_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
     """
@@ -338,9 +336,6 @@ def h_extrapolated_with_shift(
     h = torch.where(mask_mid, h_center, h)
 
     return h.squeeze(-1)
-
-
-
 
 
 
@@ -476,8 +471,6 @@ def bisection_root_finder(f, low, high, max_iter=1000, tol=1e-7):
             break
 
     return (low + high) / 2.0
-
-
 
 
 

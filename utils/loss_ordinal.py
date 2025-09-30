@@ -88,8 +88,6 @@ def ontram_nll(outputs, targets):
     return nll
 
 
-
-
 def get_cdf_ordinal(outputs):
     """"
     Get cumulative distribution function

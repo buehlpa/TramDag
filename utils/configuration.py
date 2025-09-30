@@ -560,7 +560,6 @@ def write_nn_names_matrix_to_configuration(nn_names_matrix, CONF_DICT_PATH):
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
     
 
-
 def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals=None, max_vals=None,levels_dict=None):  
     """
     Write the nodes information to the configuration dictionary.
@@ -633,7 +632,6 @@ def create_levels_dict(df: pd.DataFrame, data_type: dict):
             )
 
     return levels_dict
-
 
 
 def check_ordinal_variable_values(df, var):
@@ -815,10 +813,6 @@ def create_nn_model_names(adj_matrix, data_type):
 
     return nn_names_matrix
 
-
-
-## Adjcency matrix funcions
-import re
 
 def is_valid_column(col, col_idx):
     ci_pattern = re.compile(r"^ci(\d+)$")
