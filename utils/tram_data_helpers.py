@@ -544,7 +544,7 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
 
 
 
-def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample,device, debug=False):
+def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample,device, debug=False,minmax_dict=None):
     number_of_samples = len(latent_sample)
     output_list = []
     tram_model.eval()
@@ -602,14 +602,20 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
     low = torch.full((number_of_samples,), -1e5, device=device)
     high = torch.full((number_of_samples,), 1e5, device=device)
 
-    try:
-        min_vals = torch.tensor(target_nodes_dict[node]['min'], dtype=torch.float32).to(device)
-        max_vals = torch.tensor(target_nodes_dict[node]['max'], dtype=torch.float32).to(device)
-    except KeyError as e:
-        raise KeyError(f"Missing 'min' or 'max' value in target_nodes_dict for node '{node}': {e}")
+    if minmax_dict is not None:
+        try:
+            min_vals = torch.tensor(target_nodes_dict[node]['min'], dtype=torch.float32).to(device)
+            max_vals = torch.tensor(target_nodes_dict[node]['max'], dtype=torch.float32).to(device)
+        except KeyError as e:
+            raise KeyError(f"Missing 'min' or 'max' value in target_nodes_dict for node '{node}': {e}")
+        
+        min_max = torch.stack([min_vals, max_vals], dim=0)
 
-    min_max = torch.stack([min_vals, max_vals], dim=0)
-
+    else:
+            min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32, device=device)
+            max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32, device=device)
+            min_max = torch.stack([min_vals, max_vals], dim=0)
+    
     # Vectorized root-finding function
     def f_vectorized(targets):
         return vectorized_object_function(
@@ -771,7 +777,8 @@ def sample_full_dag(configuration_dict,
                     batch_size: int = 32,
                     delete_all_previously_sampled: bool = True,
                     verbose: bool = True,
-                    debug: bool = False):
+                    debug: bool = False,
+                    minmax_dict=None):
     """
     Sample values for all nodes in a DAG given trained TRAM models, respecting
     parental ordering. Supports both generative sampling (new U's) and
@@ -943,7 +950,7 @@ def sample_full_dag(configuration_dict,
                 
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
-                tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=True).to(device)
+                tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=debug).to(device)
                 tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
                 
                 # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
@@ -960,7 +967,7 @@ def sample_full_dag(configuration_dict,
                 ###*************************************************** Continous Modelled Outcome ************************************************
                 
                 if is_outcome_modelled_continous(node,target_nodes_dict):
-                    sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample,device=device, debug=debug)
+                    sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample,device=device, debug=debug,minmax_dict=minmax_dict)
                     
                 ###*************************************************** Ordinal Modelled Outcome ************************************************
                 
