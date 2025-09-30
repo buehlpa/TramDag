@@ -15,7 +15,6 @@ import shutil
 from scipy.stats import logistic, kstest, anderson, probplot
 
 
-
 # Time decorator
 def timeit(name=None):
     def decorator(func):
@@ -29,6 +28,185 @@ def timeit(name=None):
             return result
         return wrapper
     return decorator
+
+################################################ Model Construction #####################################
+
+def get_fully_specified_tram_model(
+    node: str,
+    configuration_dict: dict,
+    set_initial_weights: bool = False,
+    TRAIN_DATA_PATH: str = None,
+    verbose: bool = True,
+    debug: bool = False
+    ) -> TramModel:
+    """
+    Construct and return a fully specified TramModel for a given node based on
+    its configuration (ordinal or continuous outcome) and parent inputs.
+
+    This function:
+    - Analyzes the metadata of the target node and its parents.
+    - Builds an intercept network (handling ordinal or continuous cases).
+    - Builds shift networks for covariate-dependent terms.
+    - Optionally initializes the intercept network with R-based intercept
+      estimates (via COLR/POLR).
+    - Returns the combined TramModel consisting of intercept and shift parts.
+
+    Parameters
+    ----------
+    node : str
+        The target node for which the TramModel is constructed.
+    configuration_dict : dict
+        Dictionary describing all nodes and their metadata. Expected to contain:
+        - 'nodes': dict mapping node names to metadata, including:
+            - 'data_type': str (e.g., 'ordinal_yo', 'continuous')
+            - 'levels': int (for ordinal variables)
+            - 'parents_datatype': dict mapping parent names to data types
+    set_initial_weights : bool, optional (default=False)
+        If True, initializes the intercept model with increasing weights based
+        on COLR/POLR fits obtained from R. Requires `TRAIN_DATA_PATH`.
+    TRAIN_DATA_PATH : str, optional
+        Path to the training dataset CSV file. Must be provided if
+        `set_initial_weights=True`. Ignored otherwise.
+    verbose : bool, optional (default=True)
+        If True, prints high-level information about the model construction.
+    debug : bool, optional (default=False)
+        If True, prints detailed debug information during model construction and
+        initialization.
+
+    Returns
+    -------
+    TramModel
+        A fully specified TramModel object with:
+        - Intercept component (SimpleIntercept or a learned intercept network).
+        - Shift components (one per parent group).
+
+    Raises
+    ------
+    ValueError
+        - If multiple complex intercept groups are detected.
+        - If `set_initial_weights=True` but `TRAIN_DATA_PATH` is not provided.
+        - If an unknown data type is encountered.
+    RuntimeError
+        If initialization via COLR/POLR fails.
+    FileNotFoundError
+        If the training data file does not exist at `TRAIN_DATA_PATH`.
+
+    Notes
+    -----
+    - Ordinal outcomes use (levels - 1) thetas.
+    - Continuous outcomes default to 20 thetas unless otherwise specified.
+    - Intercept and shift networks are grouped by transformation prefixes
+      (ci/si for intercepts, cs/ls for shifts).
+    - Initialization requires R with the `tram` package if
+      `set_initial_weights=True`.
+
+    Examples
+    --------
+    >>> tram_model = get_fully_specified_tram_model(
+    ...     node="y",
+    ...     configuration_dict=config,
+    ...     set_initial_weights=True,
+    ...     TRAIN_DATA_PATH="data/train.csv",
+    ...     debug=True
+    ... )
+    >>> print(tram_model)
+    TramModel(intercept=..., shifts=[...])
+    """
+    
+    
+    
+    from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
+    
+    target_nodes = configuration_dict['nodes']
+    default_number_thetas = 20  # default for continuous outcomes
+
+    if debug:
+        print(f"[DEBUG] default_number_thetas for continuous outcomes: {default_number_thetas}")
+
+        
+    # Determine number of thetas
+    def compute_n_thetas(node, target_nodes: dict):
+        if is_outcome_modelled_continous(node,target_nodes):
+            return default_number_thetas
+        if is_outcome_modelled_ordinal(node,target_nodes):
+            return target_nodes[node]['levels'] - 1 
+
+    # Compute number of input features for a given feature set
+    def compute_n_features(feats, parents_datatype):
+        n_features = 0
+        for parent_name, _ in feats:
+            parent_dt = parents_datatype[parent_name]
+            if 'xn' in parent_dt.lower():
+                n_features += target_nodes[parent_name]['levels']
+            else:
+                n_features += 1
+        return n_features
+
+    # Gather transformation terms and model class names
+    _, terms_dict, model_names_dict = ordered_parents(node, target_nodes)
+    model_dict = merge_transformation_dicts(terms_dict, model_names_dict)
+
+    # Split into intercept and shift components by h_term prefixes
+    intercepts_dict = {
+        k: v for k, v in model_dict.items()
+        if any(pref in v['h_term'] for pref in ("ci", "si"))
+    }
+    shifts_dict = {
+        k: v for k, v in model_dict.items()
+        if not any(pref in v['h_term'] for pref in ("ci", "si"))
+    }
+
+    # Build intercept network
+    intercept_groups = group_by_base(intercepts_dict, prefixes=("ci", "si"))
+    
+    # Use specified thetas or default for continuous
+    n_thetas = compute_n_thetas(node, target_nodes)
+    
+    if intercept_groups:
+        if len(intercept_groups) > 1:
+            raise ValueError("Multiple complex intercept groups detected; only one is supported.")
+        feats = next(iter(intercept_groups.values()))
+        cls_name = feats[0][1]['class_name']
+        base_cls = get_base_model_class(cls_name)
+
+        n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
+        nn_int = globals()[base_cls](n_features=n_features, n_thetas=n_thetas)
+    else:
+        nn_int = SimpleIntercept(n_thetas=n_thetas) 
+        
+    # set initial weights to be increasing for Intercept Model
+    if set_initial_weights and nn_int is not None:
+
+        if TRAIN_DATA_PATH is None:
+            raise ValueError(
+                "TRAIN_DATA_PATH must be provided when set_initial_weights=True"
+            )
+        # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
+        # init_last_layer_hardcoded(nn_int)
+
+        init_last_layer_COLR_POLR(
+            nn_int,
+            node,
+            configuration_dict,
+            n_thetas,
+            TRAIN_DATA_PATH=TRAIN_DATA_PATH,
+            debug=debug
+        )
+        if debug or verbose:
+            print(f"[INFO] Initialized intercept model with preinitialized weights: {nn_int}")
+
+    # Build shift networks
+    shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
+    nn_shifts = []
+    for feats in shift_groups.values():
+        cls_name = feats[0][1]['class_name']
+        base_cls = get_base_model_class(cls_name)
+        n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
+        nn_shifts.append(globals()[base_cls](n_features=n_features))
+
+    # Combine into final TramModel
+    tram_model = TramModel(nn_int, nn_shifts)
+    return tram_model
 
 
 def preprocess_inputs(x, transformation_terms, device='cuda'):
@@ -146,143 +324,83 @@ def group_by_base(term_dict, prefixes):
     return groups
 
 @torch.no_grad()
-def init_last_layer_increasing(module: nn.Module, start: float = -2.0, end: float = 2.0):
-    """
-    Initialize the weights of the last nn.Linear in `module` so that the outputs
-    are linearly increasing between [start, end].
-
-    Assumes the last layer is nn.Linear with shape (n_thetas, in_features).
-    """
-    # Find last Linear layer
-    last_linear = None
-    for m in reversed(list(module.modules())):
-        if isinstance(m, nn.Linear):
-            last_linear = m
-            break
-    if last_linear is None:
-        raise ValueError("No nn.Linear layer found in module.")
-
-    n_thetas = last_linear.out_features
-    in_features = last_linear.in_features
-
-    # Desired increasing values
-    values = torch.linspace(start, end, steps=n_thetas)
-
-    # If in_features > 1, just repeat values / distribute across input dims
-    w = torch.zeros((n_thetas, in_features))
-    w[:, 0] = values  # put increasing sequence in first input channel
-
-    last_linear.weight.copy_(w)
-
-    if last_linear.bias is not None:
-        last_linear.bias.zero_()  # optional: reset bias to 0
-
-    return last_linear
-
-@torch.no_grad()
-def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
-    """
-    Initialize the weights of the last nn.Linear in `module`
-    with a fixed hardcoded vector (theta_tilde).
-    """
-    last_linear = None
-    for m in reversed(list(module.modules())):
-        if isinstance(m, nn.Linear):
-            last_linear = m
-            break
-    if last_linear is None:
-        raise ValueError("No nn.Linear layer found in module.")
-
-
-    ###########################EXAMPLE HARDCODED ONLY EXPERIMENTAL MUST BE REMOVE OR CLCULCATED BY A POLR / COLR BEFOREHAND FOR THE VARS##########################
-    # hardcoded = torch.tensor(    ############## <- this stems from inverser transform of COlr thetas for the weights inint experiment in R TEM
-    #      [  4.8985,  -0.2014,  -1.0680, -17.7275,   0.5565,  -1.6440, -17.7275,
-    #     -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
-    #     -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
-    
-    # TODO get thetas from : thetas=fit_r_model_subprocess(target, dtype, data_path,verbose=False)
-
-    hardcoded = torch.tensor([-2.0079,  0.8893, -0.5046], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
-    ############################################################################################
-
-    if hardcoded.numel() != last_linear.out_features:
-        raise ValueError(
-            f"Hardcoded vector has {hardcoded.numel()} elements, "
-            f"but last layer expects {last_linear.out_features}"
-        )
-
-    # Expand to (out_features, in_features)
-    w = torch.zeros((last_linear.out_features, last_linear.in_features),
-                    dtype=last_linear.weight.dtype,
-                    device=last_linear.weight.device)
-    w[:, 0] = hardcoded  # fill the first input channel
-
-    # Copy into the model
-    last_linear.weight.copy_(w)
-    if last_linear.bias is not None:
-        last_linear.bias.zero_()
-
-    return last_linear
-
-@torch.no_grad()
-def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dict,theta_count:int, debug=False,TRAIN_DATA_PATH): 
+def init_last_layer_COLR_POLR(
+    module: nn.Module,
+    node: str,
+    configuration_dict: dict,
+    theta_count: int,
+    TRAIN_DATA_PATH: str,
+    debug: bool = False,
+):
     """
     Initialize the last linear layer of a PyTorch module with intercept weights
-    estimated from an equivalent R model (COLR for continuous, POLR for ordinal).
+    estimated from an equivalent R model (COLR for continuous outcomes, POLR for ordinal outcomes).
 
     This function:
-    - Locates the final `nn.Linear` layer in the given module.
-    - Determines whether the target node is continuous or ordinal.
-    - Uses `fit_r_model_subprocess` to fit an R model on the training data and
-      extract intercept estimates.
-    - Applies an inverse transform to convert R thetas from COLR / POLR  to theta_tilde .
-    - Sets the weights of the last linear layer so that its first input channel
-      encodes these intercepts, with all other inputs initialized to zero.
-    - Resets the bias term to zero if present.
+    - Finds the last `nn.Linear` layer in the given module.
+    - Determines the target type (continuous vs. ordinal) from the configuration.
+    - Runs an R subprocess to fit a COLR or POLR model and extract intercepts.
+    - Applies the appropriate inverse transformation to convert R-estimated thetas
+      into theta_tilde values compatible with TRAM models.
+    - Initializes the last linear layer such that:
+        * The first input channel encodes the transformed intercepts.
+        * All other input channels are zero-initialized.
+        * Bias is reset to zero (if present).
 
     Parameters
     ----------
     module : nn.Module
         PyTorch module containing at least one `nn.Linear` layer.
-        The last such layer will be initialized.
+        The last linear layer will be initialized.
     node : str
-        Name of the target node to model (must exist in `configuration_dict['nodes']`).
+        Target node name (must exist in `configuration_dict['nodes']`).
     configuration_dict : dict
         Experiment configuration dictionary. Must contain:
-        - 'nodes': dict with metadata for each node, including its data type.
-        - 'PATHS': dict with a 'DATA_PATH' entry pointing to the dataset folder.
-        - 'experiment_name': str, used to resolve the training CSV path.
+        - 'nodes': dict mapping node names → metadata (including data types).
+        - 'PATHS': dict with dataset paths.
+        - 'experiment_name': str, used to resolve dataset file paths.
+    theta_count : int
+        Expected number of intercepts (thetas) for the outcome.
     debug : bool, optional (default=False)
         If True, prints debug information from the R subprocess and
-        initialization process.
+        initialization steps.
+    TRAIN_DATA_PATH : str, optional
+        Path to the training dataset CSV file. Must exist.
 
     Returns
     -------
     nn.Linear
-        The initialized last linear layer of the module.
+        The initialized last linear layer.
 
     Raises
     ------
     ValueError
         - If no `nn.Linear` layer is found in the module.
-        - If the number of intercepts from R does not match the output
-          dimension of the last linear layer.
+        - If the number of transformed intercepts does not match
+          the output dimension of the last linear layer.
+    FileNotFoundError
+        If the training data file does not exist at `TRAIN_DATA_PATH`.
     RuntimeError
-        If the R subprocess fails to execute or produces invalid output.
+        If the R subprocess or the inverse transformation fails.
 
     Notes
     -----
-    - Continuous targets are handled via COLR, ordinal targets via POLR.
-    - Requires R with `MASS`, `tram`, and `readr` installed and available via `Rscript`.
-    - Initialization only affects the **first input channel** of the last
-      linear layer; all other inputs are zeroed.
-    - Bias is reset to zero to enforce clean initialization.
+    - Continuous targets use COLR + `inverse_transform_intercepts_continous`.
+    - Ordinal targets use POLR + `inverse_transform_intercepts_ordinal`
+      (with `-inf` and `+inf` padding).
+    - Requires R with `MASS`, `tram`, and `readr` installed and callable
+      via `Rscript`.
 
     Examples
     --------
     >>> model = TramDag(...)
     >>> last_layer = init_last_layer_COLR_POLR(
-    ...     model, node="y", configuration_dict=config, debug=True
+    ...     model,
+    ...     node="y",
+    ...     configuration_dict=config,
+    ...     theta_count=3,
+    ...     TRAIN_DATA_PATH="data/train.csv",
+    ...     debug=True
     ... )
     >>> print(last_layer.weight)
     tensor([...])  # initialized intercept weights
@@ -313,7 +431,6 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
     
     thetas_R=fit_r_model_subprocess(node, dtype, theta_count, TRAIN_DATA_PATH, debug=debug)
     thetas_R=torch.tensor(thetas_R)
-
 
 
 
@@ -376,147 +493,6 @@ def init_last_layer_COLR_POLR(module: nn.Module,node:str, configuration_dict:dic
 
     return last_linear
 
-def get_fully_specified_tram_model(node: str, configuration_dict: dict, debug=True, set_initial_weights=False) -> TramModel:
-    """
-    Construct and return a fully specified TramModel for a given node based on
-    its configuration (ordinal or continuous outcome) and parent inputs.
-
-    This function:
-    - Analyzes the metadata of the target node and its parents.
-    - Builds an intercept network (handling ordinal or continuous cases).
-    - Builds shift networks for covariate-dependent terms.
-    - Optionally initializes the intercept network with increasing weights
-      using R-based estimates (via COLR/POLR).
-    - Returns the combined TramModel consisting of intercept and shift parts.
-
-    Parameters
-    ----------
-    node : str
-        The target node for which the TramModel is constructed.
-    configuration_dict : dict
-        Dictionary describing all nodes and their metadata. Expected to contain:
-        - 'nodes': dict mapping node names to metadata, including:
-            - 'data_type': str (e.g., 'ordinal_yo', 'continuous')
-            - 'levels': int (for ordinal variables)
-            - 'parents_datatype': dict mapping parent names to data types
-    debug : bool, optional (default=True)
-        If True, prints debug information during model construction and
-        initialization.
-    set_initial_weights : bool, optional (default=False)
-        If True, initializes the intercept model with increasing weights based
-        on COLR/POLR fits obtained from R.
-
-    Returns
-    -------
-    TramModel
-        A fully specified TramModel object with:
-        - Intercept component (SimpleIntercept or a learned intercept network).
-        - Shift components (one per parent group).
-
-    Raises
-    ------
-    ValueError
-        If multiple complex intercept groups are detected, or if an unknown
-        data type is encountered.
-
-    Notes
-    -----
-    - Ordinal outcomes use (levels - 1) thetas.
-    - Continuous outcomes default to 20 thetas unless otherwise specified.
-    - Intercept and shift networks are grouped by transformation prefixes
-      (ci/si for intercepts, cs/ls for shifts).
-    - Initialization requires R and the 'tram' package if
-      `set_initial_weights=True`.
-
-    Examples
-    --------
-    >>> tram_model = get_fully_specified_tram_model(
-    ...     node="y",
-    ...     configuration_dict=config,
-    ...     debug=True,
-    ...     set_initial_weights=True
-    ... )
-    >>> print(tram_model)
-    TramModel(intercept=..., shifts=[...])
-    """
-    from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
-    
-    target_nodes = configuration_dict['nodes']
-    default_number_thetas = 20  # default for continuous outcomes
-
-    # Determine number of thetas
-    def compute_n_thetas(node, target_nodes: dict):
-        if is_outcome_modelled_continous(node,target_nodes):
-            return default_number_thetas
-        if is_outcome_modelled_ordinal(node,target_nodes):
-            return target_nodes[node]['levels'] - 1 
-
-    # Compute number of input features for a given feature set
-    def compute_n_features(feats, parents_datatype):
-        n_features = 0
-        for parent_name, _ in feats:
-            parent_dt = parents_datatype[parent_name]
-            if 'xn' in parent_dt.lower():
-                n_features += target_nodes[parent_name]['levels']
-            else:
-                n_features += 1
-        return n_features
-
-    # Gather transformation terms and model class names
-    _, terms_dict, model_names_dict = ordered_parents(node, target_nodes)
-    model_dict = merge_transformation_dicts(terms_dict, model_names_dict)
-
-    # Split into intercept and shift components by h_term prefixes
-    intercepts_dict = {
-        k: v for k, v in model_dict.items()
-        if any(pref in v['h_term'] for pref in ("ci", "si"))
-    }
-    shifts_dict = {
-        k: v for k, v in model_dict.items()
-        if not any(pref in v['h_term'] for pref in ("ci", "si"))
-    }
-
-    # Build intercept network
-    intercept_groups = group_by_base(intercepts_dict, prefixes=("ci", "si"))
-    
-    # Use specified thetas or default for continuous
-    n_thetas = compute_n_thetas(node, target_nodes)
-    
-    if intercept_groups:
-        if len(intercept_groups) > 1:
-            raise ValueError("Multiple complex intercept groups detected; only one is supported.")
-        feats = next(iter(intercept_groups.values()))
-        cls_name = feats[0][1]['class_name']
-        base_cls = get_base_model_class(cls_name)
-
-        n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
-        nn_int = globals()[base_cls](n_features=n_features, n_thetas=n_thetas)
-    else:
-        nn_int = SimpleIntercept(n_thetas=n_thetas) 
-        
-    # set initial weights to be increasing for Intercept Model
-    if set_initial_weights and nn_int is not None:
-        # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
-        # init_last_layer_hardcoded(nn_int)
-        
-        init_last_layer_COLR_POLR(nn_int,node,configuration_dict,n_thetas,debug=debug)
-        if debug:
-            print(f"[INFO] Initialized intercept model with preinitialized weights: {nn_int}")
-
-    # Build shift networks
-    shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
-    nn_shifts = []
-    for feats in shift_groups.values():
-        cls_name = feats[0][1]['class_name']
-        base_cls = get_base_model_class(cls_name)
-        n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
-        nn_shifts.append(globals()[base_cls](n_features=n_features))
-
-    # Combine into final TramModel
-    tram_model = TramModel(nn_int, nn_shifts)
-    return tram_model
-
-
 def ordered_parents(node, conf_dict) -> dict:
     
     """
@@ -556,59 +532,7 @@ def ordered_parents(node, conf_dict) -> dict:
 
     return ordered_parents_datatype, ordered_transformation_terms_in_h, ordered_transformation_term_nn_models_in_h
 
-
-# print training history
-def load_history(node, experiment_dir):
-    node_dir = os.path.join(experiment_dir, node)
-    train_hist_path = os.path.join(node_dir, "train_loss_hist.json")
-    val_hist_path = os.path.join(node_dir, "val_loss_hist.json")
-
-    if os.path.exists(train_hist_path) and os.path.exists(val_hist_path):
-        with open(train_hist_path, 'r') as f:
-            train_loss_hist = json.load(f)
-        with open(val_hist_path, 'r') as f:
-            val_loss_hist = json.load(f)
-        return train_loss_hist, val_loss_hist
-    else:
-        return None, None
-
-def show_training_history(conf_dict,EXPERIMENT_DIR):
-    plt.figure(figsize=(14, 12))
-    # --- Full history (top plot) ---
-    plt.subplot(2, 1, 1)
-    for node in conf_dict:
-        train_hist, val_hist = load_history(node, EXPERIMENT_DIR)
-        if train_hist is None or val_hist is None:
-            print(f"No history found for node: {node}")
-            continue
-        epochs = range(1, len(train_hist) + 1)
-        plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
-        plt.plot(epochs, val_hist, label=f"{node} - val")
-    plt.title("Training and Validation NLL Across Nodes - Full History")
-    plt.xlabel("Epoch")
-    plt.ylabel("NLL")
-    plt.legend()
-    plt.grid(True)
-
-    # --- Last 10% of epochs (bottom plot) ---
-    plt.subplot(2, 1, 2)
-    for node in conf_dict:
-        train_hist, val_hist = load_history(node, EXPERIMENT_DIR)
-        if train_hist is None or val_hist is None:
-            continue
-        total_epochs = len(train_hist)
-        start_idx = int(total_epochs * 0.9)
-        epochs = range(start_idx + 1, total_epochs + 1)
-        plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
-        plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
-    plt.title("Training and Validation NLL - Last 10% of Epochs")
-    plt.xlabel("Epoch")
-    plt.ylabel("NLL")
-    plt.legend()
-    plt.grid(True)
-
-    plt.tight_layout()
-    plt.show()
+######################################### Model Training #####################################
 
 def model_train_val_paths(NODE_DIR):
     MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
@@ -657,7 +581,7 @@ def train_val_loop(
     use_scheduler: bool,
     scheduler: torch.optim.lr_scheduler._LRScheduler = None,
     save_linear_shifts: bool = False,
-    verbose: int = 1,
+    verbose: bool = True,
     device: str = 'cpu',
     debug: bool = False
 ):
@@ -676,8 +600,8 @@ def train_val_loop(
         print("[DEBUG] min_max shape:", min_max.shape)
 
     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
-        if verbose:
-            print("Existing model found. Loading weights and history...")
+        if verbose or debug:
+            print("[INFO] Existing model found. Loading weights and history...")
         tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
         with open(TRAIN_HIST_PATH, 'r') as f:
             train_loss_hist = json.load(f)
@@ -686,8 +610,8 @@ def train_val_loop(
         start_epoch = len(train_loss_hist)
         best_val_loss = min(val_loss_hist)
     else:
-        if verbose:
-            print("No existing model found. Starting fresh...")
+        if verbose or debug :
+            print("[INFO] No existing model found. Starting fresh...")
         train_loss_hist, val_loss_hist = [], []
         start_epoch = 0
         best_val_loss = float('inf')
@@ -782,152 +706,59 @@ def train_val_loop(
                 f"[Train: {train_time:.2f}s  Val: {val_time:.2f}s  Total: {total_time:.2f}s]"
             )
 
-# def train_val_loop(
-#     node,
-#     target_nodes,
-#     NODE_DIR,
-#     tram_model: torch.nn.Module,
-#     train_loader: torch.utils.data.DataLoader,
-#     val_loader: torch.utils.data.DataLoader,
-#     epochs: int,
-#     optimizer: torch.optim.Optimizer,
-#     use_scheduler: bool,
-#     scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-#     save_linear_shifts: bool = False,
-#     verbose: int = 1,
-#     device: str = 'cpu'
-# ):
-#     # Resolve device
-#     device = torch.device(device)
-#     # Paths for saving
-#     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = \
-#         model_train_val_paths(NODE_DIR)
 
-#     # Move model (and any existing params) onto device immediately
-#     tram_model = tram_model.to(device)
+# print training history
+def load_history(node, experiment_dir):
+    node_dir = os.path.join(experiment_dir, node)
+    train_hist_path = os.path.join(node_dir, "train_loss_hist.json")
+    val_hist_path = os.path.join(node_dir, "val_loss_hist.json")
 
-#     # Prepare min/max tensors for contram scaling
-#     min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
-#     max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
-#     min_max = torch.stack([min_vals, max_vals], dim=0)
+    if os.path.exists(train_hist_path) and os.path.exists(val_hist_path):
+        with open(train_hist_path, 'r') as f:
+            train_loss_hist = json.load(f)
+        with open(val_hist_path, 'r') as f:
+            val_loss_hist = json.load(f)
+        return train_loss_hist, val_loss_hist
+    else:
+        return None, None
 
-#     # Load old training state if it exists
-#     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
-#         if verbose:
-#             print("Existing model found. Loading weights and history...")
-#         tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-#         with open(TRAIN_HIST_PATH, 'r') as f:
-#             train_loss_hist = json.load(f)
-#         with open(VAL_HIST_PATH, 'r') as f:
-#             val_loss_hist = json.load(f)
-#         start_epoch = len(train_loss_hist)
-#         best_val_loss = min(val_loss_hist)
-#     else:
-#         if verbose:
-#             print("No existing model found. Starting fresh...")
-#         train_loss_hist, val_loss_hist = [], []
-#         start_epoch = 0
-#         best_val_loss = float('inf')
+def show_training_history(conf_dict,EXPERIMENT_DIR):
+    plt.figure(figsize=(14, 12))
+    # --- Full history (top plot) ---
+    plt.subplot(2, 1, 1)
+    for node in conf_dict:
+        train_hist, val_hist = load_history(node, EXPERIMENT_DIR)
+        if train_hist is None or val_hist is None:
+            print(f"No history found for node: {node}")
+            continue
+        epochs = range(1, len(train_hist) + 1)
+        plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
+        plt.plot(epochs, val_hist, label=f"{node} - val")
+    plt.title("Training and Validation NLL Across Nodes - Full History")
+    plt.xlabel("Epoch")
+    plt.ylabel("NLL")
+    plt.legend()
+    plt.grid(True)
 
-#     # Main loop
-#     for epoch in range(start_epoch, epochs):
-#         epoch_start = time.time()
+    # --- Last 10% of epochs (bottom plot) ---
+    plt.subplot(2, 1, 2)
+    for node in conf_dict:
+        train_hist, val_hist = load_history(node, EXPERIMENT_DIR)
+        if train_hist is None or val_hist is None:
+            continue
+        total_epochs = len(train_hist)
+        start_idx = int(total_epochs * 0.9)
+        epochs = range(start_idx + 1, total_epochs + 1)
+        plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
+        plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
+    plt.title("Training and Validation NLL - Last 10% of Epochs")
+    plt.xlabel("Epoch")
+    plt.ylabel("NLL")
+    plt.legend()
+    plt.grid(True)
 
-#         # --- Training ---
-#         tram_model.train()
-#         train_loss = 0.0
-#         train_start = time.time()
-#         for (int_input, shift_list), y in train_loader:
-#             # Move everything to device
-#             int_input = int_input.to(device)
-#             shift_list = [s.to(device) for s in shift_list]
-#             y = y.to(device)
-
-#             optimizer.zero_grad()
-#             y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-
-#             if 'yo' in target_nodes[node]['data_type'].lower():
-#                 loss = ontram_nll(y_pred, y)
-#             else:
-#                 loss = contram_nll(y_pred, y, min_max=min_max)
-
-#             loss.backward()
-#             optimizer.step()
-#             train_loss += loss.item()
-
-#         if use_scheduler and scheduler is not None:
-#             scheduler.step()
-
-#         avg_train_loss = train_loss / len(train_loader)
-#         train_loss_hist.append(avg_train_loss)
-#         train_time = time.time() - train_start
-
-#         # --- Validation ---
-#         tram_model.eval()
-#         val_loss = 0.0
-#         val_start = time.time()
-#         with torch.no_grad():
-#             for (int_input, shift_list), y in val_loader:
-#                 int_input = int_input.to(device)
-#                 shift_list = [s.to(device) for s in shift_list]
-#                 y = y.to(device)
-
-#                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-#                 if 'yo' in target_nodes[node]['data_type'].lower():
-#                     loss = ontram_nll(y_pred, y)
-#                 else:
-#                     loss = contram_nll(y_pred, y, min_max=min_max)
-#                 val_loss += loss.item()
-
-#         avg_val_loss = val_loss / len(val_loader)
-#         val_loss_hist.append(avg_val_loss)
-#         val_time = time.time() - val_start
-
-#         # --- Save linear shifts if requested ---
-#         if save_linear_shifts and hasattr(tram_model, 'nn_shift') and tram_model.nn_shift:
-#             shift_path = os.path.join(NODE_DIR, "linear_shifts_all_epochs.json")
-#             if os.path.exists(shift_path):
-#                 with open(shift_path, 'r') as f:
-#                     all_shift_weights = json.load(f)
-#             else:
-#                 all_shift_weights = {}
-
-#             epoch_weights = {}
-#             for i, shift_layer in enumerate(tram_model.nn_shift):
-#                 if hasattr(shift_layer, 'fc') and hasattr(shift_layer.fc, 'weight'):
-#                     epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
-#                 else:
-#                     if verbose > 1:
-#                         print(f"shift_{i}: missing 'fc.weight'")
-#             all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
-#             with open(shift_path, 'w') as f:
-#                 json.dump(all_shift_weights, f)
-#             if verbose > 1:
-#                 print(f"Appended linear shift weights for epoch {epoch+1}")
-
-#         # --- Checkpointing ---
-#         if avg_val_loss < best_val_loss:
-#             best_val_loss = avg_val_loss
-#             torch.save(tram_model.state_dict(), MODEL_PATH)
-#             if verbose:
-#                 print("Saved new best model.")
-#         # Always save last
-#         torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
-#         with open(TRAIN_HIST_PATH, 'w') as f:
-#             json.dump(train_loss_hist, f)
-#         with open(VAL_HIST_PATH, 'w') as f:
-#             json.dump(val_loss_hist, f)
-
-#         # --- Epoch summary ---
-#         if verbose:
-#             total_time = time.time() - epoch_start
-#             print(
-#                 f"Epoch {epoch+1}/{epochs}  "
-#                 f"Train Loss: {avg_train_loss:.4f}  Val Loss: {avg_val_loss:.4f}  "
-#                 f"[Train: {train_time:.2f}s  Val: {val_time:.2f}s  Total: {total_time:.2f}s]"
-#             )
-
-
+    plt.tight_layout()
+    plt.show()
 
 def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
     """
@@ -960,3 +791,85 @@ def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
         'ad_statistic': ad_stat
     }               
                 
+
+
+
+# ################################ UNUSED #####################################
+# @torch.no_grad()
+# def init_last_layer_increasing(module: nn.Module, start: float = -2.0, end: float = 2.0):
+#     """
+#     Initialize the weights of the last nn.Linear in `module` so that the outputs
+#     are linearly increasing between [start, end].
+
+#     Assumes the last layer is nn.Linear with shape (n_thetas, in_features).
+#     """
+#     # Find last Linear layer
+#     last_linear = None
+#     for m in reversed(list(module.modules())):
+#         if isinstance(m, nn.Linear):
+#             last_linear = m
+#             break
+#     if last_linear is None:
+#         raise ValueError("No nn.Linear layer found in module.")
+
+#     n_thetas = last_linear.out_features
+#     in_features = last_linear.in_features
+
+#     # Desired increasing values
+#     values = torch.linspace(start, end, steps=n_thetas)
+
+#     # If in_features > 1, just repeat values / distribute across input dims
+#     w = torch.zeros((n_thetas, in_features))
+#     w[:, 0] = values  # put increasing sequence in first input channel
+
+#     last_linear.weight.copy_(w)
+
+#     if last_linear.bias is not None:
+#         last_linear.bias.zero_()  # optional: reset bias to 0
+
+#     return last_linear
+
+# @torch.no_grad()
+# def init_last_layer_hardcoded(module: nn.Module): # TEMPORRALY FUNCTION
+#     """
+#     Initialize the weights of the last nn.Linear in `module`
+#     with a fixed hardcoded vector (theta_tilde).
+#     """
+#     last_linear = None
+#     for m in reversed(list(module.modules())):
+#         if isinstance(m, nn.Linear):
+#             last_linear = m
+#             break
+#     if last_linear is None:
+#         raise ValueError("No nn.Linear layer found in module.")
+
+
+#     ###########################EXAMPLE HARDCODED ONLY EXPERIMENTAL MUST BE REMOVE OR CLCULCATED BY A POLR / COLR BEFOREHAND FOR THE VARS##########################
+#     # hardcoded = torch.tensor(    ############## <- this stems from inverser transform of COlr thetas for the weights inint experiment in R TEM
+#     #      [  4.8985,  -0.2014,  -1.0680, -17.7275,   0.5565,  -1.6440, -17.7275,
+#     #     -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
+#     #     -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+    
+#     # TODO get thetas from : thetas=fit_r_model_subprocess(target, dtype, data_path,verbose=False)
+
+#     hardcoded = torch.tensor([-2.0079,  0.8893, -0.5046], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
+#     ############################################################################################
+
+#     if hardcoded.numel() != last_linear.out_features:
+#         raise ValueError(
+#             f"Hardcoded vector has {hardcoded.numel()} elements, "
+#             f"but last layer expects {last_linear.out_features}"
+#         )
+
+#     # Expand to (out_features, in_features)
+#     w = torch.zeros((last_linear.out_features, last_linear.in_features),
+#                     dtype=last_linear.weight.dtype,
+#                     device=last_linear.weight.device)
+#     w[:, 0] = hardcoded  # fill the first input channel
+
+#     # Copy into the model
+#     last_linear.weight.copy_(w)
+#     if last_linear.bias is not None:
+#         last_linear.bias.zero_()
+
+#     return last_linear
