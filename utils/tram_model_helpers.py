@@ -588,6 +588,15 @@ def train_val_loop(
 ):
     device = torch.device(device)
 
+    if debug:
+        print(f"[DEBUG] min_max device: {min_max.device}")
+    
+    if debug:
+        for name, param in tram_model.named_parameters():
+            print(f"[DEBUG] Param {name} device: {param.device}")
+        for name, buf in tram_model.named_buffers():
+            print(f"[DEBUG] Buffer {name} device: {buf.device}")
+    
     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
     tram_model = tram_model.to(device)
 
@@ -604,7 +613,25 @@ def train_val_loop(
     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
         if verbose or debug:
             print("[INFO] Existing model found. Loading weights and history...")
-        tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+            
+        state_dict = torch.load(MODEL_PATH, map_location=device)
+        tram_model.load_state_dict(state_dict)
+        tram_model.to(device)
+        
+        
+        if debug:
+            print(f"[DEBUG] Loaded model state dict to: {device}")
+            for name, param in tram_model.named_parameters():
+                print(f"[DEBUG] Param {name} device after load: {param.device}")
+                break
+        # tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+        
+        if debug:
+            for name, param in tram_model.named_parameters():
+                print(f"[DEBUG] Param {name} device: {param.device}")
+            for name, buf in tram_model.named_buffers():
+                print(f"[DEBUG] Buffer {name} device: {buf.device}")
+        
         with open(TRAIN_HIST_PATH, 'r') as f:
             train_loss_hist = json.load(f)
         with open(VAL_HIST_PATH, 'r') as f:
@@ -624,12 +651,28 @@ def train_val_loop(
         train_loss = 0.0
         train_start = time.time()
 
-        for (int_input, shift_list), y in train_loader:
+        for batch_idx, ((int_input, shift_list), y) in enumerate(train_loader):
+
+            # Only print once: first epoch + first batch
+            if debug and epoch == start_epoch and batch_idx == 0:
+                print(f"[DEBUG] Loader batch devices: int_input={int_input.device}, "
+                    f"y={y.device}, shift_list={[s.device for s in shift_list]}")
+
             int_input = int_input.to(device)
             shift_list = [s.to(device) for s in shift_list]
             y = y.to(device)
 
             optimizer.zero_grad()
+
+            # Only print once: first epoch + first batch
+            if debug and epoch == start_epoch and batch_idx == 0:
+                print(f"[DEBUG] int_input device: {int_input.device}")
+                print(f"[DEBUG] y device: {y.device}")
+                print(f"[DEBUG] shift_list devices: {[s.device for s in shift_list]}")
+                for name, param in tram_model.named_parameters():
+                    print(f"[DEBUG] Model param {name} device: {param.device}")
+                    break  # print only first param for brevity
+
             y_pred = tram_model(int_input=int_input, shift_input=shift_list)
 
             if 'yo' in target_nodes[node]['data_type'].lower():
@@ -649,7 +692,9 @@ def train_val_loop(
         avg_train_loss = train_loss / len(train_loader)
         train_loss_hist.append(avg_train_loss)
         train_time = time.time() - train_start
-
+        
+        
+        ############ VALIDATION ############
         tram_model.eval()
         val_loss = 0.0
         val_start = time.time()
@@ -707,6 +752,10 @@ def train_val_loop(
                 f"Train NLL: {avg_train_loss:.4f}  Val NLL: {avg_val_loss:.4f}  "
                 f"[Train: {train_time:.2f}s  Val: {val_time:.2f}s  Total: {total_time:.2f}s]"
             )
+
+
+
+
 
 
 # print training history
