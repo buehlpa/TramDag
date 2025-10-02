@@ -13,6 +13,8 @@ from utils.configuration import (
     create_nx_graph,
 )   
 
+from utils.configuration import *
+
 class TramDagConfig:
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None, **kwargs):
         """
@@ -246,11 +248,6 @@ class TramDagConfig:
 import inspect
 from utils.tram_data import GenericDataset
 from torch.utils.data import Dataset, DataLoader
-
-
-import inspect
-from utils.tram_data import GenericDataset
-from torch.utils.data import Dataset, DataLoader
 class TramDagDataset(Dataset):
     
     #TODO add docstring
@@ -265,7 +262,7 @@ class TramDagDataset(Dataset):
         "return_intercept_shift": True,
         "debug": False,
         "transform": None,
-        "use_dataloader": False,
+        "use_dataloader": True,
     }
 
     def __init__(self):
@@ -383,6 +380,7 @@ class TramDagDataset(Dataset):
                     f"Please provide values for all variables."
                 )
 
+
     def summary(self):
         print("\n[TramDagDataset Summary]")
         print("=" * 60)
@@ -428,11 +426,6 @@ class TramDagDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
-from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag
-from torch.optim import Adam
-import torch
-import json
 
 from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
 from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag
@@ -444,10 +437,9 @@ import os
 class TramDagModel:
     
     #TODO add docstring
-    #TODO add verbose and debug , vebose print only infos, debug prints info + debug statements, warnings, errors are always printed
     # ---- defaults used at construction time ----
     DEFAULTS_CONFIG = {
-        "set_initial_weights": True,
+        "set_initial_weights": False,
         "debug":False,
         
     }
@@ -471,6 +463,7 @@ class TramDagModel:
         """Empty init. Use classmethods like .from_config()."""
         self.debug = False
         self.verbose = False
+        self.device = None
         pass
 
     @classmethod
@@ -483,10 +476,25 @@ class TramDagModel:
         self.cfg = cfg
         self.nodes_dict = self.cfg.conf_dict["nodes"] 
 
+        # resolve device
+        device_arg = kwargs.get("device", "auto")
+        if device_arg == "auto":
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device_str = device_arg
+        self.device = torch.device(device_str)
+            
         # merge defaults with user overrides
         settings = dict(cls.DEFAULTS_CONFIG)
         settings.update(kwargs)
 
+        # set flags on the instance so they are accessible later
+        self.debug = settings.get("debug", False)
+        self.verbose = settings.get("verbose", False)
+
+        if  self.debug:
+            print(f"[DEBUG] TramDagModel using device: {self.device}")
+            
         # initialize settings storage
         self.settings = {k: {} for k in settings.keys()}
 
@@ -507,10 +515,12 @@ class TramDagModel:
         for node in self.nodes_dict.keys():
             per_node_kwargs = {}
             for k, v in settings.items():
+                if k == "device":   # skip device, not for get_fully_specified_tram_model
+                    continue
                 resolved = v[node] if isinstance(v, dict) else v
                 per_node_kwargs[k] = resolved
                 self.settings[k][node] = resolved
-            if self.debug or self.verbose:
+            if self.debug:
                 print(f"\n[INFO] Building model for node '{node}' with settings: {per_node_kwargs}")
             self.models[node] = get_fully_specified_tram_model(
                 node=node,
@@ -518,6 +528,63 @@ class TramDagModel:
                 **per_node_kwargs
             )
         return self
+
+    @classmethod
+    def from_directory(cls, EXPERIMENT_DIR: str, device: str = "auto", debug: bool = False, verbose: bool = False):
+        """
+        Reconstruct a TramDagModel from an experiment directory.
+
+        This loads:
+        - The configuration file (config.json).
+        - The minmax scaling file (min_max_scaling.json).
+        - Initializes all per-node models (like from_config).
+
+        Parameters
+        ----------
+        experiment_dir : str
+            Path to the experiment directory containing `config.json` and `min_max_scaling.json`.
+        device : str, optional
+            Device string ("cpu", "cuda", or "auto"). Default is "auto".
+        debug : bool, optional
+            Enable debug printing. Default = False.
+        verbose : bool, optional
+            Enable info printing. Default = True.
+
+        Returns
+        -------
+        TramDagModel
+            A fully initialized TramDagModel with config and minmax loaded.
+        """
+
+        # --- load config file ---
+        config_path = os.path.join(EXPERIMENT_DIR, "configuration.json")
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"[ERROR] Config file not found at {config_path}")
+
+        with open(config_path, "r") as f:
+            cfg_dict = json.load(f)
+
+        # Create TramConfig wrapper (adjust if your cfg is a dict already)
+        cfg = TramDagConfig(cfg_dict)
+
+        # --- build model from config ---
+        self = cls.from_config(cfg, device=device, debug=debug, verbose=verbose)
+
+        # --- load minmax scaling ---
+        minmax_path = os.path.join(EXPERIMENT_DIR, "min_max_scaling.json")
+        if not os.path.exists(minmax_path):
+            raise FileNotFoundError(f"[ERROR] MinMax file not found at {minmax_path}")
+
+        with open(minmax_path, "r") as f:
+            self.minmax_dict = json.load(f)
+
+        if self.verbose or self.debug:
+            print(f"[INFO] Loaded TramDagModel from {EXPERIMENT_DIR}")
+            print(f"[INFO] Config loaded from {config_path}")
+            print(f"[INFO] MinMax scaling loaded from {minmax_path}")
+
+        return self
+
 
     def load_or_compute_minmax(self, use_existing=False, write=True,td_train_data=None):
         EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -559,9 +626,10 @@ class TramDagModel:
             Training data, either as a raw dataframe or as a TramDagDataset.
         val_data : pd.DataFrame or TramDagDataset, optional
             Validation data, either as a raw dataframe or as a TramDagDataset.
-        **kwargs : dict
-            Overrides for DEFAULTS_FIT (epochs, learning_rate, etc.).
+        kwargs : dict
+            Overrides for DEFAULTS_FIT (epochs, learning_rate, device, etc.).
         """
+
         # --- convert to TramDagDataset if needed ---
         if isinstance(train_data, pd.DataFrame):
             td_train_data = TramDagDataset.from_dataframe(train_data, self.cfg)
@@ -582,13 +650,20 @@ class TramDagModel:
             raise TypeError(
                 f"[ERROR] val_data must be pd.DataFrame, TramDagDataset, or None, got {type(val_data)}"
             )
-        # merge defaults with overrides
+
+        # --- merge defaults with overrides ---
         settings = dict(self.DEFAULTS_FIT)
         settings.update(kwargs)
 
-        device = torch.device(
-            "cuda" if (settings["device"] == "auto" and torch.cuda.is_available()) else settings["device"]
-        )
+        # --- resolve device ---
+        device_arg = settings.get("device", "auto")
+        if device_arg == "auto":
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device_str = device_arg
+        self.device = torch.device(device_str)
+        device = self.device
+
         # which nodes to train , default all nodes
         train_list = settings["train_list"] or list(self.models.keys())
 
@@ -599,9 +674,8 @@ class TramDagModel:
         # store resolved settings for this fit
         self.fit_settings = {k: {} for k in settings.keys()}
 
-        # calulate scaling from training data and write to EXPERIMENT_DIR 
-        self.load_or_compute_minmax(use_existing=False, write=True,td_train_data=td_train_data)
-
+        # calculate scaling from training data and write to EXPERIMENT_DIR 
+        self.load_or_compute_minmax(use_existing=False, write=True, td_train_data=td_train_data)
 
         results = {}
         for node in train_list:
@@ -637,21 +711,20 @@ class TramDagModel:
 
             # grab loaders
             train_loader = td_train_data.loaders[node]
-            val_loader = td_val_data.loaders[node]
+            val_loader = td_val_data.loaders[node] if td_val_data else None
 
             # min max for scaling
             min_vals = torch.tensor(self.minmax_dict[node][0], dtype=torch.float32, device=device)
             max_vals = torch.tensor(self.minmax_dict[node][1], dtype=torch.float32, device=device)
             min_max = torch.stack([min_vals, max_vals], dim=0)
-            
+
             try:
                 EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
                 NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
-                # print(f"[INFO] NODE_DIR : {NODE_DIR}")
             except Exception:
                 NODE_DIR = os.path.join("models", node)
                 print("[WARNING] No log directory specified in config, saving to default location.")
-                
+
             os.makedirs(NODE_DIR, exist_ok=True)
             self.fit_settings["NODE_DIR"] = {node: NODE_DIR}
 
@@ -673,11 +746,13 @@ class TramDagModel:
                 verbose=node_verbose,
                 device=device,
                 debug=node_debug,
-                min_max=min_max)
-            
+                min_max=min_max
+            )
+
             results[node] = history
 
         return results
+
 
 
     def get_latent(self, df, verbose=False):
@@ -714,15 +789,95 @@ class TramDagModel:
 
             return all_latents_df
 
+    def show_latents(self, df, variable: str = None, confidence: float = 0.95, simulations: int = 1000):
+        """
+        Plot latent U distributions for one node or all nodes.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Input dataframe with the raw data.
+        variable : str, optional
+            If given, only plot for this node. If None, plot all nodes.
+        confidence : float, optional
+            Confidence level for QQ plot bands. Default = 0.95.
+        simulations : int, optional
+            Number of simulations for QQ bands. Default = 1000.
+        """
+        import matplotlib.pyplot as plt
+        from scipy.stats import logistic, probplot
+
+        # Compute latent representations
+        latents_df = self.get_latent(df)
+
+        # Select nodes
+        nodes = [variable] if variable is not None else self.nodes_dict.keys()
+
+        for node in nodes:
+            if f"{node}_U" not in latents_df.columns:
+                print(f"[WARNING] No latent found for node {node}, skipping.")
+                continue
+
+            sample = latents_df[f"{node}_U"].values
+
+            # --- Create plots ---
+            fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+
+            # Histogram
+            axs[0].hist(sample, bins=50, color="steelblue", alpha=0.7)
+            axs[0].set_title(f"Latent Histogram ({node})")
+            axs[0].set_xlabel("U")
+            axs[0].set_ylabel("Frequency")
+
+            # QQ Plot with confidence bands
+            probplot(sample, dist="logistic", plot=axs[1])
+            self._add_r_style_confidence_bands(axs[1], sample, dist=logistic,
+                                               confidence=confidence, simulations=simulations)
+            axs[1].set_title(f"Latent QQ Plot ({node})")
+
+            plt.suptitle(f"Latent Diagnostics for Node: {node}", fontsize=14)
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+            plt.show()
+
+    @staticmethod
+    def _add_r_style_confidence_bands(ax, sample, dist, confidence=0.95, simulations=1000):
+        """
+        Adds confidence bands to a QQ plot using simulation under the null hypothesis.
+        """
+        import numpy as np
+
+        n = len(sample)
+        if n == 0:
+            return
+
+        quantiles = np.linspace(0, 1, n, endpoint=False) + 0.5 / n
+        theo_q = dist.ppf(quantiles)
+
+        # Simulate order statistics from the theoretical distribution
+        sim_data = dist.rvs(size=(simulations, n))
+        sim_order_stats = np.sort(sim_data, axis=1)
+
+        # Confidence bands
+        lower = np.percentile(sim_order_stats, 100 * (1 - confidence) / 2, axis=0)
+        upper = np.percentile(sim_order_stats, 100 * (1 + confidence) / 2, axis=0)
+
+        # Sort empirical sample
+        sample_sorted = np.sort(sample)
+
+        # Re-draw points and CI (overwrite probplot defaults)
+        ax.clear()
+        ax.plot(theo_q, sample_sorted, 'o', markersize=3, alpha=0.6, label="Empirical Q-Q")
+        ax.plot(theo_q, theo_q, 'b--', label="y = x")
+        ax.fill_between(theo_q, lower, upper, color='gray', alpha=0.3,
+                        label=f'{int(confidence*100)}% CI')
+        ax.legend()
+    
+    
     def sample(
         self,
         do_interventions: dict = None,
         predefined_latent_samples_df: pd.DataFrame = None,
-        number_of_samples: int = 10_000,
-        batch_size: int = 32,
-        delete_all_previously_sampled: bool = True,
-        verbose: bool = False,
-        debug: bool = False,
+        **kwargs,
     ):
         """
         Sample from the DAG using trained TRAM models.
@@ -733,16 +888,8 @@ class TramDagModel:
             Mapping of node names to fixed values. Example: {'x1': 1.0}.
         predefined_latent_samples_df : pd.DataFrame, optional
             DataFrame with predefined latent U's. Must contain columns "{node}_U".
-        number_of_samples : int, default=10_000
-            Number of samples to draw if no predefined latents are given.
-        batch_size : int, default=32
-            Batch size for DataLoader evaluation during sampling.
-        delete_all_previously_sampled : bool, default=True
-            Whether to remove existing sampled.pt/latents.pt files before resampling.
-        verbose : bool, default=True
-            Print high-level progress messages ([INFO]).
-        debug : bool, default=False
-            Print detailed debug messages ([DEBUG]) in addition to [INFO].
+        kwargs : dict
+            Overrides for default settings (number_of_samples, batch_size, device, etc.).
 
         Returns
         -------
@@ -751,6 +898,7 @@ class TramDagModel:
         latents_by_node : dict
             Mapping {node: tensor of latent U's used}.
         """
+
         try:
             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         except KeyError:
@@ -759,44 +907,263 @@ class TramDagModel:
                 "Sampling requires trained model checkpoints."
             )
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # ---- defaults ----
+        settings = {
+            "number_of_samples": 10_000,
+            "batch_size": 32,
+            "delete_all_previously_sampled": True,
+            "verbose": False,
+            "debug": False,
+            "device": self.device.type if hasattr(self, "device") else "auto",
+        }
+        settings.update(kwargs)
 
+        
+        if not hasattr(self, "minmax_dict"):
+            raise RuntimeError(
+                "[ERROR] minmax_dict not found. You must call .fit() or .load_or_compute_minmax() "
+                "before sampling, so scaling info is available."
+                )
+            
+        # ---- resolve device ----
+        device_arg = settings["device"]
+        if device_arg == "auto":
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device_str = device_arg
+        self.device = torch.device(device_str)
+        device = self.device
+
+        # ---- perform sampling ----
         sampled_by_node, latents_by_node = sample_full_dag(
             configuration_dict=self.cfg.conf_dict,
             EXPERIMENT_DIR=EXPERIMENT_DIR,
             device=device,
             do_interventions=do_interventions or {},
             predefined_latent_samples_df=predefined_latent_samples_df,
-            number_of_samples=number_of_samples,
-            batch_size=batch_size,
-            delete_all_previously_sampled=delete_all_previously_sampled,
-            verbose=verbose,
-            debug=debug,
-            minmax_dict=self.minmax_dict
+            number_of_samples=settings["number_of_samples"],
+            batch_size=settings["batch_size"],
+            delete_all_previously_sampled=settings["delete_all_previously_sampled"],
+            verbose=settings["verbose"],
+            debug=settings["debug"],
+            minmax_dict=self.minmax_dict,
         )
+
         return sampled_by_node, latents_by_node
 
+    def history(self):
+        """
+        Load training and validation loss histories for all nodes.
+
+        Looks for JSON files in:
+            EXPERIMENT_DIR/{node}/train_loss_hist.json
+            EXPERIMENT_DIR/{node}/val_loss_hist.json
+
+        Returns
+        -------
+        dict
+            {node: {"train": train_hist, "validation": val_hist}}
+        """
+        try:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        except KeyError:
+            raise ValueError(
+                "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
+                "History retrieval requires experiment logs."
+            )
+
+        all_histories = {}
+        for node in self.nodes_dict.keys():
+            node_dir = os.path.join(EXPERIMENT_DIR, node)
+            train_path = os.path.join(node_dir, "train_loss_hist.json")
+            val_path = os.path.join(node_dir, "val_loss_hist.json")
+
+            node_hist = {}
+
+            # --- load train history ---
+            if os.path.exists(train_path):
+                try:
+                    with open(train_path, "r") as f:
+                        node_hist["train"] = json.load(f)
+                except Exception as e:
+                    print(f"[WARNING] Could not load {train_path}: {e}")
+                    node_hist["train"] = None
+            else:
+                node_hist["train"] = None
+
+            # --- load val history ---
+            if os.path.exists(val_path):
+                try:
+                    with open(val_path, "r") as f:
+                        node_hist["validation"] = json.load(f)
+                except Exception as e:
+                    print(f"[WARNING] Could not load {val_path}: {e}")
+                    node_hist["validation"] = None
+            else:
+                node_hist["validation"] = None
+
+            all_histories[node] = node_hist
+
+        if self.verbose or self.debug:
+            print(f"[INFO] Loaded training/validation histories for {len(all_histories)} nodes.")
+
+        return all_histories
+
+    def plot_history(self, variable: str = None):
+            """
+            Plot training and validation loss histories.
+
+            Parameters
+            ----------
+            variable : str, optional
+                If given, plot only this node's history.
+                If None, plot all nodes together.
+            """
+
+            import matplotlib.pyplot as plt
+
+            histories = self.history()
+
+            # Select which nodes to plot
+            if variable is not None:
+                if variable not in histories:
+                    raise ValueError(f"[ERROR] Node '{variable}' not found in histories.")
+                nodes_to_plot = [variable]
+            else:
+                nodes_to_plot = list(histories.keys())
+
+            plt.figure(figsize=(14, 12))
+
+            # --- Full history (top plot) ---
+            plt.subplot(2, 1, 1)
+            for node in nodes_to_plot:
+                node_hist = histories[node]
+                train_hist, val_hist = node_hist["train"], node_hist["validation"]
+
+                if train_hist is None or val_hist is None:
+                    print(f"[WARNING] No history found for node: {node}")
+                    continue
+
+                epochs = range(1, len(train_hist) + 1)
+                plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
+                plt.plot(epochs, val_hist, label=f"{node} - val")
+
+            plt.title("Training and Validation NLL - Full History")
+            plt.xlabel("Epoch")
+            plt.ylabel("NLL")
+            plt.legend()
+            plt.grid(True)
+
+            # --- Last 10% of epochs (bottom plot) ---
+            plt.subplot(2, 1, 2)
+            for node in nodes_to_plot:
+                node_hist = histories[node]
+                train_hist, val_hist = node_hist["train"], node_hist["validation"]
+
+                if train_hist is None or val_hist is None:
+                    continue
+
+                total_epochs = len(train_hist)
+                if total_epochs < 5:  # not enough epochs to zoom
+                    continue
+
+                start_idx = int(total_epochs * 0.9)
+                epochs = range(start_idx + 1, total_epochs + 1)
+                plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
+                plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
+
+            plt.title("Training and Validation NLL - Last 10% of Epochs")
+            plt.xlabel("Epoch")
+            plt.ylabel("NLL")
+            plt.legend()
+            plt.grid(True)
+
+            plt.tight_layout()
+            plt.show()
+
+
+
     def summary(self):
+        """
+        Print a summary of the TramDagModel:
+        1. Model architecture per node.
+        2. Whether trained model checkpoints exist on disk.
+        3. Whether sampling results exist on disk.
+        4. Whether training histories exist and number of epochs.
+        """
+        import json
+
+        try:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        except KeyError:
+            EXPERIMENT_DIR = None
+            print("[WARNING] No 'EXPERIMENT_DIR' found in cfg.conf_dict['PATHS'].")
+
         print("\n[TramDagModel Summary]")
-        print("=" * 60)
+        print("=" * 100)
+
         for node, model in self.models.items():
-            print(f" Node '{node}': {model.__class__.__name__}")
-            for k, v in self.settings.items():
-                if node in v:
-                    print(f"   - {k}: {v[node]}")
-        print("=" * 60 + "\n")
+            print(f"\nNode '{node}':")
+            print("-" * 100)
 
+            # 1. Model architecture
+            print(" Model architecture:")
+            print(model)
 
+            if EXPERIMENT_DIR:
+                node_dir = os.path.join(EXPERIMENT_DIR, node)
 
+                # 2. Check trained model checkpoint
+                ckpt_exists = any(
+                    f.endswith(".pt") or f.endswith(".pth")
+                    for f in os.listdir(node_dir)
+                ) if os.path.exists(node_dir) else False
+                print(f" Trained model checkpoint found: {ckpt_exists}")
+
+                # 3. Check sampling results
+                sampling_dir = os.path.join(node_dir, "sampling")
+                sampling_exists = os.path.isdir(sampling_dir) and len(os.listdir(sampling_dir)) > 0
+                print(f" Sampling results found: {sampling_exists}")
+
+                # 4. Check training history
+                train_path = os.path.join(node_dir, "train_loss_hist.json")
+                val_path = os.path.join(node_dir, "val_loss_hist.json")
+
+                if os.path.exists(train_path):
+                    try:
+                        with open(train_path, "r") as f:
+                            train_hist = json.load(f)
+                        n_epochs = len(train_hist)
+                        print(f" Training history: found ({n_epochs} epochs)")
+                    except Exception as e:
+                        print(f" Training history: error loading ({e})")
+                else:
+                    print(" Training history: not found")
+
+                if os.path.exists(val_path):
+                    try:
+                        with open(val_path, "r") as f:
+                            val_hist = json.load(f)
+                        n_epochs_val = len(val_hist)
+                        print(f" Validation history: found ({n_epochs_val} epochs)")
+                    except Exception as e:
+                        print(f" Validation history: error loading ({e})")
+                else:
+                    print(" Validation history: not found")
+
+            else:
+                print(" [INFO] No experiment directory defined, cannot check checkpoints/sampling/history.")
+
+        print("=" * 100 + "\n")
 
 ## Usage
 
-cfg = TramDagConfig.load("/home/bule/TramDag/dev_experiment_logs/exp_6_2/configuration.json")
+# cfg = TramDagConfig.load("/home/bule/TramDag/dev_experiment_logs/exp_6_2/configuration.json")
 
-train_df=pd.read_csv('/home/bule/TramDag/dev_experiment_logs/exp_6_2/exp_6_2_train.csv')
-val_df=pd.read_csv('/home/bule/TramDag/dev_experiment_logs/exp_6_2/exp_6_2_val.csv')
-# splits 
+# train_df=pd.read_csv('/home/bule/TramDag/dev_experiment_logs/exp_6_2/exp_6_2_train.csv')
+# val_df=pd.read_csv('/home/bule/TramDag/dev_experiment_logs/exp_6_2/exp_6_2_val.csv')
+# # splits 
 
-td_model = TramDagModel.from_config(cfg, set_initial_weights=False,verbose=False) 
+# td_model = TramDagModel.from_config(cfg, set_initial_weights=False,verbose=False) 
 
-td_model.fit(train_df, val_df,epochs=513)
+# td_model.fit(train_df, val_df,epochs=520)
