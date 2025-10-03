@@ -37,7 +37,8 @@ def get_fully_specified_tram_model(
     set_initial_weights: bool = False,
     TRAIN_DATA_PATH: str = None,
     verbose: bool = True,
-    debug: bool = False
+    debug: bool = False,
+    device='cpu'
     ) -> TramModel:
     """
     Construct and return a fully specified TramModel for a given node based on
@@ -205,7 +206,7 @@ def get_fully_specified_tram_model(
         nn_shifts.append(globals()[base_cls](n_features=n_features))
 
     # Combine into final TramModel
-    tram_model = TramModel(nn_int, nn_shifts)
+    tram_model = TramModel(nn_int, nn_shifts,device=device)
     return tram_model
 
 
@@ -220,7 +221,7 @@ def preprocess_inputs(x, transformation_terms, device='cuda'):
       - int_inputs: Tensor of shape (B, n_features) for intercept model
       - shift_list: List of tensors for each shift model, shape (B, group_features)
     """
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
     transformation_terms=list(transformation_terms)
     
     ## if there is only a source so transforamtion terms is 0:

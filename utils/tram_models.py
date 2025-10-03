@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class TramModel(nn.Module):
-    def __init__(self, nn_int, nn_shift=None):
+    def __init__(self, nn_int, nn_shift=None,device='cpu'):
         super(TramModel, self).__init__()
         """
         Combine the intercept and shift models into a single model for ONTRAM
@@ -15,7 +15,7 @@ class TramModel(nn.Module):
             nn_shift: List of PyTorch models for the shift terms (or None)
         """
         self.nn_int = nn_int
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = device
         
         # if there is no shift model
         if nn_shift is None or nn_shift==[]:
