@@ -253,7 +253,7 @@ class TramDagDataset(Dataset):
     DEFAULTS = {
         "batch_size": 32_000,
         "shuffle": True,
-        "num_workers": 8,
+        "num_workers": 0,
         "pin_memory": True,
         "return_intercept_shift": True,
         "debug": False,
@@ -268,7 +268,7 @@ class TramDagDataset(Dataset):
         "worker_init_fn": None,
         "multiprocessing_context": None,
         "generator": None,
-        "prefetch_factor": 4,
+        "prefetch_factor": None,
         "persistent_workers": False,
         "pin_memory_device": "",
     }
