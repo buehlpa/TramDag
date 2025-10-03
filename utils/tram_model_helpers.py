@@ -38,7 +38,7 @@ def get_fully_specified_tram_model(
     TRAIN_DATA_PATH: str = None,
     verbose: bool = True,
     debug: bool = False,
-    device='cpu'
+    device='auto'
     ) -> TramModel:
     """
     Construct and return a fully specified TramModel for a given node based on
@@ -114,7 +114,7 @@ def get_fully_specified_tram_model(
     TramModel(intercept=..., shifts=[...])
     """
     
-    
+    print(device)
     
     from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
     

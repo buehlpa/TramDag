@@ -473,7 +473,7 @@ class TramDagModel:
         """Empty init. Use classmethods like .from_config()."""
         self.debug = False
         self.verbose = False
-        self.device = None
+        self.device = 'auto'
         pass
 
     @classmethod
@@ -494,9 +494,9 @@ class TramDagModel:
             device_str = device_arg
         self.device = torch.device(device_str)
         
-        if hasattr(self, "models") and self.models:
-            for node, model in self.models.items():
-                self.models[node] = model.to(self.device)
+        # if hasattr(self, "models") and self.models:
+        #     for node, model in self.models.items():
+        #         self.models[node] = model.to(self.device)
                 
         # merge defaults with user overrides
         settings = dict(cls.DEFAULTS_CONFIG)
@@ -529,8 +529,6 @@ class TramDagModel:
         for node in self.nodes_dict.keys():
             per_node_kwargs = {}
             for k, v in settings.items():
-                if k == "device":   # skip device, not for get_fully_specified_tram_model
-                    continue
                 resolved = v[node] if isinstance(v, dict) else v
                 per_node_kwargs[k] = resolved
                 self.settings[k][node] = resolved
@@ -540,7 +538,7 @@ class TramDagModel:
                 node=node,
                 configuration_dict=self.cfg.conf_dict,
                 **per_node_kwargs
-            ).to(self.device)
+            )
         return self
 
     @classmethod
@@ -630,6 +628,32 @@ class TramDagModel:
                 print(f"[INFO] Saved new minmax dict to {minmax_path}")
 
 
+    def _ensure_dataset(self, data, is_val=False):
+        """
+        Ensure the input is converted to a TramDagDataset if needed.
+
+        Parameters
+        ----------
+        data : pd.DataFrame, TramDagDataset, or None
+            Input data to be converted or passed through.
+        is_val : bool, default=False
+            Whether the dataset is validation data (affects shuffle flag).
+
+        Returns
+        -------
+        TramDagDataset or None
+        """
+        if isinstance(data, pd.DataFrame):
+            return TramDagDataset.from_dataframe(data, self.cfg, shuffle=not is_val)
+        elif isinstance(data, TramDagDataset):
+            return data
+        elif data is None:
+            return None
+        else:
+            raise TypeError(
+                f"[ERROR] data must be pd.DataFrame, TramDagDataset, or None, got {type(data)}"
+            )
+
     def fit(self, train_data, val_data=None, **kwargs):
         """
         Fit TRAM models for specified nodes.
@@ -643,27 +667,8 @@ class TramDagModel:
         kwargs : dict
             Overrides for DEFAULTS_FIT (epochs, learning_rate, device, etc.).
         """
-
-        # --- convert to TramDagDataset if needed ---
-        if isinstance(train_data, pd.DataFrame):
-            td_train_data = TramDagDataset.from_dataframe(train_data, self.cfg)
-        elif isinstance(train_data, TramDagDataset):
-            td_train_data = train_data
-        else:
-            raise TypeError(
-                f"[ERROR] train_data must be pd.DataFrame or TramDagDataset, got {type(train_data)}"
-            )
-
-        if isinstance(val_data, pd.DataFrame):
-            td_val_data = TramDagDataset.from_dataframe(val_data, self.cfg, shuffle=False)
-        elif isinstance(val_data, TramDagDataset):
-            td_val_data = val_data
-        elif val_data is None:
-            td_val_data = None
-        else:
-            raise TypeError(
-                f"[ERROR] val_data must be pd.DataFrame, TramDagDataset, or None, got {type(val_data)}"
-            )
+        td_train_data = self._ensure_dataset(train_data, is_val=False)
+        td_val_data = self._ensure_dataset(val_data, is_val=True)
 
         # --- merge defaults with overrides ---
         settings = dict(self.DEFAULTS_FIT)
@@ -766,7 +771,6 @@ class TramDagModel:
             results[node] = history
 
         return results
-
 
 
     def get_latent(self, df, verbose=False):
