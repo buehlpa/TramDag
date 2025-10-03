@@ -1,0 +1,50 @@
+{
+    "date_of_creation": "2025-10-02 13:02:45",
+    "experiment_name": "create_configration_test1",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/create_configration_test1",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/create_configration_test1"
+    },
+    "data_type": {
+        "x1": "continous",
+        "x2": "continous",
+        "x3": "continous"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "ls",
+            "ci11"
+        ],
+        [
+            "0",
+            "0",
+            "ci12"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "LinearShift",
+            "ComplexInterceptDefaultTabular11"
+        ],
+        [
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular12"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": null
+}

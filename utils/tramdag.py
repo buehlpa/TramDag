@@ -249,20 +249,28 @@ import inspect
 from utils.tram_data import GenericDataset
 from torch.utils.data import Dataset, DataLoader
 class TramDagDataset(Dataset):
-    
-    #TODO add docstring
-    #TODO add verbose and debug , vebose print only infos, debug prints info + debug statements, warnings, errors are always printed
-    #TODO add veryfier such that nothing is missing for later training such as experiment name 
-    
+
     DEFAULTS = {
-        "batch_size": 32,
+        "batch_size": 32_000,
         "shuffle": True,
-        "num_workers": 4,
-        "pin_memory": False,
+        "num_workers": 8,
+        "pin_memory": True,
         "return_intercept_shift": True,
         "debug": False,
         "transform": None,
         "use_dataloader": True,
+        # DataLoader extras
+        "sampler": None,
+        "batch_sampler": None,
+        "collate_fn": None,
+        "drop_last": False,
+        "timeout": 0,
+        "worker_init_fn": None,
+        "multiprocessing_context": None,
+        "generator": None,
+        "prefetch_factor": 4,
+        "persistent_workers": False,
+        "pin_memory_device": "",
     }
 
     def __init__(self):
@@ -298,9 +306,9 @@ class TramDagDataset(Dataset):
         self._build_dataloaders()
         return self
 
-    def compute_scaling(self, df: pd.DataFrame=None, write: bool = True):
+    def compute_scaling(self, df: pd.DataFrame = None, write: bool = True):
         """
-        Derive scaling information (min, max, levels) from data USE training data.
+        Derive scaling information (min, max, levels) from data (should use training data).
         """
         if self.debug:
             print("[DEBUG] Make sure to provide only training data to compute_scaling!")     
@@ -315,27 +323,16 @@ class TramDagDataset(Dataset):
         return minmax_dict
 
     def _apply_settings(self, settings: dict):
-        self.batch_size = settings["batch_size"]
-        self.shuffle = settings["shuffle"]
-        self.num_workers = settings["num_workers"]
-        self.pin_memory = settings["pin_memory"]
-        self.return_intercept_shift = settings["return_intercept_shift"]
-        self.debug = settings["debug"]
-        self.transform = settings["transform"]
-        self.use_dataloader = settings["use_dataloader"]   
+        # store everything into self (makes it easy to pass into DataLoader later)
+        for k, v in settings.items():
+            setattr(self, k, v)
+
         self.nodes_dict = self.cfg.conf_dict["nodes"]
 
-        # validate dict attributes
-        for name, val in {
-            "batch_size": self.batch_size,
-            "shuffle": self.shuffle,
-            "num_workers": self.num_workers,
-            "pin_memory": self.pin_memory,
-            "return_intercept_shift": self.return_intercept_shift,
-            "debug": self.debug,
-            "transform": self.transform,
-        }.items():
-            self._check_keys(name, val)
+        # validate only the most important ones
+        for name in ["batch_size", "shuffle", "num_workers", "pin_memory",
+                     "return_intercept_shift", "debug", "transform"]:
+            self._check_keys(name, getattr(self, name))
 
     def _build_dataloaders(self):
         """Build node-specific dataloaders or raw datasets depending on settings."""
@@ -351,20 +348,26 @@ class TramDagDataset(Dataset):
             )
 
             if self.use_dataloader:
-                batch_size = self.batch_size[node] if isinstance(self.batch_size, dict) else self.batch_size
-                shuffle_flag = self.shuffle[node] if isinstance(self.shuffle, dict) else bool(self.shuffle)
-                num_workers = self.num_workers[node] if isinstance(self.num_workers, dict) else self.num_workers
-                pin_memory = self.pin_memory[node] if isinstance(self.pin_memory, dict) else self.pin_memory
-
-                self.loaders[node] = DataLoader(
-                    ds,
-                    batch_size=batch_size,
-                    shuffle=shuffle_flag,
-                    num_workers=num_workers,
-                    pin_memory=pin_memory,
-                )
+                # resolve per-node overrides
+                kwargs = {
+                    "batch_size": self.batch_size[node] if isinstance(self.batch_size, dict) else self.batch_size,
+                    "shuffle": self.shuffle[node] if isinstance(self.shuffle, dict) else self.shuffle,
+                    "num_workers": self.num_workers[node] if isinstance(self.num_workers, dict) else self.num_workers,
+                    "pin_memory": self.pin_memory[node] if isinstance(self.pin_memory, dict) else self.pin_memory,
+                    "sampler": self.sampler,
+                    "batch_sampler": self.batch_sampler,
+                    "collate_fn": self.collate_fn,
+                    "drop_last": self.drop_last,
+                    "timeout": self.timeout,
+                    "worker_init_fn": self.worker_init_fn,
+                    "multiprocessing_context": self.multiprocessing_context,
+                    "generator": self.generator,
+                    "prefetch_factor": self.prefetch_factor,
+                    "persistent_workers": self.persistent_workers,
+                    "pin_memory_device": self.pin_memory_device,
+                }
+                self.loaders[node] = DataLoader(ds, **kwargs)
             else:
-                # just keep raw dataset
                 self.loaders[node] = ds
 
 
@@ -434,6 +437,13 @@ import torch
 import os
 
 
+from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
+from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
+from torch.optim import Adam
+import torch
+import os
+
+
 class TramDagModel:
     
     #TODO add docstring
@@ -483,7 +493,11 @@ class TramDagModel:
         else:
             device_str = device_arg
         self.device = torch.device(device_str)
-            
+        
+        if hasattr(self, "models") and self.models:
+            for node, model in self.models.items():
+                self.models[node] = model.to(self.device)
+                
         # merge defaults with user overrides
         settings = dict(cls.DEFAULTS_CONFIG)
         settings.update(kwargs)
@@ -526,7 +540,7 @@ class TramDagModel:
                 node=node,
                 configuration_dict=self.cfg.conf_dict,
                 **per_node_kwargs
-            )
+            ).to(self.device)
         return self
 
     @classmethod
@@ -1081,6 +1095,143 @@ class TramDagModel:
             plt.tight_layout()
             plt.show()
 
+    def show_samples_vs_true(
+        self,
+        df,
+        bins: int = 100,
+        hist_true_color: str = "blue",
+        hist_est_color: str = "orange",
+        figsize: tuple = (14, 5),
+    ):
+        """
+        Compare true vs sampled distributions for each node.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Dataframe with true observed values.
+        bins : int, optional
+            Number of bins for histograms (continuous case). Default = 100.
+        hist_true_color : str, optional
+            Color for true data histogram/bar. Default = "blue".
+        hist_est_color : str, optional
+            Color for sampled data histogram/bar. Default = "orange".
+        figsize : tuple, optional
+            Figure size for each node. Default = (14, 5).
+        """
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import torch
+        from statsmodels.graphics.gofplots import qqplot_2samples
+
+        target_nodes = self.cfg.conf_dict["nodes"]
+        experiment_dir = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        for node in target_nodes:
+            sample_path = os.path.join(experiment_dir, f"{node}/sampling/sampled.pt")
+            if not os.path.isfile(sample_path):
+                print(f"[WARNING] skip {node}: {sample_path} not found.")
+                continue
+
+            try:
+                sampled = torch.load(sample_path, map_location=device).cpu().numpy()
+            except Exception as e:
+                print(f"[ERROR] Could not load {sample_path}: {e}")
+                continue
+
+            sampled = sampled[np.isfinite(sampled)]
+
+            if node not in df.columns:
+                print(f"[WARNING] skip {node}: column not found in DataFrame.")
+                continue
+
+            true_vals = df[node].dropna().values
+            true_vals = true_vals[np.isfinite(true_vals)]
+
+            if sampled.size == 0 or true_vals.size == 0:
+                print(f"[WARNING] skip {node}: empty array after NaN/Inf removal.")
+                continue
+
+            fig, axs = plt.subplots(1, 2, figsize=figsize)
+
+            if is_outcome_modelled_continous(node, target_nodes):
+                # Continuous: histogram + QQ
+                axs[0].hist(
+                    true_vals,
+                    bins=bins,
+                    density=True,
+                    alpha=0.6,
+                    color=hist_true_color,
+                    label=f"True {node}",
+                )
+                axs[0].hist(
+                    sampled,
+                    bins=bins,
+                    density=True,
+                    alpha=0.6,
+                    color=hist_est_color,
+                    label="Sampled",
+                )
+                axs[0].set_xlabel("Value")
+                axs[0].set_ylabel("Density")
+                axs[0].set_title(f"Histogram overlay for {node}")
+                axs[0].legend()
+                axs[0].grid(True, ls="--", alpha=0.4)
+
+                qqplot_2samples(true_vals, sampled, line="45", ax=axs[1])
+                axs[1].set_xlabel("True quantiles")
+                axs[1].set_ylabel("Sampled quantiles")
+                axs[1].set_title(f"QQ plot for {node}")
+                axs[1].grid(True, ls="--", alpha=0.4)
+
+            elif is_outcome_modelled_ordinal(node, target_nodes):
+                # Ordinal: bar plot only
+                unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
+                unique_vals = np.sort(unique_vals)
+
+                true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
+                sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
+
+                axs[0].bar(unique_vals - 0.2, true_counts / true_counts.sum(),
+                           width=0.4, color=hist_true_color, alpha=0.7, label="True")
+                axs[0].bar(unique_vals + 0.2, sampled_counts / sampled_counts.sum(),
+                           width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
+
+                axs[0].set_xticks(unique_vals)
+                axs[0].set_xlabel("Ordinal Level")
+                axs[0].set_ylabel("Relative Frequency")
+                axs[0].set_title(f"Ordinal bar plot for {node}")
+                axs[0].legend()
+                axs[0].grid(True, ls="--", alpha=0.4)
+
+                axs[1].axis("off")  # No QQ for ordinal
+
+            else:
+                # Fallback: categorical
+                unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
+                unique_vals = sorted(unique_vals, key=str)
+
+                true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
+                sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
+
+                axs[0].bar(np.arange(len(unique_vals)) - 0.2, true_counts / true_counts.sum(),
+                           width=0.4, color=hist_true_color, alpha=0.7, label="True")
+                axs[0].bar(np.arange(len(unique_vals)) + 0.2, sampled_counts / sampled_counts.sum(),
+                           width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
+
+                axs[0].set_xticks(np.arange(len(unique_vals)))
+                axs[0].set_xticklabels(unique_vals, rotation=45)
+                axs[0].set_xlabel("Category")
+                axs[0].set_ylabel("Relative Frequency")
+                axs[0].set_title(f"Categorical bar plot for {node}")
+                axs[0].legend()
+                axs[0].grid(True, ls="--", alpha=0.4)
+
+                axs[1].axis("off")
+
+            plt.tight_layout()
+            plt.show()
 
 
     def summary(self):

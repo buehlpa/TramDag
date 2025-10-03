@@ -140,9 +140,17 @@ class GenericDataset(Dataset):
         self._check_multiclass_predictors_of_df()
         self._check_ordinal_levels()
 
+        # precompute tensors
+        self._precompute_all()
+
+        # constant for SI
+        self._const_one = torch.tensor(1.0)
+        
+        
         if self.debug or self.verbose:
             print(f"[INFO] ------ Initalized all attributes of Genericdataset ------")
-            
+    
+    
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
         
@@ -330,16 +338,75 @@ class GenericDataset(Dataset):
         if self.debug:
             print(f"[DEBUG] Shift group indices: {self.shift_groups_indices}")
 
+    def _precompute_all(self):
+        """
+        Precompute all tensors for numerical/ordinal predictors + y.
+        Store them in self.X_list (aligned with self.predictors).
+        """
+        self.X_list = []
+
+        for var in self.predictors:
+            dt = self.parents_datatype_dict[var].lower()
+
+            if dt in ("continous",) or "xc" in dt:
+                arr = self.df[var].to_numpy(dtype=np.float32)
+                self.X_list.append(torch.from_numpy(arr).unsqueeze(1))
+
+            elif "ordinal" in dt and "xn" in dt:
+                c = self.ordinal_num_classes[var]
+                vals = self.df[var].to_numpy(dtype=np.int64)
+                onehot = F.one_hot(torch.from_numpy(vals), num_classes=c).float()
+                self.X_list.append(onehot)
+
+            else:
+                # keep image paths as-is (handled in __getitem__)
+                self.X_list.append(self.df[var].tolist())
+
+        if self.return_y and self.target_col in self.df.columns:
+            dtype = self.target_data_type
+            if dtype in ("continous",) or "yc" in dtype:
+                self.y_tensor = torch.tensor(self.df[self.target_col].to_numpy(dtype=np.float32))
+            elif self.target_num_classes:
+                vals = self.df[self.target_col].to_numpy(dtype=np.int64)
+                self.y_tensor = F.one_hot(torch.from_numpy(vals), num_classes=self.target_num_classes).float()
+            else:
+                self.y_tensor = None
+        else:
+            self.y_tensor = None
+
+
+    # def _preprocess_inputs(self, x):
+    #     its = [x[i] for i in self.intercept_indices]
+    #     if not its:
+    #         raise ValueError("No intercept tensors found!")
+    #     int_inputs = torch.cat([t.view(t.shape[0], -1) for t in its], dim=1)
+    #     shifts = []
+    #     for grp in self.shift_groups_indices:
+    #         parts = [x[i].view(x[i].shape[0], -1) for i in grp]
+    #         shifts.append(torch.cat(parts, dim=1))
+    #     return int_inputs, (shifts if shifts else None)
+    
     def _preprocess_inputs(self, x):
-        its = [x[i] for i in self.intercept_indices]
-        if not its:
+        # Collect intercept inputs
+        if not self.intercept_indices:
             raise ValueError("No intercept tensors found!")
-        int_inputs = torch.cat([t.view(t.shape[0], -1) for t in its], dim=1)
-        shifts = []
-        for grp in self.shift_groups_indices:
-            parts = [x[i].view(x[i].shape[0], -1) for i in grp]
-            shifts.append(torch.cat(parts, dim=1))
-        return int_inputs, (shifts if shifts else None)
+
+        # Concatenate all intercept tensors along feature dimension
+        int_inputs = torch.cat(
+            [x[i].reshape(x[i].shape[0], -1) for i in self.intercept_indices],
+            dim=1
+        )
+
+        # Build shift groups if present
+        if self.shift_groups_indices:
+            shifts = [
+                torch.cat([x[i].reshape(x[i].shape[0], -1) for i in grp], dim=1)
+                for grp in self.shift_groups_indices
+            ]
+        else:
+            shifts = None
+
+        return int_inputs, shifts
 
     def _transform_y(self, row):
         if self.target_data_type in ('continous',) or 'yc' in self.target_data_type:
@@ -419,65 +486,123 @@ class GenericDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-        row = self.df.iloc[idx]
         x_data = []
 
-        # for source nodes the dataset gets just a 1.0
+        # intercept if needed
         if self.h_needs_simple_intercept:
-            x_data.append(torch.tensor(1.0))
-        
-        # id target is a source node, return the x_data and y
-        if self.target_is_source:
-            
-            if not self.return_intercept_shift:
-                if self.return_y:
-                    y = self._transform_y(row)
-                    return (tuple(x_data), y)
-                else:
-                    return tuple(x_data)
-            
-            batched = [x.unsqueeze(0) for x in x_data]
-            int_in, shifts = self._preprocess_inputs(batched)
-            int_in = int_in.squeeze(0)
-            shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
-            if self.return_y:
-                y = self._transform_y(row)
-                return ((int_in, shifts), y)
-            else:
-                return (int_in, shifts)
+            x_data.append(self._const_one)
 
-        # predictors X 
-        for var in self.predictors:
-            dt = self.parents_datatype_dict[var].lower()
-            if dt in ('continous',) or 'xc' in dt:
-                x_data.append(torch.tensor(row[var], dtype=torch.float32))
-            elif 'ordinal' in dt and 'xn' in dt:
-                c = self.ordinal_num_classes[var]
-                o = int(row[var])
-                x_data.append(
-                    F.one_hot(torch.tensor(o, dtype=torch.long), num_classes=c).float().squeeze()
-                )
+        # predictors
+        for _, stored in zip(self.predictors, self.X_list):
+            if isinstance(stored, torch.Tensor):
+                x_data.append(stored[idx])
             else:
-                img = Image.open(row[var]).convert('RGB')
+                img = Image.open(stored[idx])
+                img = img.convert("RGB")
                 if self.transform:
                     img = self.transform(img)
                 x_data.append(img)
 
-        if not self.return_intercept_shift:
-            if self.return_y:
-                y = self._transform_y(row)
-                return tuple(x_data), y
-            else:
-                return tuple(x_data)
-
+        # intercept/shift decomposition
         batched = [x.unsqueeze(0) for x in x_data]
         int_in, shifts = self._preprocess_inputs(batched)
+
         int_in = int_in.squeeze(0)
         shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
-        if self.return_y:
-            y = self._transform_y(row)
-            return (int_in, shifts), y
-        return int_in, shifts
+
+        out = ((int_in, shifts), self.y_tensor[idx]) if self.return_y else (int_in, shifts)
+        return out
+
+
+
+
+    # import time
+    # def __getitem__(self, idx):
+    #     if not hasattr(self, "_timing_counter"):
+    #         self._timing_counter = 0
+    #         self._timing_accumulator = {}  # store sums
+    #         self._timing_samples = 0       # how many samples aggregated
+    #     self._timing_counter += 1
+    #     REPORT_INTERVAL = 10000
+
+    #     times = {}
+    #     t0 = time.perf_counter()
+    #     x_data = []
+
+    #     # intercept if needed
+    #     if self.h_needs_simple_intercept:
+    #         t_int0 = time.perf_counter()
+    #         x_data.append(self._const_one)
+    #         times["intercept_tensor"] = time.perf_counter() - t_int0
+
+    #     t1 = time.perf_counter()
+    #     times["setup"] = t1 - t0
+
+    #     # predictors
+    #     t_pred0 = time.perf_counter()
+    #     for var, stored in zip(self.predictors, self.X_list):
+    #         if isinstance(stored, torch.Tensor):
+    #             t_slice0 = time.perf_counter()
+    #             x_data.append(stored[idx])
+    #             times[f"slice_{var}"] = time.perf_counter() - t_slice0
+    #         else:
+    #             t_img0 = time.perf_counter()
+    #             img = Image.open(stored[idx])
+    #             times[f"image_open_{var}"] = time.perf_counter() - t_img0
+
+    #             t_conv0 = time.perf_counter()
+    #             img = img.convert("RGB")
+    #             times[f"image_convert_{var}"] = time.perf_counter() - t_conv0
+
+    #             if self.transform:
+    #                 t_trans0 = time.perf_counter()
+    #                 img = self.transform(img)
+    #                 times[f"transform_{var}"] = time.perf_counter() - t_trans0
+
+    #             x_data.append(img)
+    #     times["predictors_total"] = time.perf_counter() - t_pred0
+
+    #     # intercept/shift decomposition
+    #     t_bat0 = time.perf_counter()
+    #     batched = [x.unsqueeze(0) for x in x_data]
+    #     times["unsqueeze"] = time.perf_counter() - t_bat0
+
+    #     t_pre0 = time.perf_counter()
+    #     int_in, shifts = self._preprocess_inputs(batched)
+    #     times["preprocess_inputs"] = time.perf_counter() - t_pre0
+
+    #     t_sq0 = time.perf_counter()
+    #     int_in = int_in.squeeze(0)
+    #     shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
+    #     times["squeeze"] = time.perf_counter() - t_sq0
+
+    #     t_y0 = time.perf_counter()
+    #     out = ((int_in, shifts), self.y_tensor[idx]) if self.return_y else (int_in, shifts)
+    #     times["package_output"] = time.perf_counter() - t_y0
+
+    #     times["total"] = time.perf_counter() - t0
+
+    #     # --- accumulate stats ---
+    #     for k, v in times.items():
+    #         if k not in self._timing_accumulator:
+    #             self._timing_accumulator[k] = []
+    #         self._timing_accumulator[k].append(v)
+    #     self._timing_samples += 1
+
+    #     # --- report every REPORT_INTERVAL samples ---
+    #     if self._timing_counter % REPORT_INTERVAL == 0:
+    #         print(f"[TIMING REPORT after {self._timing_counter} samples]")
+    #         for k, vals in self._timing_accumulator.items():
+    #             arr = np.array(vals)
+    #             print(f"  {k:20s} mean={arr.mean():.6e} min={arr.min():.6e} max={arr.max():.6e}")
+    #         # reset
+    #         self._timing_accumulator = {}
+    #         self._timing_samples = 0
+
+    #     return out
+
+
+
 
 
 def get_dataloader(
