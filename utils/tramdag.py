@@ -287,6 +287,13 @@ class TramDagDataset(Dataset):
         settings = dict(cls.DEFAULTS)
         settings.update(kwargs)
 
+        # ouptu all setttings if debug
+        if settings.get("debug", False):
+            print("[DEBUG] TramDagDataset.from_dataframe() settings (after defaults + overrides):")
+            for k, v in settings.items():
+                print(f"    {k}: {v}")
+
+
         # infer variable name automatically
         callers_locals = inspect.currentframe().f_back.f_locals
         inferred = None
@@ -429,12 +436,6 @@ class TramDagDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-
-from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
-from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag
-from torch.optim import Adam
-import torch
-import os
 
 
 from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
@@ -628,7 +629,7 @@ class TramDagModel:
                 print(f"[INFO] Saved new minmax dict to {minmax_path}")
 
 
-    def _ensure_dataset(self, data, is_val=False):
+    def _ensure_dataset(self, data, is_val=False,**kwargs):
         """
         Ensure the input is converted to a TramDagDataset if needed.
 
@@ -644,7 +645,7 @@ class TramDagModel:
         TramDagDataset or None
         """
         if isinstance(data, pd.DataFrame):
-            return TramDagDataset.from_dataframe(data, self.cfg, shuffle=not is_val)
+            return TramDagDataset.from_dataframe(data, self.cfg, shuffle=not is_val,**kwargs)
         elif isinstance(data, TramDagDataset):
             return data
         elif data is None:
@@ -667,8 +668,8 @@ class TramDagModel:
         kwargs : dict
             Overrides for DEFAULTS_FIT (epochs, learning_rate, device, etc.).
         """
-        td_train_data = self._ensure_dataset(train_data, is_val=False)
-        td_val_data = self._ensure_dataset(val_data, is_val=True)
+        td_train_data = self._ensure_dataset(train_data, is_val=False, **kwargs)
+        td_val_data = self._ensure_dataset(val_data, is_val=True, **kwargs)
 
         # --- merge defaults with overrides ---
         settings = dict(self.DEFAULTS_FIT)
