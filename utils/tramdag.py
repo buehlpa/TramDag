@@ -658,132 +658,6 @@ class TramDagModel:
                 f"[ERROR] data must be pd.DataFrame, TramDagDataset, or None, got {type(data)}"
             )
 
-    # def fit(self, train_data, val_data=None, **kwargs):
-    #     """
-    #     Fit TRAM models for specified nodes.
-
-    #     Parameters
-    #     ----------
-    #     train_data : pd.DataFrame or TramDagDataset
-    #         Training data, either as a raw dataframe or as a TramDagDataset.
-    #     val_data : pd.DataFrame or TramDagDataset, optional
-    #         Validation data, either as a raw dataframe or as a TramDagDataset.
-    #     kwargs : dict
-    #         Overrides for DEFAULTS_FIT (epochs, learning_rate, device, etc.).
-    #     """
-    #     td_train_data = self._ensure_dataset(train_data, is_val=False, **kwargs)
-    #     td_val_data = self._ensure_dataset(val_data, is_val=True, **kwargs)
-
-    #     # --- merge defaults with overrides ---
-    #     settings = dict(self.DEFAULTS_FIT)
-    #     settings.update(kwargs)
-
-    #     # --- resolve device ---
-    #     device_arg = settings.get("device", "auto")
-    #     if device_arg == "auto":
-    #         device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    #     else:
-    #         device_str = device_arg
-    #     self.device = torch.device(device_str)
-    #     device = self.device
-
-    #     if self.debug:
-    #         print(f"[DEBUG] fit(): device: {device}")
-
-    #     # which nodes to train , default all nodes
-    #     train_list = settings["train_list"] or list(self.models.keys())
-
-    #     def _resolve(key, node):
-    #         val = settings[key]
-    #         return val[node] if isinstance(val, dict) else val
-
-    #     # store resolved settings for this fit
-    #     self.fit_settings = {k: {} for k in settings.keys()}
-
-    #     # calculate scaling from training data and write to EXPERIMENT_DIR 
-    #     self.load_or_compute_minmax(use_existing=False, write=True, td_train_data=td_train_data)
-
-    #     results = {}
-    #     for node in train_list:
-    #         model = self.models[node]
-
-    #         # resolve per-node settings
-    #         node_epochs = _resolve("epochs", node)
-    #         node_lr = _resolve("learning_rate", node)
-    #         node_debug = _resolve("debug", node)
-    #         node_save_linear_shifts = _resolve("save_linear_shifts", node)
-    #         node_verbose = _resolve("verbose", node)
-
-    #         # record them
-    #         self.fit_settings["epochs"][node] = node_epochs
-    #         self.fit_settings["learning_rate"][node] = node_lr
-    #         self.fit_settings["debug"][node] = node_debug
-    #         self.fit_settings["save_linear_shifts"][node] = node_save_linear_shifts
-    #         self.fit_settings["verbose"][node] = node_verbose
-
-    #         # resolve optimizer
-    #         if settings["optimizers"] and node in settings["optimizers"]:
-    #             optimizer = settings["optimizers"][node]
-    #         else:
-    #             optimizer = Adam(model.parameters(), lr=node_lr)
-    #         self.fit_settings["optimizers"][node] = optimizer
-
-    #         # resolve scheduler
-    #         if settings["schedulers"] and node in settings["schedulers"]:
-    #             scheduler = settings["schedulers"][node]
-    #         else:
-    #             scheduler = None
-    #         self.fit_settings["schedulers"][node] = scheduler
-
-    #         # grab loaders
-    #         train_loader = td_train_data.loaders[node]
-    #         val_loader = td_val_data.loaders[node] if td_val_data else None
-
-    #         # min max for scaling
-    #         min_vals = torch.tensor(self.minmax_dict[node][0], dtype=torch.float32, device=device)
-    #         max_vals = torch.tensor(self.minmax_dict[node][1], dtype=torch.float32, device=device)
-    #         min_max = torch.stack([min_vals, max_vals], dim=0)
-
-    #         try:
-    #             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
-    #             NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
-    #         except Exception:
-    #             NODE_DIR = os.path.join("models", node)
-    #             print("[WARNING] No log directory specified in config, saving to default location.")
-
-    #         os.makedirs(NODE_DIR, exist_ok=True)
-    #         self.fit_settings["NODE_DIR"] = {node: NODE_DIR}
-
-    #         if node_verbose:
-    #             print(f"\n[INFO] Training node '{node}' for {node_epochs} epochs on {device}")
-            
-                
-            
-            
-    #         history = train_val_loop(
-    #             node=node,
-    #             target_nodes=self.nodes_dict,
-    #             NODE_DIR=NODE_DIR,
-    #             tram_model=model,
-    #             train_loader=train_loader,
-    #             val_loader=val_loader,
-    #             epochs=node_epochs,
-    #             optimizer=optimizer,
-    #             use_scheduler=(scheduler is not None),
-    #             scheduler=scheduler,
-    #             save_linear_shifts=node_save_linear_shifts,
-    #             verbose=node_verbose,
-    #             device=device,
-    #             debug=node_debug,
-    #             min_max=min_max
-    #         )
-
-    #         results[node] = history
-
-    #     return results
-
-
-
     # ==========================================================
     #   TramDagModel._fit_single_node (picklable, static)
     # ==========================================================
@@ -921,7 +795,8 @@ class TramDagModel:
         self.load_or_compute_minmax(use_existing=False, write=True, td_train_data=td_train_data)
 
         # --- print header ---
-        print(f"[INFO] Training {len(train_list)} nodes ({train_mode}) on {device_str}")
+        if self.verbose or self.debug:
+            print(f"[INFO] Training {len(train_list)} nodes ({train_mode}) on {device_str}")
 
         # ======================================================================
         # Sequential mode  safe for GPU or debugging)
@@ -1508,3 +1383,133 @@ class TramDagModel:
 # td_model = TramDagModel.from_config(cfg, set_initial_weights=False,verbose=False) 
 
 # td_model.fit(train_df, val_df,epochs=520)
+
+
+
+############### GRAVEYARD 
+
+
+    # def fit(self, train_data, val_data=None, **kwargs):
+    #     """
+    #     Fit TRAM models for specified nodes.
+
+    #     Parameters
+    #     ----------
+    #     train_data : pd.DataFrame or TramDagDataset
+    #         Training data, either as a raw dataframe or as a TramDagDataset.
+    #     val_data : pd.DataFrame or TramDagDataset, optional
+    #         Validation data, either as a raw dataframe or as a TramDagDataset.
+    #     kwargs : dict
+    #         Overrides for DEFAULTS_FIT (epochs, learning_rate, device, etc.).
+    #     """
+    #     td_train_data = self._ensure_dataset(train_data, is_val=False, **kwargs)
+    #     td_val_data = self._ensure_dataset(val_data, is_val=True, **kwargs)
+
+    #     # --- merge defaults with overrides ---
+    #     settings = dict(self.DEFAULTS_FIT)
+    #     settings.update(kwargs)
+
+    #     # --- resolve device ---
+    #     device_arg = settings.get("device", "auto")
+    #     if device_arg == "auto":
+    #         device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    #     else:
+    #         device_str = device_arg
+    #     self.device = torch.device(device_str)
+    #     device = self.device
+
+    #     if self.debug:
+    #         print(f"[DEBUG] fit(): device: {device}")
+
+    #     # which nodes to train , default all nodes
+    #     train_list = settings["train_list"] or list(self.models.keys())
+
+    #     def _resolve(key, node):
+    #         val = settings[key]
+    #         return val[node] if isinstance(val, dict) else val
+
+    #     # store resolved settings for this fit
+    #     self.fit_settings = {k: {} for k in settings.keys()}
+
+    #     # calculate scaling from training data and write to EXPERIMENT_DIR 
+    #     self.load_or_compute_minmax(use_existing=False, write=True, td_train_data=td_train_data)
+
+    #     results = {}
+    #     for node in train_list:
+    #         model = self.models[node]
+
+    #         # resolve per-node settings
+    #         node_epochs = _resolve("epochs", node)
+    #         node_lr = _resolve("learning_rate", node)
+    #         node_debug = _resolve("debug", node)
+    #         node_save_linear_shifts = _resolve("save_linear_shifts", node)
+    #         node_verbose = _resolve("verbose", node)
+
+    #         # record them
+    #         self.fit_settings["epochs"][node] = node_epochs
+    #         self.fit_settings["learning_rate"][node] = node_lr
+    #         self.fit_settings["debug"][node] = node_debug
+    #         self.fit_settings["save_linear_shifts"][node] = node_save_linear_shifts
+    #         self.fit_settings["verbose"][node] = node_verbose
+
+    #         # resolve optimizer
+    #         if settings["optimizers"] and node in settings["optimizers"]:
+    #             optimizer = settings["optimizers"][node]
+    #         else:
+    #             optimizer = Adam(model.parameters(), lr=node_lr)
+    #         self.fit_settings["optimizers"][node] = optimizer
+
+    #         # resolve scheduler
+    #         if settings["schedulers"] and node in settings["schedulers"]:
+    #             scheduler = settings["schedulers"][node]
+    #         else:
+    #             scheduler = None
+    #         self.fit_settings["schedulers"][node] = scheduler
+
+    #         # grab loaders
+    #         train_loader = td_train_data.loaders[node]
+    #         val_loader = td_val_data.loaders[node] if td_val_data else None
+
+    #         # min max for scaling
+    #         min_vals = torch.tensor(self.minmax_dict[node][0], dtype=torch.float32, device=device)
+    #         max_vals = torch.tensor(self.minmax_dict[node][1], dtype=torch.float32, device=device)
+    #         min_max = torch.stack([min_vals, max_vals], dim=0)
+
+    #         try:
+    #             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+    #             NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+    #         except Exception:
+    #             NODE_DIR = os.path.join("models", node)
+    #             print("[WARNING] No log directory specified in config, saving to default location.")
+
+    #         os.makedirs(NODE_DIR, exist_ok=True)
+    #         self.fit_settings["NODE_DIR"] = {node: NODE_DIR}
+
+    #         if node_verbose:
+    #             print(f"\n[INFO] Training node '{node}' for {node_epochs} epochs on {device}")
+            
+                
+            
+            
+    #         history = train_val_loop(
+    #             node=node,
+    #             target_nodes=self.nodes_dict,
+    #             NODE_DIR=NODE_DIR,
+    #             tram_model=model,
+    #             train_loader=train_loader,
+    #             val_loader=val_loader,
+    #             epochs=node_epochs,
+    #             optimizer=optimizer,
+    #             use_scheduler=(scheduler is not None),
+    #             scheduler=scheduler,
+    #             save_linear_shifts=node_save_linear_shifts,
+    #             verbose=node_verbose,
+    #             device=device,
+    #             debug=node_debug,
+    #             min_max=min_max
+    #         )
+
+    #         results[node] = history
+
+    #     return results
+
