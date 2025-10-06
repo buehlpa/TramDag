@@ -1,0 +1,278 @@
+{
+    "date_of_creation": "2025-10-06 07:34:48",
+    "experiment_name": "create_configration_test3",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/create_configration_test3",
+        "LOG_DIR": "/home/bule/TramDag/dev_experiment_logs",
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/create_configration_test3"
+    },
+    "data_type": {
+        "x1": "continous",
+        "x2": "continous",
+        "x3": "continous",
+        "x4": "continous",
+        "x5": "continous",
+        "x6": "continous",
+        "x7": "continous"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "ls",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ci12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ci11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "cs"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "LinearShift",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexInterceptDefaultTabular11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular12"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular11"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "ComplexShiftDefaultTabular"
+        ],
+        [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "continous",
+            "node_type": "internal",
+            "parents": [
+                "x1"
+            ],
+            "parents_datatype": {
+                "x1": "continous"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls"
+            },
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift"
+            }
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x4": {
+            "Modelnr": 3,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x5": {
+            "Modelnr": 4,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x6": {
+            "Modelnr": 5,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x7": {
+            "Modelnr": 6,
+            "data_type": "continous",
+            "node_type": "sink",
+            "parents": [
+                "x1",
+                "x2",
+                "x3",
+                "x4",
+                "x5",
+                "x6"
+            ],
+            "parents_datatype": {
+                "x1": "continous",
+                "x2": "continous",
+                "x3": "continous",
+                "x4": "continous",
+                "x5": "continous",
+                "x6": "continous"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ci12",
+                "x2": "ci11",
+                "x3": "cs12",
+                "x4": "cs11",
+                "x5": "ls",
+                "x6": "cs"
+            },
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "ComplexInterceptDefaultTabular12",
+                "x2": "ComplexInterceptDefaultTabular11",
+                "x3": "ComplexShiftDefaultTabular12",
+                "x4": "ComplexShiftDefaultTabular11",
+                "x5": "LinearShift",
+                "x6": "ComplexShiftDefaultTabular"
+            }
+        }
+    }
+}

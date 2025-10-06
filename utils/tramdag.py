@@ -936,8 +936,8 @@ class TramDagModel:
             "number_of_samples": 10_000,
             "batch_size": 32,
             "delete_all_previously_sampled": True,
-            "verbose": False,
-            "debug": False,
+            "verbose": self.verbose if hasattr(self, "verbose") else False,
+            "debug": self.debug if hasattr(self, "debug") else False,
             "device": self.device.type if hasattr(self, "device") else "auto",
         }
         settings.update(kwargs)
@@ -957,6 +957,9 @@ class TramDagModel:
             device_str = device_arg
         self.device = torch.device(device_str)
         device = self.device
+
+        if self.debug or settings["debug"]:
+            print(f"[DEBUG] sample(): device: {device}")
 
         # ---- perform sampling ----
         sampled_by_node, latents_by_node = sample_full_dag(

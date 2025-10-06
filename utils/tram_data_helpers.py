@@ -603,18 +603,18 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
     high = torch.full((number_of_samples,), 1e5, device=device)
 
     if minmax_dict is not None:
+            min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32, device=device)
+            max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32, device=device)
+            min_max = torch.stack([min_vals, max_vals], dim=0)
+
+    else:
         try:
             min_vals = torch.tensor(target_nodes_dict[node]['min'], dtype=torch.float32).to(device)
             max_vals = torch.tensor(target_nodes_dict[node]['max'], dtype=torch.float32).to(device)
         except KeyError as e:
             raise KeyError(f"Missing 'min' or 'max' value in target_nodes_dict for node '{node}': {e}")
-        
         min_max = torch.stack([min_vals, max_vals], dim=0)
 
-    else:
-            min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32, device=device)
-            max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32, device=device)
-            min_max = torch.stack([min_vals, max_vals], dim=0)
     
     # Vectorized root-finding function
     def f_vectorized(targets):
@@ -839,11 +839,24 @@ def sample_full_dag(configuration_dict,
     - Continuous outcomes are sampled via vectorized root finding
       (Chandrupatla's algorithm), while ordinal outcomes use categorical sampling.
     """
-    
-    if predefined_latent_samples_df is not None:
-        print(f'[INFO] Using predefined latents samples from dataframe -> therefore n_samples is set to the number of rows in the dataframe: {len(predefined_latent_samples_df)}')
-        number_of_samples = len(predefined_latent_samples_df)
+    if verbose or debug:
+        print(f"[INFO] Starting full DAG sampling with {number_of_samples} samples per node.")
+        if do_interventions:
+            print(f"[INFO] Interventions specified for nodes: {list(do_interventions.keys())}")
+            
+    if debug:
+        print('[DEBUG] sample_full_dag: device:', device)
         
+        
+    if predefined_latent_samples_df is not None:
+        number_of_samples = len(predefined_latent_samples_df)
+        if verbose or debug:
+            print(f'[INFO] Using predefined latents samples from dataframe -> therefore n_samples is set to the number of rows in the dataframe: {len(predefined_latent_samples_df)}')
+    
+    
+    
+    
+    
     
     target_nodes_dict=configuration_dict["nodes"]
 
@@ -950,7 +963,7 @@ def sample_full_dag(configuration_dict,
                 
                 ### load modelweights
                 MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
-                tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=debug).to(device)
+                tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=debug, device=device,verbose=verbose).to(device)
                 tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
                 
                 # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
