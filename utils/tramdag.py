@@ -683,6 +683,9 @@ class TramDagModel:
         self.device = torch.device(device_str)
         device = self.device
 
+        if self.debug:
+            print(f"[DEBUG] fit(): device: {device}")
+
         # which nodes to train , default all nodes
         train_list = settings["train_list"] or list(self.models.keys())
 
@@ -749,7 +752,10 @@ class TramDagModel:
 
             if node_verbose:
                 print(f"\n[INFO] Training node '{node}' for {node_epochs} epochs on {device}")
-
+            
+                
+            
+            
             history = train_val_loop(
                 node=node,
                 target_nodes=self.nodes_dict,

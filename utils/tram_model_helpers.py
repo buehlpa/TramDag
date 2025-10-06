@@ -114,7 +114,15 @@ def get_fully_specified_tram_model(
     TramModel(intercept=..., shifts=[...])
     """
     
-    print(device)
+    # Settign the device
+    if device == "auto":
+        device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device_str = device
+    device = torch.device(device_str)
+    
+    if debug:
+        print(f'[DEBUG] get_fully_specified_tram_model(): device: {device}')
     
     from utils.tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
     
@@ -777,6 +785,9 @@ def train_val_loop(
     import time, os, json
     device = torch.device(device)
 
+    if debug:
+        print(f'[DEBUG] fitrain_val_loop():  device: {device}')
+    
     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
     tram_model = tram_model.to(device)
 
