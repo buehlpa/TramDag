@@ -504,7 +504,22 @@ class GenericDataset(Dataset):
                 x_data.append(img)
 
         # intercept/shift decomposition
-        batched = [x.unsqueeze(0) for x in x_data]
+        # batched = [x.unsqueeze(0) for x in x_data] # old version
+        
+        batched = []
+        for x in x_data:
+            if isinstance(x, torch.Tensor):
+                if x.ndim == 0:  # scalar (e.g., intercept)
+                    batched.append(x.view(1, 1))
+                elif x.ndim == 1:
+                    batched.append(x.unsqueeze(0))
+                else:
+                    batched.append(x.unsqueeze(0) if x.ndim == 3 else x)
+            else:
+                batched.append(x)
+        
+        
+        
         int_in, shifts = self._preprocess_inputs(batched)
 
         int_in = int_in.squeeze(0)

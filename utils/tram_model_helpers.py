@@ -1113,6 +1113,10 @@ def check_if_training_complete(node, NODE_DIR, epochs):
 #             print(f"[INFO] {epoch+1} Train NLL: {avg_train_loss:.4f} | Val NLL: {avg_val_loss:.4f} | Epoch time: {total_time:.2f}s")
 
 #     # If neither verbose nor debug is True, suppress all output completely.
+import time, os, json, torch
+from torch.utils.data import DataLoader
+
+
 
 def train_val_loop( 
     node,
@@ -1131,7 +1135,6 @@ def train_val_loop(
     debug: bool = False,
     min_max=None,
 ):
-    import time, os, json, torch
 
     device = torch.device(device)
 
@@ -1167,9 +1170,9 @@ def train_val_loop(
         start_epoch = 0
         best_val_loss = float('inf')
 
-    # Detect if loaders are datasets
-    train_is_dataset = isinstance(train_loader, torch.utils.data.Dataset)
-    val_is_dataset = isinstance(val_loader, torch.utils.data.Dataset)
+    # Detect input type
+    train_is_dataloader = isinstance(train_loader, DataLoader)
+    val_is_dataloader = isinstance(val_loader, DataLoader)
 
     # ---------------- MAIN LOOP ----------------
     for epoch in range(start_epoch, epochs):
@@ -1185,13 +1188,23 @@ def train_val_loop(
             prev_fetch_end = time.time()
 
         # ---------------- TRAIN LOOP ----------------
-        train_iter = range(len(train_loader)) if train_is_dataset else enumerate(train_loader)
-        for idx in train_iter:
-            if train_is_dataset:
-                batch_idx = idx
-                (int_input, shift_list), y = train_loader[idx]
+        if train_is_dataloader:
+            train_iterable = enumerate(train_loader)
+        else:
+            train_iterable = enumerate(range(len(train_loader)))
+
+        for batch_idx, item in train_iterable:
+            if train_is_dataloader:
+                (int_input, shift_list), y = item
             else:
-                batch_idx, ((int_input, shift_list), y) = idx
+                (int_input, shift_list), y = train_loader[item]
+
+                # ensure tensors have batch dimension
+                if torch.is_tensor(int_input):
+                    int_input = int_input.unsqueeze(0)
+                shift_list = [s.unsqueeze(0) if torch.is_tensor(s) else s for s in shift_list]
+                if torch.is_tensor(y):
+                    y = y.unsqueeze(0)
 
             if debug:
                 fetch_time = time.time() - prev_fetch_end
@@ -1246,7 +1259,7 @@ def train_val_loop(
             if debug:
                 print(f"[INFO] Scheduler step: {time.time() - t_sched:.4f}s")
 
-        avg_train_loss = train_loss / (len(train_loader) if not train_is_dataset else len(train_loader))
+        avg_train_loss = train_loss / (len(train_loader) if len(train_loader) > 0 else 1)
         train_loss_hist.append(avg_train_loss)
 
         # ---------------- VALIDATION ----------------
@@ -1255,45 +1268,57 @@ def train_val_loop(
         if debug:
             prev_val_fetch = time.time()
 
-        val_iter = range(len(val_loader)) if val_is_dataset else enumerate(val_loader)
-        with torch.no_grad():
-            for idx in val_iter:
-                if val_is_dataset:
-                    batch_idx = idx
-                    (int_input, shift_list), y = val_loader[idx]
-                else:
-                    batch_idx, ((int_input, shift_list), y) = idx
+        if val_loader is not None:
+            if val_is_dataloader:
+                val_iterable = enumerate(val_loader)
+            else:
+                val_iterable = enumerate(range(len(val_loader)))
 
-                if debug:
-                    fetch_time = time.time() - prev_val_fetch
-                    print(f"[INFO] VAL Batch {batch_idx} fetch: {fetch_time:.4f}s")
-                    bval_start = time.time()
+            with torch.no_grad():
+                for batch_idx, item in val_iterable:
+                    if val_is_dataloader:
+                        (int_input, shift_list), y = item
+                    else:
+                        (int_input, shift_list), y = val_loader[item]
+                        if torch.is_tensor(int_input):
+                            int_input = int_input.unsqueeze(0)
+                        shift_list = [s.unsqueeze(0) if torch.is_tensor(s) else s for s in shift_list]
+                        if torch.is_tensor(y):
+                            y = y.unsqueeze(0)
 
-                int_input = int_input.to(device)
-                shift_list = [s.to(device) for s in shift_list]
-                y = y.to(device)
+                    if debug:
+                        fetch_time = time.time() - prev_val_fetch
+                        print(f"[INFO] VAL Batch {batch_idx} fetch: {fetch_time:.4f}s")
+                        bval_start = time.time()
 
-                if debug:
-                    tval0 = time.time()
-                y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-                if debug:
-                    print(f"[INFO] VAL Forward: {time.time() - tval0:.4f}s")
+                    int_input = int_input.to(device)
+                    shift_list = [s.to(device) for s in shift_list]
+                    y = y.to(device)
 
-                if debug:
-                    tval1 = time.time()
-                if 'yo' in target_nodes[node]['data_type'].lower():
-                    loss = ontram_nll(y_pred, y)
-                else:
-                    loss = contram_nll(y_pred, y, min_max=min_max)
-                if debug:
-                    print(f"[INFO] VAL Loss: {time.time() - tval1:.4f}s")
-                    print(f"[INFO] VAL BATCH {batch_idx} Total: {time.time() - bval_start:.4f}s")
+                    if debug:
+                        tval0 = time.time()
+                    y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+                    if debug:
+                        print(f"[INFO] VAL Forward: {time.time() - tval0:.4f}s")
 
-                val_loss += loss.item()
-                if debug:
-                    prev_val_fetch = time.time()
+                    if debug:
+                        tval1 = time.time()
+                    if 'yo' in target_nodes[node]['data_type'].lower():
+                        loss = ontram_nll(y_pred, y)
+                    else:
+                        loss = contram_nll(y_pred, y, min_max=min_max)
+                    if debug:
+                        print(f"[INFO] VAL Loss: {time.time() - tval1:.4f}s")
+                        print(f"[INFO] VAL BATCH {batch_idx} Total: {time.time() - bval_start:.4f}s")
 
-        avg_val_loss = val_loss / (len(val_loader) if not val_is_dataset else len(val_loader))
+                    val_loss += loss.item()
+                    if debug:
+                        prev_val_fetch = time.time()
+
+            avg_val_loss = val_loss / (len(val_loader) if len(val_loader) > 0 else 1)
+        else:
+            avg_val_loss = float('nan')
+
         val_loss_hist.append(avg_val_loss)
 
         # ---------------- SAVING ----------------
@@ -1318,8 +1343,6 @@ def train_val_loop(
         if verbose or debug:
             total_time = time.time() - epoch_start if epoch_start is not None else 0.0
             print(f"[INFO] Epoch {epoch+1}: Train NLL={avg_train_loss:.4f} | Val NLL={avg_val_loss:.4f} | Time={total_time:.2f}s")
-
-
 
 
 # print training history
