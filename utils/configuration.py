@@ -318,7 +318,9 @@ def interactive_nn_names_matrix(CONF_DICT_PATH, seed=5):
                             nm[i, j] = "0"
             try:
                 write_nn_names_matrix_to_configuration(nm, CONF_DICT_PATH)
+                write_nodes_information_to_configuration(CONF_DICT_PATH)
                 plot_nn_names_matrix(nm, data_type)
+                
             except Exception as e:
                 print(f"Error saving or plotting NN-names matrix: {e}")
 

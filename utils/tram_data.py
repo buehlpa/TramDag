@@ -490,206 +490,123 @@ class GenericDataset(Dataset):
         return len(self.df)
 
 
-    # def __getitem__(self, idx):
-    #     x_data = []
-
-    #     # intercept if needed
-    #     if self.h_needs_simple_intercept:
-    #         x_data.append(self._const_one)
-
-    #     # predictors
-    #     for _, stored in zip(self.predictors, self.X_list):
-    #         if isinstance(stored, torch.Tensor):
-    #             x_data.append(stored[idx])
-    #         else:
-    #             img = Image.open(stored[idx])
-    #             img = img.convert("RGB")
-    #             if self.transform:
-    #                 img = self.transform(img)
-    #             x_data.append(img)
-
-    #     # intercept/shift decomposition
-    #     # batched = [x.unsqueeze(0) for x in x_data] # old version
-        
-    #     batched = []
-    #     for x in x_data:
-    #         if isinstance(x, torch.Tensor):
-    #             if x.ndim == 0:  # scalar (e.g., intercept)
-    #                 batched.append(x.view(1, 1))
-    #             elif x.ndim == 1:
-    #                 batched.append(x.unsqueeze(0))
-    #             else:
-    #                 batched.append(x.unsqueeze(0) if x.ndim == 3 else x)
-    #         else:
-    #             batched.append(x)
-        
-    #     int_in, shifts = self._preprocess_inputs(batched)
-
-    #     int_in = int_in.squeeze(0)
-    #     shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
-
-    #     out = ((int_in, shifts), self.y_tensor[idx]) if self.return_y else (int_in, shifts)
-    #     return out
-
     def __getitem__(self, idx):
-        start_total = time.perf_counter()
         x_data = []
-        timings = {}
 
-        # --- 1. Intercept ---
-        t0 = time.perf_counter()
+        # intercept if needed
         if self.h_needs_simple_intercept:
             x_data.append(self._const_one)
-        timings["intercept"] = time.perf_counter() - t0
 
-        # --- 2. Predictor loading (numeric + images) ---
-        t1 = time.perf_counter()
-        img_time_accum = 0.0
+        # predictors
         for _, stored in zip(self.predictors, self.X_list):
             if isinstance(stored, torch.Tensor):
                 x_data.append(stored[idx])
             else:
-                img_t0 = time.perf_counter()
-                # Lazy-load image on demand
-                with Image.open(stored[idx]) as img:
-                    img = img.convert("RGB")
-                    if self.transform:
-                        img = self.transform(img)
+                img = Image.open(stored[idx])
+                img = img.convert("RGB")
+                if self.transform:
+                    img = self.transform(img)
                 x_data.append(img)
-                img_time_accum += time.perf_counter() - img_t0
-        timings["predictor_loading"] = time.perf_counter() - t1
-        if img_time_accum > 0:
-            timings["image_loading"] = img_time_accum
 
-        # --- 3. Tensor batching ---
-        t2 = time.perf_counter()
+        # intercept/shift decomposition
+        # batched = [x.unsqueeze(0) for x in x_data] # old version
+        
         batched = []
         for x in x_data:
             if isinstance(x, torch.Tensor):
-                # Avoid redundant tensor copies
-                if x.ndim == 0:
+                if x.ndim == 0:  # scalar (e.g., intercept)
                     batched.append(x.view(1, 1))
                 elif x.ndim == 1:
                     batched.append(x.unsqueeze(0))
-                elif x.ndim == 3:  # image tensor
-                    batched.append(x.unsqueeze(0))
                 else:
-                    batched.append(x)
+                    batched.append(x.unsqueeze(0) if x.ndim == 3 else x)
             else:
                 batched.append(x)
-        timings["batching"] = time.perf_counter() - t2
-
-        # --- 4. Intercept/shift decomposition ---
-        t3 = time.perf_counter()
+        
         int_in, shifts = self._preprocess_inputs(batched)
-        timings["intercept_shift_split"] = time.perf_counter() - t3
 
-        # --- 5. Target fetch ---
-        t4 = time.perf_counter()
-        y = self.y_tensor[idx] if self.return_y else None
-        timings["target_fetch"] = time.perf_counter() - t4
+        int_in = int_in.squeeze(0)
+        shifts = [] if shifts is None else [s.squeeze(0) for s in shifts]
 
-        # --- 6. Total time ---
-        timings["total"] = time.perf_counter() - start_total
+        out = ((int_in, shifts), self.y_tensor[idx]) if self.return_y else (int_in, shifts)
+        return out
 
-        # --- Debug output for first 50 samples ---
-        if (self.debug or self.verbose) and self._timing_print_counter < 50:
-            self._timing_print_counter += 1
-            timing_str = ", ".join([f"{k}={v*1000:.2f}ms" for k, v in timings.items()])
-            print(f"[TIME] idx={idx}: {timing_str}")
+    # def __getitem__(self, idx):
+    #     start_total = time.perf_counter()
+    #     x_data = []
+    #     timings = {}
 
-        # --- Output formatting (avoid unnecessary tensor copies) ---
-        if int_in.ndim == 2 and int_in.shape[0] == 1:
-            int_in = int_in[0]
-        if shifts is None:
-            shifts = []
-        else:
-            shifts = [s[0] if s.ndim == 2 and s.shape[0] == 1 else s for s in shifts]
+    #     # --- 1. Intercept ---
+    #     t0 = time.perf_counter()
+    #     if self.h_needs_simple_intercept:
+    #         x_data.append(self._const_one)
+    #     timings["intercept"] = time.perf_counter() - t0
 
-        return ((int_in, shifts), y) if self.return_y else (int_in, shifts)
-
-
-    # def _precompute_all(self):
-    #     self.X_list = []
-    #     for var in self.predictors:
-    #         dt = self.parents_datatype_dict[var].lower()
-    #         if dt in ("continous",) or "xc" in dt:
-    #             arr = self.df[var].to_numpy(dtype=np.float32)
-    #             self.X_list.append(torch.from_numpy(arr).unsqueeze(1))
-    #         elif "ordinal" in dt and "xn" in dt:
-    #             c = self.ordinal_num_classes[var]
-    #             vals = self.df[var].to_numpy(dtype=np.int64)
-    #             onehot = F.one_hot(torch.from_numpy(vals), num_classes=c).float()
-    #             self.X_list.append(onehot)
+    #     # --- 2. Predictor loading (numeric + images) ---
+    #     t1 = time.perf_counter()
+    #     img_time_accum = 0.0
+    #     for _, stored in zip(self.predictors, self.X_list):
+    #         if isinstance(stored, torch.Tensor):
+    #             x_data.append(stored[idx])
     #         else:
-    #             # preload image tensors for speed
-    #             imgs = []
-    #             for p in self.df[var].tolist():
-    #                 img = Image.open(p).convert("RGB")
+    #             img_t0 = time.perf_counter()
+    #             # Lazy-load image on demand
+    #             with Image.open(stored[idx]) as img:
+    #                 img = img.convert("RGB")
     #                 if self.transform:
     #                     img = self.transform(img)
-    #                 imgs.append(img.unsqueeze(0))
-    #             self.X_list.append(torch.cat(imgs))
+    #             x_data.append(img)
+    #             img_time_accum += time.perf_counter() - img_t0
+    #     timings["predictor_loading"] = time.perf_counter() - t1
+    #     if img_time_accum > 0:
+    #         timings["image_loading"] = img_time_accum
 
-    #     if self.return_y and self.target_col in self.df.columns:
-    #         dtype = self.target_data_type
-    #         if dtype in ("continous",) or "yc" in dtype:
-    #             self.y_tensor = torch.tensor(
-    #                 self.df[self.target_col].to_numpy(dtype=np.float32)
-    #             )
-    #         elif self.target_num_classes:
-    #             vals = self.df[self.target_col].to_numpy(dtype=np.int64)
-    #             self.y_tensor = F.one_hot(
-    #                 torch.from_numpy(vals), num_classes=self.target_num_classes
-    #             ).float()
+    #     # --- 3. Tensor batching ---
+    #     t2 = time.perf_counter()
+    #     batched = []
+    #     for x in x_data:
+    #         if isinstance(x, torch.Tensor):
+    #             # Avoid redundant tensor copies
+    #             if x.ndim == 0:
+    #                 batched.append(x.view(1, 1))
+    #             elif x.ndim == 1:
+    #                 batched.append(x.unsqueeze(0))
+    #             elif x.ndim == 3:  # image tensor
+    #                 batched.append(x.unsqueeze(0))
+    #             else:
+    #                 batched.append(x)
     #         else:
-    #             self.y_tensor = None
+    #             batched.append(x)
+    #     timings["batching"] = time.perf_counter() - t2
+
+    #     # --- 4. Intercept/shift decomposition ---
+    #     t3 = time.perf_counter()
+    #     int_in, shifts = self._preprocess_inputs(batched)
+    #     timings["intercept_shift_split"] = time.perf_counter() - t3
+
+    #     # --- 5. Target fetch ---
+    #     t4 = time.perf_counter()
+    #     y = self.y_tensor[idx] if self.return_y else None
+    #     timings["target_fetch"] = time.perf_counter() - t4
+
+    #     # --- 6. Total time ---
+    #     timings["total"] = time.perf_counter() - start_total
+
+    #     # --- Debug output for first 50 samples ---
+    #     if (self.debug or self.verbose) and self._timing_print_counter < 50:
+    #         self._timing_print_counter += 1
+    #         timing_str = ", ".join([f"{k}={v*1000:.2f}ms" for k, v in timings.items()])
+    #         print(f"[TIME] idx={idx}: {timing_str}")
+
+    #     # --- Output formatting (avoid unnecessary tensor copies) ---
+    #     if int_in.ndim == 2 and int_in.shape[0] == 1:
+    #         int_in = int_in[0]
+    #     if shifts is None:
+    #         shifts = []
     #     else:
-    #         self.y_tensor = None
+    #         shifts = [s[0] if s.ndim == 2 and s.shape[0] == 1 else s for s in shifts]
 
-    # # --------------------------------------------------------------------------------
-    # # Build pre-concatenated tensors for ultra-fast access
-    # # --------------------------------------------------------------------------------
-    # def _build_fast_access_tensors(self):
-    #     tensors = [t for t in self.X_list if isinstance(t, torch.Tensor)]
-    #     if not tensors:
-    #         raise ValueError("No tensor predictors found!")
-    #     self.X_tensor = torch.cat(
-    #         [t if t.ndim == 2 else t.view(len(t), -1) for t in tensors], dim=1
-    #     )
-
-    #     # intercept and shift indexing
-    #     self.int_inputs_tensor = self.X_tensor[:, self.intercept_indices]
-    #     self.shift_tensors = [
-    #         self.X_tensor[:, grp] for grp in self.shift_groups_indices
-    #     ]
-
-    #     if self.h_needs_simple_intercept:
-    #         self.const_column = torch.ones(len(self.df), 1)
-    #         self.int_inputs_tensor = torch.cat(
-    #             [self.const_column, self.int_inputs_tensor], dim=1
-    #         )
-
-    # # --------------------------------------------------------------------------------
-    # # Fast path __getitem__
-    # # --------------------------------------------------------------------------------
-    # def __getitem__(self, idx):
-    #     int_in = self.int_inputs_tensor[idx]
-    #     shifts = [s[idx] for s in self.shift_tensors]
-    #     if self.return_y:
-    #         return (int_in, shifts), self.y_tensor[idx]
-    #     return int_in, shifts
-
-    # def _preprocess_inputs(self, x):
-    #     its = [x[i] for i in self.intercept_indices]
-    #     if not its:
-    #         raise ValueError("No intercept tensors found!")
-    #     int_inputs = torch.cat([t.view(t.shape[0], -1) for t in its], dim=1)
-    #     shifts = []
-    #     for grp in self.shift_groups_indices:
-    #         parts = [x[i].view(x[i].shape[0], -1) for i in grp]
-    #         shifts.append(torch.cat(parts, dim=1))
-    #     return int_inputs, (shifts if shifts else None)
+    #     return ((int_in, shifts), y) if self.return_y else (int_in, shifts)
 
 
 

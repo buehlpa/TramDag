@@ -35,7 +35,7 @@ def get_fully_specified_tram_model(
     node: str,
     configuration_dict: dict,
     set_initial_weights: bool = False,
-    TRAIN_DATA_PATH: str = None,
+    initial_data: str = None,
     verbose: bool = True,
     debug: bool = False,
     device='auto'
@@ -65,8 +65,8 @@ def get_fully_specified_tram_model(
     set_initial_weights : bool, optional (default=False)
         If True, initializes the intercept model with increasing weights based
         on COLR/POLR fits obtained from R. Requires `TRAIN_DATA_PATH`.
-    TRAIN_DATA_PATH : str, optional
-        Path to the training dataset CSV file. Must be provided if
+    initial_data : str or pandas.DataFrame or None, optional
+        Either a path to a CSV file or a pandas DataFrame. Required if
         `set_initial_weights=True`. Ignored otherwise.
     verbose : bool, optional (default=True)
         If True, prints high-level information about the model construction.
@@ -186,23 +186,47 @@ def get_fully_specified_tram_model(
     # set initial weights to be increasing for Intercept Model
     if set_initial_weights and nn_int is not None:
 
-        if TRAIN_DATA_PATH is None:
+        if initial_data is None:
             raise ValueError(
-                "TRAIN_DATA_PATH must be provided when set_initial_weights=True"
+                "initial_data (path to .csv OR pandas Dataframe) must be provided when set_initial_weights=True"
             )
+            
+
+        if initial_data is not None:
+            # case 1: DataFrame -> write to temporary CSV
+            if hasattr(initial_data, "to_csv"):
+                TEMP_CSV_PATH = f"temp_initial_data_{int(time.time())}.csv"
+                initial_data.to_csv(TEMP_CSV_PATH, index=False)
+                initial_data = TEMP_CSV_PATH
+                if debug:
+                    print(f"[DEBUG] Wrote DataFrame to temporary CSV: {TEMP_CSV_PATH}")
+            # case 2: assume it's already a path -> check existence
+            elif isinstance(initial_data, str):
+                if not os.path.exists(initial_data):
+                    raise FileNotFoundError(f"[ERROR] CSV path not found: {initial_data}")
+            else:
+                raise TypeError("[ERROR] initial_data must be either a str path, a DataFrame, or None.")
+    
         # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
         # init_last_layer_hardcoded(nn_int)
-
         init_last_layer_COLR_POLR(
             nn_int,
             node,
             configuration_dict,
             n_thetas,
-            TRAIN_DATA_PATH=TRAIN_DATA_PATH,
+            TRAIN_DATA_PATH=TEMP_CSV_PATH,
             debug=debug
         )
         if debug or verbose:
             print(f"[INFO] Initialized intercept model with preinitialized weights: {nn_int}")
+        
+        if TEMP_CSV_PATH and os.path.exists(TEMP_CSV_PATH):
+            try:
+                os.remove(TEMP_CSV_PATH)
+                if debug:
+                    print(f"[DEBUG] Removed temporary CSV file: {TEMP_CSV_PATH}")
+            except Exception as e:
+                print(f"[WARNING] Could not delete temporary file: {e}")
 
     # Build shift networks
     shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))

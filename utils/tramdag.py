@@ -1,19 +1,28 @@
-
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
 import numpy as np
 import pandas as pd
+import json
+import inspect
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from utils.configuration import (
-    load_configuration_dict,
-    write_configuration_dict,
-    validate_adj_matrix,
-    create_levels_dict,
-    create_nx_graph,
-)   
+from statsmodels.graphics.gofplots import qqplot_2samples
+from scipy.stats import logistic, probplot
 
-from utils.configuration import *
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torch.optim import Adam
+
+from joblib import Parallel, delayed
+
+from utils.configuration import load_configuration_dict,write_configuration_dict,validate_adj_matrix,create_levels_dict,create_nx_graph
+from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
+from utils.tram_data import GenericDataset
+from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
+
+
 
 class TramDagConfig:
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None, **kwargs):
@@ -24,9 +33,7 @@ class TramDagConfig:
             conf_dict: optional dict with configuration. If None, starts empty.
             CONF_DICT_PATH: optional path to config file.
         """
-        #TODO add verbose and debug , vebose print only infos, debug prints info + debug statements, warnings, errors are always printed
-        #TODO add veryfier such that nothing is missing for later training such as experiment name 
-        
+
         self.debug = False
         self.verbose = False
         
@@ -245,10 +252,116 @@ class TramDagConfig:
         plt.show()
 
 
-import inspect
-from utils.tram_data import GenericDataset
-from torch.utils.data import Dataset, DataLoader
+
 class TramDagDataset(Dataset):
+    
+    """
+    TramDagModel
+    =============
+
+    The `TramDagModel` class manages training, sampling, and analysis of a 
+    DAG-based (Directed Acyclic Graph) ensemble of TRAM (Transformational Regression And Marginalization)
+    models. Each node in the DAG corresponds to one TRAM model representing a variable and 
+    its conditional distribution given its parents. 
+
+    The class provides a unified interface for model construction, training (sequentially or in parallel),
+    evaluation, sampling, and diagnostics. It ensures consistent configuration management, 
+    scaling, and experiment organization.
+
+    ---------------------------------------------------------------------
+    Core Responsibilities
+    ---------------------------------------------------------------------
+    - Build one TRAM model per node based on a DAG configuration.
+    - Train all node models either sequentially or in parallel using multiprocessing.
+    - Automatically handle dataset creation, scaling (min-max normalization), and model checkpointing.
+    - Sample from the full DAG, optionally under interventions (do-operations).
+    - Compute and visualize latent representations and diagnostic plots.
+    - Load and visualize training histories and sampled vs. true data comparisons.
+    - Summarize experiment status, including trained models, histories, and sampling outputs.
+
+    ---------------------------------------------------------------------
+    Key Attributes
+    ---------------------------------------------------------------------
+    - **cfg** : TramDagConfig  
+      Configuration object defining the DAG structure, node types, and model specifications.
+
+    - **nodes_dict** : dict  
+      Mapping of node names to their structural/variable configurations.
+
+    - **models** : dict  
+      Mapping of node names to trained TRAM model instances.
+
+    - **device** : torch.device  
+      Device used for computation (“cpu” or “cuda”).
+
+    - **minmax_dict** : dict  
+      Node-wise min/max scaling parameters used for normalization and rescaling.
+
+    - **settings** : dict  
+      Flattened record of resolved configuration and training hyperparameters.
+
+    ---------------------------------------------------------------------
+    Configuration Defaults
+    ---------------------------------------------------------------------
+    - **DEFAULTS_CONFIG**  
+      Settings used at model construction (e.g. debug, set_initial_weights).
+
+    - **DEFAULTS_FIT**  
+      Settings used during training (e.g. epochs, learning_rate, device, callbacks).
+
+    ---------------------------------------------------------------------
+    Main Methods
+    ---------------------------------------------------------------------
+    - **from_config(cfg, **kwargs)** → TramDagModel  
+      Build all node models from a configuration dictionary.
+
+    - **from_directory(EXPERIMENT_DIR, ...)** → TramDagModel  
+      Load an existing experiment from disk, including configuration and scaling.
+
+    - **fit(train_data, val_data=None, **kwargs)** → dict  
+      Train all node models sequentially or in parallel; returns training histories.
+
+    - **get_latent(df)** → pd.DataFrame  
+      Compute latent variable (U) representations for all nodes.
+
+    - **show_latents(df, variable=None, confidence=0.95, simulations=1000)**  
+      Plot latent histograms and QQ plots with confidence bands.
+
+    - **sample(do_interventions=None, predefined_latent_samples_df=None, **kwargs)** → (dict, dict)  
+      Sample data from the DAG under observational or interventional regimes.
+
+    - **history()** → dict  
+      Load training and validation loss histories from experiment files.
+
+    - **plot_history(variable=None)**  
+      Visualize training/validation NLL curves for one or all nodes.
+
+    - **show_samples_vs_true(df, bins=100, ...)**  
+      Compare true vs. sampled node distributions using histograms or bar plots.
+
+    - **summary()**  
+      Print a comprehensive overview of all node models, their checkpoints, sampling outputs, and histories.
+
+    ---------------------------------------------------------------------
+    Notes
+    ---------------------------------------------------------------------
+    - Supports both continuous and ordinal/categorical nodes.
+    - Compatible with GPU training if individual TRAM models support CUDA.
+    - Ensures reproducibility and modular retraining per node.
+    - Requires auxiliary components such as `TramDagConfig`, `TramDagDataset`,
+      and functions like `train_val_loop`, `sample_full_dag`, and `get_fully_specified_tram_model`.
+
+    ---------------------------------------------------------------------
+    Example
+    ---------------------------------------------------------------------
+    >>> cfg = TramDagConfig.from_json("config.json")
+    >>> tram_dag = TramDagModel.from_config(cfg, device="cuda", debug=True)
+    >>> tram_dag.fit(train_df, val_df, epochs=50)
+    >>> samples, latents = tram_dag.sample(number_of_samples=5000)
+    >>> tram_dag.show_samples_vs_true(train_df)
+    >>> tram_dag.summary()
+
+    """
 
     DEFAULTS = {
         "batch_size": 32_000,
@@ -437,18 +550,8 @@ class TramDagDataset(Dataset):
         return len(self.df)
 
 
-
-from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
-from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
-from torch.optim import Adam
-from joblib import Parallel, delayed
-import torch
-import os
-
-
 class TramDagModel:
     
-    #TODO add docstring
     # ---- defaults used at construction time ----
     DEFAULTS_CONFIG = {
         "set_initial_weights": False,
@@ -880,8 +983,6 @@ class TramDagModel:
         simulations : int, optional
             Number of simulations for QQ bands. Default = 1000.
         """
-        import matplotlib.pyplot as plt
-        from scipy.stats import logistic, probplot
 
         # Compute latent representations
         latents_df = self.get_latent(df)
@@ -920,8 +1021,7 @@ class TramDagModel:
         """
         Adds confidence bands to a QQ plot using simulation under the null hypothesis.
         """
-        import numpy as np
-
+        
         n = len(sample)
         if n == 0:
             return
@@ -1103,8 +1203,6 @@ class TramDagModel:
                 If None, plot all nodes together.
             """
 
-            import matplotlib.pyplot as plt
-
             histories = self.history()
 
             # Select which nodes to plot
@@ -1188,10 +1286,7 @@ class TramDagModel:
         figsize : tuple, optional
             Figure size for each node. Default = (14, 5).
         """
-        import numpy as np
-        import matplotlib.pyplot as plt
-        import torch
-        from statsmodels.graphics.gofplots import qqplot_2samples
+
 
         target_nodes = self.cfg.conf_dict["nodes"]
         experiment_dir = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -1311,7 +1406,6 @@ class TramDagModel:
         3. Whether sampling results exist on disk.
         4. Whether training histories exist and number of epochs.
         """
-        import json
 
         try:
             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -1376,144 +1470,4 @@ class TramDagModel:
 
         print("=" * 100 + "\n")
 
-## Usage
-
-# cfg = TramDagConfig.load("/home/bule/TramDag/dev_experiment_logs/exp_6_2/configuration.json")
-
-# train_df=pd.read_csv('/home/bule/TramDag/dev_experiment_logs/exp_6_2/exp_6_2_train.csv')
-# val_df=pd.read_csv('/home/bule/TramDag/dev_experiment_logs/exp_6_2/exp_6_2_val.csv')
-# # splits 
-
-# td_model = TramDagModel.from_config(cfg, set_initial_weights=False,verbose=False) 
-
-# td_model.fit(train_df, val_df,epochs=520)
-
-
-
-############### GRAVEYARD 
-
-
-    # def fit(self, train_data, val_data=None, **kwargs):
-    #     """
-    #     Fit TRAM models for specified nodes.
-
-    #     Parameters
-    #     ----------
-    #     train_data : pd.DataFrame or TramDagDataset
-    #         Training data, either as a raw dataframe or as a TramDagDataset.
-    #     val_data : pd.DataFrame or TramDagDataset, optional
-    #         Validation data, either as a raw dataframe or as a TramDagDataset.
-    #     kwargs : dict
-    #         Overrides for DEFAULTS_FIT (epochs, learning_rate, device, etc.).
-    #     """
-    #     td_train_data = self._ensure_dataset(train_data, is_val=False, **kwargs)
-    #     td_val_data = self._ensure_dataset(val_data, is_val=True, **kwargs)
-
-    #     # --- merge defaults with overrides ---
-    #     settings = dict(self.DEFAULTS_FIT)
-    #     settings.update(kwargs)
-
-    #     # --- resolve device ---
-    #     device_arg = settings.get("device", "auto")
-    #     if device_arg == "auto":
-    #         device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    #     else:
-    #         device_str = device_arg
-    #     self.device = torch.device(device_str)
-    #     device = self.device
-
-    #     if self.debug:
-    #         print(f"[DEBUG] fit(): device: {device}")
-
-    #     # which nodes to train , default all nodes
-    #     train_list = settings["train_list"] or list(self.models.keys())
-
-    #     def _resolve(key, node):
-    #         val = settings[key]
-    #         return val[node] if isinstance(val, dict) else val
-
-    #     # store resolved settings for this fit
-    #     self.fit_settings = {k: {} for k in settings.keys()}
-
-    #     # calculate scaling from training data and write to EXPERIMENT_DIR 
-    #     self.load_or_compute_minmax(use_existing=False, write=True, td_train_data=td_train_data)
-
-    #     results = {}
-    #     for node in train_list:
-    #         model = self.models[node]
-
-    #         # resolve per-node settings
-    #         node_epochs = _resolve("epochs", node)
-    #         node_lr = _resolve("learning_rate", node)
-    #         node_debug = _resolve("debug", node)
-    #         node_save_linear_shifts = _resolve("save_linear_shifts", node)
-    #         node_verbose = _resolve("verbose", node)
-
-    #         # record them
-    #         self.fit_settings["epochs"][node] = node_epochs
-    #         self.fit_settings["learning_rate"][node] = node_lr
-    #         self.fit_settings["debug"][node] = node_debug
-    #         self.fit_settings["save_linear_shifts"][node] = node_save_linear_shifts
-    #         self.fit_settings["verbose"][node] = node_verbose
-
-    #         # resolve optimizer
-    #         if settings["optimizers"] and node in settings["optimizers"]:
-    #             optimizer = settings["optimizers"][node]
-    #         else:
-    #             optimizer = Adam(model.parameters(), lr=node_lr)
-    #         self.fit_settings["optimizers"][node] = optimizer
-
-    #         # resolve scheduler
-    #         if settings["schedulers"] and node in settings["schedulers"]:
-    #             scheduler = settings["schedulers"][node]
-    #         else:
-    #             scheduler = None
-    #         self.fit_settings["schedulers"][node] = scheduler
-
-    #         # grab loaders
-    #         train_loader = td_train_data.loaders[node]
-    #         val_loader = td_val_data.loaders[node] if td_val_data else None
-
-    #         # min max for scaling
-    #         min_vals = torch.tensor(self.minmax_dict[node][0], dtype=torch.float32, device=device)
-    #         max_vals = torch.tensor(self.minmax_dict[node][1], dtype=torch.float32, device=device)
-    #         min_max = torch.stack([min_vals, max_vals], dim=0)
-
-    #         try:
-    #             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
-    #             NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
-    #         except Exception:
-    #             NODE_DIR = os.path.join("models", node)
-    #             print("[WARNING] No log directory specified in config, saving to default location.")
-
-    #         os.makedirs(NODE_DIR, exist_ok=True)
-    #         self.fit_settings["NODE_DIR"] = {node: NODE_DIR}
-
-    #         if node_verbose:
-    #             print(f"\n[INFO] Training node '{node}' for {node_epochs} epochs on {device}")
-            
-                
-            
-            
-    #         history = train_val_loop(
-    #             node=node,
-    #             target_nodes=self.nodes_dict,
-    #             NODE_DIR=NODE_DIR,
-    #             tram_model=model,
-    #             train_loader=train_loader,
-    #             val_loader=val_loader,
-    #             epochs=node_epochs,
-    #             optimizer=optimizer,
-    #             use_scheduler=(scheduler is not None),
-    #             scheduler=scheduler,
-    #             save_linear_shifts=node_save_linear_shifts,
-    #             verbose=node_verbose,
-    #             device=device,
-    #             debug=node_debug,
-    #             min_max=min_max
-    #         )
-
-    #         results[node] = history
-
-    #     return results
 
