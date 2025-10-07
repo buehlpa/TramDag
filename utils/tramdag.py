@@ -925,7 +925,7 @@ class TramDagModel:
                 print(f"[INFO] Using {n_jobs} CPU workers for parallel node training")
             parallel_outputs = Parallel(
                 n_jobs=n_jobs,
-                backend="multiprocessing",
+                backend="loky",#loky, multiprocessing
                 verbose=10,
                 prefer="processes"
             )(delayed(self._fit_single_node)(node, self, settings, td_train_data, td_val_data, device_str) for node in train_list )
