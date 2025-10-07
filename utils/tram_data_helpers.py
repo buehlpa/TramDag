@@ -668,7 +668,8 @@ def provide_latents_for_input_data(
     EXPERIMENT_DIR,
     data_loader,
     base_df,
-    verbose=False
+    verbose=False,
+    min_max=None
 ):
     """
     Compute latent representations for each observation in base_df
@@ -694,9 +695,10 @@ def provide_latents_for_input_data(
     tram_model.eval()
 
     #### 2. Forward Pass
-    min_vals = torch.tensor(target_nodes[node]["min"], dtype=torch.float32, device=device)
-    max_vals = torch.tensor(target_nodes[node]["max"], dtype=torch.float32, device=device)
-    min_max = torch.stack([min_vals, max_vals], dim=0)
+    if min_max is None:
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
 
     latents_list = []
     with torch.no_grad():
@@ -719,11 +721,19 @@ def provide_latents_for_input_data(
     return latents_df
 
 
-def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbose=False):
+def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbose=False, min_max_dict=None):
 
     all_latents_dfs = []
 
     for node in configuration_dict["nodes"]:
+        
+        if min_max_dict is not None and node in min_max_dict:
+            min_vals = torch.tensor(min_max_dict[node][0], dtype=torch.float32)
+            max_vals = torch.tensor(min_max_dict[node][1], dtype=torch.float32)
+            min_max = torch.stack([min_vals, max_vals], dim=0)
+        else:
+            min_max=None
+            
         # Skip ordinal outcomes if not supported
         if is_outcome_modelled_ordinal(node, configuration_dict["nodes"]):
             print(f"[INFO] Skipping node '{node}' (ordinal targets not yet supported).")
@@ -753,7 +763,8 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbos
             EXPERIMENT_DIR=EXPERIMENT_DIR,
             data_loader=node_loader,
             base_df=df,
-            verbose=verbose
+            verbose=verbose,
+            min_max=min_max
         )
 
         all_latents_dfs.append(node_latents_df)

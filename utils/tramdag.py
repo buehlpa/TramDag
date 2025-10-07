@@ -572,7 +572,7 @@ class TramDagModel:
         "save_linear_shifts": True,
         "debug":False,
         "verbose": True,
-        "train_mode": "sequential",  # or "multiprocess"
+        "train_mode": "sequential",  # or "parallel"
     }
 
     def __init__(self):
@@ -848,7 +848,7 @@ class TramDagModel:
             Validation data.
         kwargs : dict
             May include:
-                - train_mode : "sequential" or "multiprocess"
+                - train_mode : "sequential" or "parallel"
                 - device : "cpu", "cuda", or "auto"
                 - num_workers, prefetch_factor, persistent_workers
                 - epochs, learning_rate, etc.
@@ -867,15 +867,15 @@ class TramDagModel:
 
         # --- training mode ---
         train_mode = settings.get("train_mode", "sequential").lower()
-        if train_mode not in ("sequential", "multiprocess"):
-            raise ValueError("train_mode must be 'sequential' or 'multiprocess'")
+        if train_mode not in ("sequential", "parallel"):
+            raise ValueError("train_mode must be 'sequential' or 'parallel'")
 
         # --- DataLoader safety logic ---
-        if train_mode == "multiprocess":
-            # if user passed loader multiprocessing params, warn and override
+        if train_mode == "parallel":
+            # if user passed loader paralleling params, warn and override
             for flag in ("num_workers", "persistent_workers", "prefetch_factor"):
                 if flag in kwargs:
-                    print(f"[WARNING] '{flag}' is ignored in multiprocess mode "
+                    print(f"[WARNING] '{flag}' is ignored in parallel mode "
                         f"(disabled to prevent nested multiprocessing).")
             # disable unsafe loader multiprocessing options
             settings["num_workers"] = 0
@@ -905,7 +905,7 @@ class TramDagModel:
         # Sequential mode  safe for GPU or debugging)
         # ======================================================================
         if train_mode == "sequential" or "cuda" in device_str:
-            if "cuda" in device_str and train_mode == "multiprocess":
+            if "cuda" in device_str and train_mode == "parallel":
                 print("[WARNING] GPU device detected — forcing sequential mode.")
             results = {}
             for node in train_list:
@@ -916,9 +916,9 @@ class TramDagModel:
             return results
 
         # ======================================================================
-        # Multiprocess mode (CPU only)
+        # parallel mode (CPU only)
         # ======================================================================
-        if train_mode == "multiprocess":
+        if train_mode == "parallel":
 
             n_jobs = min(len(train_list), os.cpu_count() // 2 or 1)
             if self.verbose or self.debug:
@@ -959,11 +959,13 @@ class TramDagModel:
                     "Latent extraction requires trained model checkpoints."
                 )
 
+            
             all_latents_df = create_latent_df_for_full_dag(
                 configuration_dict=self.cfg.conf_dict,
                 EXPERIMENT_DIR=EXPERIMENT_DIR,
                 df=df,
                 verbose=verbose,
+                min_max_dict=self.minmax_dict
             )
 
             return all_latents_df

@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 import networkx as nx
 import pandas as pd
+import os
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -463,6 +464,17 @@ def create_and_write_new_configuration_dict(experiment_name,CONF_DICT_PATH,EXPER
         print(f"Error writing configuration dictionary to {CONF_DICT_PATH}.", file=sys.stderr)
         raise
     return configuration_dict
+
+def setup_configuration(experiment_name,EXPERIMENT_DIR):
+    CONF_DICT_PATH = os.path.join(EXPERIMENT_DIR, f"configuration.json")
+    DATA_PATH = EXPERIMENT_DIR # <----------- change to different source if needed
+    os.makedirs(EXPERIMENT_DIR,exist_ok=True)
+    if os.path.exists(CONF_DICT_PATH):
+        print(f"Configuration already exists{CONF_DICT_PATH}")
+    else:
+        _=create_and_write_new_configuration_dict(experiment_name,CONF_DICT_PATH,EXPERIMENT_DIR,DATA_PATH,None)
+        print(f"Created new configuration file at {CONF_DICT_PATH}")
+
 
 def read_adj_matrix_from_configuration(CONF_DICT_PATH):
     """
