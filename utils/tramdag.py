@@ -489,21 +489,22 @@ class TramDagModel:
         self.cfg = cfg
         self.nodes_dict = self.cfg.conf_dict["nodes"] 
 
+
+        
+                
+        # update defaults with kwargs
+        settings = dict(cls.DEFAULTS_CONFIG)
+        settings.update(kwargs)
+
+
         # resolve device
-        device_arg = kwargs.get("device", "auto")
+        device_arg = settings.get("device", "auto")
         if device_arg == "auto":
             device_str = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             device_str = device_arg
         self.device = torch.device(device_str)
-        
-        # if hasattr(self, "models") and self.models:
-        #     for node, model in self.models.items():
-        #         self.models[node] = model.to(self.device)
-                
-        # merge defaults with user overrides
-        settings = dict(cls.DEFAULTS_CONFIG)
-        settings.update(kwargs)
+
 
         # set flags on the instance so they are accessible later
         self.debug = settings.get("debug", False)
@@ -753,15 +754,13 @@ class TramDagModel:
         # --- merge defaults ---
         settings = dict(self.DEFAULTS_FIT)
         settings.update(kwargs)
+        
+        self.debug = settings.get("debug", False)
+        self.verbose = settings.get("verbose", False)
 
         # --- resolve device ---
-        device_arg = settings.get("device", "auto")
-        if device_arg == "auto":
-            device_str = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            device_str = device_arg
+        device_str=self.get_device(settings)
         self.device = torch.device(device_str)
-        device = self.device
 
         # --- training mode ---
         train_mode = settings.get("train_mode", "sequential").lower()
@@ -784,12 +783,13 @@ class TramDagModel:
             if self.debug:
                 print("[DEBUG] Sequential mode: using DataLoader kwargs as provided.")
 
+        # --- which nodes to train ---
+        train_list = settings.get("train_list") or list(self.models.keys())
+
+
         # --- dataset prep (receives adjusted settings) ---
         td_train_data = self._ensure_dataset(train_data, is_val=False, **settings)
         td_val_data = self._ensure_dataset(val_data, is_val=True, **settings)
-
-        # --- which nodes to train ---
-        train_list = settings.get("train_list") or list(self.models.keys())
 
         # --- normalization ---
         self.load_or_compute_minmax(use_existing=False, write=True, td_train_data=td_train_data)
@@ -948,6 +948,14 @@ class TramDagModel:
                         label=f'{int(confidence*100)}% CI')
         ax.legend()
     
+    @staticmethod
+    def get_device(settings):
+        device_arg = settings.get("device", "auto")
+        if device_arg == "auto":
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device_str = device_arg
+        return device_str
     
     def sample(
         self,
@@ -1002,22 +1010,18 @@ class TramDagModel:
                 )
             
         # ---- resolve device ----
-        device_arg = settings["device"]
-        if device_arg == "auto":
-            device_str = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            device_str = device_arg
+        device_str=self.get_device(settings)
         self.device = torch.device(device_str)
-        device = self.device
+
 
         if self.debug or settings["debug"]:
-            print(f"[DEBUG] sample(): device: {device}")
+            print(f"[DEBUG] sample(): device: {self.device}")
 
         # ---- perform sampling ----
         sampled_by_node, latents_by_node = sample_full_dag(
             configuration_dict=self.cfg.conf_dict,
             EXPERIMENT_DIR=EXPERIMENT_DIR,
-            device=device,
+            device=self.device,
             do_interventions=do_interventions or {},
             predefined_latent_samples_df=predefined_latent_samples_df,
             number_of_samples=settings["number_of_samples"],

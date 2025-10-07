@@ -1136,6 +1136,7 @@ def train_val_loop(
     min_max=None,
 ):
 
+    ################################## 1. PREPARATION ##################################
     device = torch.device(device)
 
     if debug:
@@ -1170,11 +1171,15 @@ def train_val_loop(
         start_epoch = 0
         best_val_loss = float('inf')
 
-    # Detect input type
+    # CHECK whetere the loaders are DataLoader or Dataset
     train_is_dataloader = isinstance(train_loader, DataLoader)
     val_is_dataloader = isinstance(val_loader, DataLoader)
+ 
+    # flag to choose correct loss function
+    is_ontram = 'yo' in target_nodes[node]['data_type'].lower()
 
-    # ---------------- MAIN LOOP ----------------
+
+    ################################## 2. MAIN LOOP ##################################
     for epoch in range(start_epoch, epochs):
         tram_model.train()
         train_loss = 0.0
@@ -1187,11 +1192,12 @@ def train_val_loop(
         if debug:
             prev_fetch_end = time.time()
 
-        # ---------------- TRAIN LOOP ----------------
+        ################################## 2.1 TRAINING ##################################
         if train_is_dataloader:
             train_iterable = enumerate(train_loader)
         else:
             train_iterable = enumerate(range(len(train_loader)))
+
 
         for batch_idx, item in train_iterable:
             if train_is_dataloader:
@@ -1208,7 +1214,7 @@ def train_val_loop(
 
             if debug:
                 fetch_time = time.time() - prev_fetch_end
-                print(f"[INFO] Batch {batch_idx} fetch: {fetch_time:.4f}s")
+                print(f"[DEBUG] Batch {batch_idx} fetch: {fetch_time:.4f}s")
                 step_start = time.time()
 
             # Move to device
@@ -1217,25 +1223,28 @@ def train_val_loop(
             int_input = int_input.to(device)
             shift_list = [s.to(device) for s in shift_list]
             y = y.to(device)
+            
+            
+            
             if debug:
-                print(f"[INFO] Move to device: {time.time() - t0:.4f}s")
+                print(f"[DEBUG] Move to device: {time.time() - t0:.4f}s")
 
             # Forward
             if debug:
                 t1 = time.time()
             y_pred = tram_model(int_input=int_input, shift_input=shift_list)
             if debug:
-                print(f"[INFO] Forward: {time.time() - t1:.4f}s")
+                print(f"[DEBUG] Forward: {time.time() - t1:.4f}s")
 
             # Loss
             if debug:
                 t2 = time.time()
-            if 'yo' in target_nodes[node]['data_type'].lower():
+            if is_ontram:
                 loss = ontram_nll(y_pred, y)
             else:
                 loss = contram_nll(y_pred, y, min_max=min_max)
             if debug:
-                print(f"[INFO] Loss: {time.time() - t2:.4f}s")
+                print(f"[DEBUG] Loss: {time.time() - t2:.4f}s")
 
             # Backward + Step
             if debug:
@@ -1244,8 +1253,8 @@ def train_val_loop(
             loss.backward()
             optimizer.step()
             if debug:
-                print(f"[INFO] Backward+Step: {time.time() - t3:.4f}s")
-                print(f"[INFO] BATCH {batch_idx} Total time: {time.time() - step_start:.4f}s\n")
+                print(f"[DEBUG] Backward+Step: {time.time() - t3:.4f}s")
+                print(f"[DEBUG] BATCH {batch_idx} Total time: {time.time() - step_start:.4f}s\n")
 
             train_loss += loss.item()
             if debug:
@@ -1257,17 +1266,16 @@ def train_val_loop(
                 t_sched = time.time()
             scheduler.step()
             if debug:
-                print(f"[INFO] Scheduler step: {time.time() - t_sched:.4f}s")
+                print(f"[DEBUG] Scheduler step: {time.time() - t_sched:.4f}s")
 
         avg_train_loss = train_loss / (len(train_loader) if len(train_loader) > 0 else 1)
         train_loss_hist.append(avg_train_loss)
 
-        # ---------------- VALIDATION ----------------
+        ################################## 2.2 TRAINING ##################################
         tram_model.eval()
         val_loss = 0.0
         if debug:
             prev_val_fetch = time.time()
-
         if val_loader is not None:
             if val_is_dataloader:
                 val_iterable = enumerate(val_loader)
@@ -1288,7 +1296,7 @@ def train_val_loop(
 
                     if debug:
                         fetch_time = time.time() - prev_val_fetch
-                        print(f"[INFO] VAL Batch {batch_idx} fetch: {fetch_time:.4f}s")
+                        print(f"[DEBUG] VAL Batch {batch_idx} fetch: {fetch_time:.4f}s")
                         bval_start = time.time()
 
                     int_input = int_input.to(device)
@@ -1299,17 +1307,19 @@ def train_val_loop(
                         tval0 = time.time()
                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
                     if debug:
-                        print(f"[INFO] VAL Forward: {time.time() - tval0:.4f}s")
+                        print(f"[DEBUG] VAL Forward: {time.time() - tval0:.4f}s")
 
                     if debug:
-                        tval1 = time.time()
-                    if 'yo' in target_nodes[node]['data_type'].lower():
+                        tval1 = time.time() 
+                    if is_ontram:
                         loss = ontram_nll(y_pred, y)
                     else:
                         loss = contram_nll(y_pred, y, min_max=min_max)
+                        
+                        
                     if debug:
-                        print(f"[INFO] VAL Loss: {time.time() - tval1:.4f}s")
-                        print(f"[INFO] VAL BATCH {batch_idx} Total: {time.time() - bval_start:.4f}s")
+                        print(f"[DEBUG] VAL Loss: {time.time() - tval1:.4f}s")
+                        print(f"[DEBUG] VAL BATCH {batch_idx} Total: {time.time() - bval_start:.4f}s")
 
                     val_loss += loss.item()
                     if debug:
@@ -1321,7 +1331,7 @@ def train_val_loop(
 
         val_loss_hist.append(avg_val_loss)
 
-        # ---------------- SAVING ----------------
+        ################################## 2.3 SAVING ##################################
         if debug:
             save_start = time.time()
 
@@ -1338,7 +1348,7 @@ def train_val_loop(
             json.dump(val_loss_hist, f)
 
         if debug:
-            print(f"[INFO] Saving epoch artifacts: {time.time() - save_start:.4f}s")
+            print(f"[DEBUG] Saving epoch artifacts: {time.time() - save_start:.4f}s")
 
         if verbose or debug:
             total_time = time.time() - epoch_start if epoch_start is not None else 0.0
