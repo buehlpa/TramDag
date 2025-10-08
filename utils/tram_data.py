@@ -21,6 +21,7 @@ from PIL import Image
 from collections import OrderedDict
 import re
 
+import tqdm
 
 
 
@@ -45,7 +46,7 @@ class GenericDataset(Dataset):
 
             This dataset:
             - Loads samples from a pandas DataFrame.
-            - Extracts predictors according to metadata in `target_nodes`.
+            - Extracts predictors according to metadata in `all_nodes_dict`.
             - Encodes ordinal/continuous variables, and applies torchvision transforms to images.
             - Optionally splits predictors into intercept and shift groups for TRAM models.
             - Returns (X, y) pairs or just X, depending on configuration.
@@ -56,7 +57,7 @@ class GenericDataset(Dataset):
                 DataFrame containing predictor and target columns.
             target_col : str
                 Name of the target column in `df`.
-            target_nodes : dict, optional
+            all_nodes_dict : dict, optional
                 Mapping node_name → metadata dict with keys such as:
                 - 'data_type': str (e.g., "ordinal_yo", "continuous", "source")
                 - 'levels': int (for ordinal variables, number of levels)
@@ -109,7 +110,7 @@ class GenericDataset(Dataset):
             >>> dataset = GenericDataset(
             ...     df=my_df,
             ...     target_col="y",
-            ...     target_nodes=config["nodes"],
+            ...     all_nodes_dict=config["nodes"],
             ...     transform=my_transform,
             ...     return_intercept_shift=True,
             ...     debug=True
@@ -124,14 +125,14 @@ class GenericDataset(Dataset):
             setattr(self, k, v)
 
         
-        # initialize debug 
+        # initialize vebosity and debug
         self._set_verbosity(verbose)
         self._set_debug(debug)
 
         # set attributes via dedicated setters
         self._set_df(df)
         self._set_target_col(target_col)
-        self._set_target_nodes(target_nodes)
+        self._set_all_nodes_dict(target_nodes)
         self._set_ordered_parents_datatype_and_transformation_terms()
 
         self._set_predictors()
@@ -157,11 +158,12 @@ class GenericDataset(Dataset):
 
         # precompute tensors
         self._precompute_all()
-        # self._build_fast_access_tensors()
 
-        # constant for SI
+                # constant for SI
         self._const_one = torch.tensor(1.0)
         self._timing_print_counter = 0
+        
+
         
         if self.debug or self.verbose:
             print(f"[INFO] ------ Initalized all attributes of Genericdataset ------")
@@ -169,8 +171,9 @@ class GenericDataset(Dataset):
     
     # Setter methods
     def _set_ordered_parents_datatype_and_transformation_terms(self):
+        # set correctly ordered parents_datatype_dict and transformation_terms_preprocessing such that they are aligned with the model intake order
         
-        ordered_parents_datatype, ordered_transformation_terms_in_h, _ =self._ordered_parents(self.target_col, self.target_nodes)
+        ordered_parents_datatype, ordered_transformation_terms_in_h, _ =self._ordered_parents(self.target_col, self.all_nodes_dict)
         if not isinstance(ordered_parents_datatype, dict):
             raise TypeError(f"parents_datatype_dict must be dict, got {type(ordered_parents_datatype)}")
         self.parents_datatype_dict = ordered_parents_datatype
@@ -226,14 +229,14 @@ class GenericDataset(Dataset):
             print(f"[DEBUG] Set target_col: type={type(self.target_col)}, value={self.target_col}")
 
 
-    def _set_target_nodes(self, target_nodes):
-        if target_nodes is None:
-            target_nodes = {}
-        if not isinstance(target_nodes, dict):
-            raise TypeError(f"target_nodes must be dict, got {type(target_nodes)}")
-        self.target_nodes = target_nodes
+    def _set_all_nodes_dict(self, all_nodes_dict):
+        if all_nodes_dict is None:
+            all_nodes_dict = {}
+        if not isinstance(all_nodes_dict, dict):
+            raise TypeError(f"all_nodes_dict must be dict, got {type(all_nodes_dict)}")
+        self.all_nodes_dict = all_nodes_dict
         if self.debug:
-            print(f"[DEBUG] Set target_nodes: type={type(self.target_nodes)}, keys={list(self.target_nodes.keys())}")
+            print(f"[DEBUG] Set all_nodes_dict: type={type(self.all_nodes_dict)}, keys={list(self.all_nodes_dict.keys())}")
 
 
     def _set_predictors(self):
@@ -253,13 +256,13 @@ class GenericDataset(Dataset):
             print(f"[DEBUG] Set h_needs_simple_intercept: type={type(self.h_needs_simple_intercept)}, value={self.h_needs_simple_intercept}")
 
     def _set_target_data_type(self):
-        dtype = self.target_nodes.get(self.target_col, {}).get('data_type', '')
+        dtype = self.all_nodes_dict.get(self.target_col, {}).get('data_type', '')
         self.target_data_type = dtype.lower()
         if self.debug:
             print(f"[DEBUG] Set target_data_type: type={type(self.target_data_type)}, value={self.target_data_type}")
 
     def _set_target_num_classes(self):
-        levels = self.target_nodes.get(self.target_col, {}).get('levels')
+        levels = self.all_nodes_dict.get(self.target_col, {}).get('levels')
         if levels is not None and not isinstance(levels, int):
             raise TypeError(f"levels must be int, got {type(levels)}")
         self.target_num_classes = levels
@@ -268,7 +271,7 @@ class GenericDataset(Dataset):
             
     def _set_target_is_source(self):
         # determine if target node is a source
-        node_type = self.target_nodes.get(self.target_col, {}).get('node_type', '')
+        node_type = self.all_nodes_dict.get(self.target_col, {}).get('node_type', '')
         if not isinstance(node_type, str):
             raise TypeError(f"node_type metadata must be str, got {type(node_type)}")
         self.target_is_source = node_type.lower() == 'source'
@@ -443,7 +446,7 @@ class GenericDataset(Dataset):
     def _check_ordinal_levels(self):
         ords = []
         # include target if it’s ordinal
-        if 'ordinal' in self.target_nodes.get(self.target_col, {}).get('data_type', '').lower():
+        if 'ordinal' in self.all_nodes_dict.get(self.target_col, {}).get('data_type', '').lower():
             ords.append(self.target_col)
         # include any xn‐encoded predictors
         ords += [
@@ -458,7 +461,7 @@ class GenericDataset(Dataset):
                     print(f"[DEBUG] _check_ordinal_levels: Skipping '{v}' as it's not in the DataFrame")
                 continue
 
-            lvl = self.target_nodes[v].get('levels')
+            lvl = self.all_nodes_dict[v].get('levels')
             if lvl is None:
                 raise ValueError(f"Ordinal '{v}' missing 'levels' metadata.")
 
@@ -489,7 +492,7 @@ class GenericDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-
+    ##############################################  OLD VERSION OF __getitem__ working 8.10
     def __getitem__(self, idx):
         x_data = []
 
@@ -531,84 +534,27 @@ class GenericDataset(Dataset):
         out = ((int_in, shifts), self.y_tensor[idx]) if self.return_y else (int_in, shifts)
         return out
 
-    # def __getitem__(self, idx):
-    #     start_total = time.perf_counter()
-    #     x_data = []
-    #     timings = {}
-
-    #     # --- 1. Intercept ---
-    #     t0 = time.perf_counter()
-    #     if self.h_needs_simple_intercept:
-    #         x_data.append(self._const_one)
-    #     timings["intercept"] = time.perf_counter() - t0
-
-    #     # --- 2. Predictor loading (numeric + images) ---
-    #     t1 = time.perf_counter()
-    #     img_time_accum = 0.0
-    #     for _, stored in zip(self.predictors, self.X_list):
-    #         if isinstance(stored, torch.Tensor):
-    #             x_data.append(stored[idx])
-    #         else:
-    #             img_t0 = time.perf_counter()
-    #             # Lazy-load image on demand
-    #             with Image.open(stored[idx]) as img:
-    #                 img = img.convert("RGB")
-    #                 if self.transform:
-    #                     img = self.transform(img)
-    #             x_data.append(img)
-    #             img_time_accum += time.perf_counter() - img_t0
-    #     timings["predictor_loading"] = time.perf_counter() - t1
-    #     if img_time_accum > 0:
-    #         timings["image_loading"] = img_time_accum
-
-    #     # --- 3. Tensor batching ---
-    #     t2 = time.perf_counter()
-    #     batched = []
-    #     for x in x_data:
-    #         if isinstance(x, torch.Tensor):
-    #             # Avoid redundant tensor copies
-    #             if x.ndim == 0:
-    #                 batched.append(x.view(1, 1))
-    #             elif x.ndim == 1:
-    #                 batched.append(x.unsqueeze(0))
-    #             elif x.ndim == 3:  # image tensor
-    #                 batched.append(x.unsqueeze(0))
-    #             else:
-    #                 batched.append(x)
-    #         else:
-    #             batched.append(x)
-    #     timings["batching"] = time.perf_counter() - t2
-
-    #     # --- 4. Intercept/shift decomposition ---
-    #     t3 = time.perf_counter()
-    #     int_in, shifts = self._preprocess_inputs(batched)
-    #     timings["intercept_shift_split"] = time.perf_counter() - t3
-
-    #     # --- 5. Target fetch ---
-    #     t4 = time.perf_counter()
-    #     y = self.y_tensor[idx] if self.return_y else None
-    #     timings["target_fetch"] = time.perf_counter() - t4
-
-    #     # --- 6. Total time ---
-    #     timings["total"] = time.perf_counter() - start_total
-
-    #     # --- Debug output for first 50 samples ---
-    #     if (self.debug or self.verbose) and self._timing_print_counter < 50:
-    #         self._timing_print_counter += 1
-    #         timing_str = ", ".join([f"{k}={v*1000:.2f}ms" for k, v in timings.items()])
-    #         print(f"[TIME] idx={idx}: {timing_str}")
-
-    #     # --- Output formatting (avoid unnecessary tensor copies) ---
-    #     if int_in.ndim == 2 and int_in.shape[0] == 1:
-    #         int_in = int_in[0]
-    #     if shifts is None:
-    #         shifts = []
-    #     else:
-    #         shifts = [s[0] if s.ndim == 2 and s.shape[0] == 1 else s for s in shifts]
-
-    #     return ((int_in, shifts), y) if self.return_y else (int_in, shifts)
+    def save_precomputed(self, path):
+        items = []
+        for i in range(len(self)):
+            items.append(self[i])
+        torch.save(items, path)
+        if self.debug or self.verbose:
+            print(f"[INFO] Saved {len(items)} samples to {path}")
 
 
+
+### get Precomputed dataset class , minimal dataaset class to load precomputed data
+class GenericDatasetPrecomputed(torch.utils.data.Dataset):
+    def __init__(self, path):
+        self.items = torch.load(path, weights_only=True)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        return self.items[idx]
+    
 
 
 def get_dataloader(

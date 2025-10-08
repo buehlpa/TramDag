@@ -19,7 +19,7 @@ from joblib import Parallel, delayed
 
 from utils.configuration import load_configuration_dict,write_configuration_dict,validate_adj_matrix,create_levels_dict,create_nx_graph
 from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
-from utils.tram_data import GenericDataset
+from utils.tram_data import GenericDataset, GenericDatasetPrecomputed
 from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
 
 
@@ -372,6 +372,7 @@ class TramDagDataset(Dataset):
         "debug": False,
         "transform": None,
         "use_dataloader": True,
+        "use_precomputed": False, 
         # DataLoader extras
         "sampler": None,
         "batch_sampler": None,
@@ -467,6 +468,18 @@ class TramDagDataset(Dataset):
                 debug=self.debug if not isinstance(self.debug, dict) else self.debug[node],
             )
 
+        ########## QUICK PATCH 
+            if hasattr(self, "use_precomputed") and self.use_precomputed:
+                os.makedirs("temp", exist_ok=True) 
+                pth = os.path.join("temp", "precomputed.pt")
+
+                if hasattr(ds, "save_precomputed") and callable(getattr(ds, "save_precomputed")):
+                    ds.save_precomputed(pth)
+                    ds = GenericDatasetPrecomputed(pth)
+                else:
+                    print("[WARNING] Dataset has no 'save_precomputed()' method — skipping precomputation.")
+
+
             if self.use_dataloader:
                 # resolve per-node overrides
                 kwargs = {
@@ -489,7 +502,15 @@ class TramDagDataset(Dataset):
                 self.loaders[node] = DataLoader(ds, **kwargs)
             else:
                 self.loaders[node] = ds
-
+                
+        if hasattr(self, "use_precomputed") and self.use_precomputed:
+            if os.path.exists(pth):
+                try:
+                    os.remove(pth)
+                    if self.debug:
+                        print(f"[INFO] Removed existing precomputed file: {pth}")
+                except Exception as e:
+                    print(f"[WARNING] Could not remove {pth}: {e}")
 
     def _check_keys(self, attr_name, attr_value):
         """Check if dict keys match cfg.conf_dict['nodes'].keys()."""
