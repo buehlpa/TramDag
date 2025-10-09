@@ -594,7 +594,7 @@ class TramDagModel:
         "debug":False,
         "verbose": True,
         "train_mode": "sequential",  # or "parallel"
-        "return_history";False,
+        "return_history": False,
     }
 
     def __init__(self):
