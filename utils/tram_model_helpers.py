@@ -1173,7 +1173,7 @@ def evaluate_standard_logistic_fit(data: np.ndarray, num_quantiles: int = 100):
 #     #     -18.4207,  -2.0716, -17.7275, -18.4207, -17.7275, -18.4207, -17.7275,
 #     #     -18.4207, -17.7275, -18.4207,  -1.2992,   0.3862,   0.6534], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
     
-#     # TODO get thetas from : thetas=fit_r_model_subprocess(target, dtype, data_path,verbose=False)
+
 
 #     hardcoded = torch.tensor([-2.0079,  0.8893, -0.5046], dtype=last_linear.weight.dtype, device=last_linear.weight.device)
 #     ############################################################################################

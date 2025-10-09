@@ -564,6 +564,7 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             print("[DEBUG] sample_continous_modelled_target: source node, defaults to SI and 1 as inputs")
         if 'int_out' not in output_list[0]:
             raise KeyError("Missing 'int_out' in model output for source node.")
+        
         theta_single = output_list[0]['int_out'][0]
         theta_single = transform_intercepts_continous(theta_single)
         thetas_expanded = theta_single.repeat(number_of_samples, 1)
@@ -914,6 +915,7 @@ def sample_full_dag(configuration_dict,
                 pass
             
             ## 3. logic to make sure parents are always sampled first
+            ### TODO : throw error if dict not in causal order..
             skipping_node = False
             if target_nodes_dict[node]['node_type'] != 'source':
                 for parent in target_nodes_dict[node]['parents']:
@@ -954,7 +956,7 @@ def sample_full_dag(configuration_dict,
             else:
                 # if latents are predefined use them
                 if predefined_latent_samples_df is not None:
-                    predefinded_sample_name = node + "_U"
+                    predefinded_sample_name = node + "_U" ## TODO In config add in validator exception for _U
 
                     if predefinded_sample_name not in predefined_latent_samples_df.columns:
                         raise ValueError(

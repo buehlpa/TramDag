@@ -401,6 +401,11 @@ class TramDagDataset(Dataset):
         settings = dict(cls.DEFAULTS)
         settings.update(kwargs)
 
+        # store config and verify
+        self.cfg = cfg
+        self.cfg._verify_completeness()
+
+
         # ouptu all setttings if debug
         if settings.get("debug", False):
             print("[DEBUG] TramDagDataset.from_dataframe() settings (after defaults + overrides):")
@@ -421,7 +426,7 @@ class TramDagDataset(Dataset):
             if any(x in df_name.lower() for x in ["val", "validation", "test"]):
                 print(f"[WARNING] DataFrame '{df_name}' looks like a validation/test set → shuffle=True. Are you sure?")
 
-        self.cfg = cfg
+ # call again to ensure Warning messages if ordinal vars have missing levels
         self.df = df.copy()
         self._apply_settings(settings)
         self._build_dataloaders()
@@ -784,9 +789,6 @@ class TramDagModel:
                 f"[ERROR] data must be pd.DataFrame, TramDagDataset, or None, got {type(data)}"
             )
 
-    # ==========================================================
-    #   TramDagModel._fit_single_node (picklable, static)
-    # ==========================================================
     @staticmethod
     def _fit_single_node(node, self_ref, settings, td_train_data, td_val_data, device_str):
         """
@@ -1159,6 +1161,74 @@ class TramDagModel:
         )
 
         return sampled_by_node, latents_by_node
+
+    def load_sampled_and_latents(self, EXPERIMENT_DIR: str = None, nodes: list = None):
+        """
+        Load 'sampled.pt' and 'latents.pt' tensors for each node.
+
+        Parameters
+        ----------
+        EXPERIMENT_DIR : str, optional
+            Path to the experiment directory. If not provided, uses
+            self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"].
+        nodes : list, optional
+            List of node names to load. If not provided, loads all nodes in self.nodes_dict.
+
+        Returns
+        -------
+        sampled_by_node : dict
+            {node: sampled tensor (on CPU)}
+        latents_by_node : dict
+            {node: latent tensor (on CPU)}
+        """
+        # --- resolve paths and node list ---
+        if EXPERIMENT_DIR is None:
+            try:
+                EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+            except (AttributeError, KeyError):
+                raise ValueError(
+                    "[ERROR] Could not resolve EXPERIMENT_DIR from cfg.conf_dict['PATHS']. "
+                    "Please provide EXPERIMENT_DIR explicitly."
+                )
+
+        if nodes is None:
+            if hasattr(self, "nodes_dict"):
+                nodes = list(self.nodes_dict.keys())
+            else:
+                raise ValueError(
+                    "[ERROR] No node list found. Please provide `nodes` or initialize model with a config."
+                )
+
+        # --- load tensors ---
+        sampled_by_node = {}
+        latents_by_node = {}
+
+        for node in nodes:
+            node_dir = os.path.join(EXPERIMENT_DIR, f"{node}")
+            sampling_dir = os.path.join(node_dir, "sampling")
+
+            sampled_path = os.path.join(sampling_dir, "sampled.pt")
+            latents_path = os.path.join(sampling_dir, "latents.pt")
+
+            if not os.path.exists(sampled_path) or not os.path.exists(latents_path):
+                print(f"[WARNING] Missing files for node '{node}' — skipping.")
+                continue
+
+            try:
+                sampled = torch.load(sampled_path, map_location="cpu")
+                latent_sample = torch.load(latents_path, map_location="cpu")
+            except Exception as e:
+                print(f"[ERROR] Could not load sampling files for node '{node}': {e}")
+                continue
+
+            sampled_by_node[node] = sampled.detach().cpu()
+            latents_by_node[node] = latent_sample.detach().cpu()
+
+        if self.verbose or self.debug:
+            print(f"[INFO] Loaded sampled and latent tensors for {len(sampled_by_node)} nodes from {EXPERIMENT_DIR}")
+
+        return sampled_by_node, latents_by_node
+
 
     def history(self):
         """
