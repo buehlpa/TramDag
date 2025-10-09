@@ -594,6 +594,7 @@ class TramDagModel:
         "debug":False,
         "verbose": True,
         "train_mode": "sequential",  # or "parallel"
+        "return_history";False,
     }
 
     def __init__(self):
@@ -934,7 +935,7 @@ class TramDagModel:
                     node, self, settings, td_train_data, td_val_data, device_str
                 )
                 results[node] = history
-            return results
+        
 
         # ======================================================================
         # parallel mode (CPU only)
@@ -952,6 +953,8 @@ class TramDagModel:
             )(delayed(self._fit_single_node)(node, self, settings, td_train_data, td_val_data, device_str) for node in train_list )
 
             results = {node: hist for node, hist in parallel_outputs}
+        
+        if settings.get("return_history", False):
             return results
 
 
