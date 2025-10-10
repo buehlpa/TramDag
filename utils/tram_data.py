@@ -279,17 +279,42 @@ class GenericDataset(Dataset):
             print(f"[DEBUG] Set target_is_source: type={type(self.target_is_source)}, value={self.target_is_source}")
 
     def _set_ordinal_numal_classes(self):
-        # compute number of classes for each ordinal-xn predictor
+        """
+        Compute the number of classes for each ordinal-Xn predictor.
+        Prefer the configured 'levels' value from all_nodes_dict, but
+        compare against observed unique levels in the DataFrame.
+        If they don't match, emit a warning but continue.
+        """
         mapping = {}
         for v in self.predictors:
             dt = self.parents_datatype_dict[v]
             if not isinstance(dt, str):
                 raise TypeError(f"datatype for predictor '{v}' must be str, got {type(dt)}")
+
             if 'ordinal' in dt.lower() and 'xn' in dt.lower():
                 if v not in self.df.columns:
                     raise ValueError(f"Predictor column '{v}' not in DataFrame")
-                mapping[v] = self.df[v].nunique()
+
+                # Configured number of levels
+                cfg_levels = self.all_nodes_dict.get(v, {}).get('levels', None)
+                # Observed unique values
+                observed_levels = int(self.df[v].nunique())
+                # Decide what to use
+                if cfg_levels is not None:
+                    mapping[v] = cfg_levels
+                    if observed_levels != cfg_levels:
+                        print(
+                            f"[WARNING] Ordinal '{v}' has {observed_levels} unique values in data "
+                            f"but is configured for {cfg_levels} levels — using configured value."
+                        )
+                else:
+                    mapping[v] = observed_levels
+                    print(
+                        f"[WARNING] Ordinal '{v}' has no 'levels' specified in config — "
+                        f"using observed {observed_levels} levels from data."
+                    )
         self.ordinal_num_classes = mapping
+
         if self.debug:
             print(f"[DEBUG] Set ordinal_num_classes: type={type(self.ordinal_num_classes)}, value={self.ordinal_num_classes}")
 
@@ -474,14 +499,18 @@ class GenericDataset(Dataset):
 
             # allow either exact ints or approximate scaled floats
             if np.array_equal(uniq, expected_int):
-                # integer‐indexed: OK
-                continue
+                # perfectly integer-encoded
+                if self.debug:
+                    print(f"[DEBUG] Ordinal '{v}' matches expected integer encoding {expected_int.tolist()}.")
             elif np.allclose(uniq, expected_scaled, atol=1e-8):
-                # scaled floats: OK
-                continue
+                # scaled floats encoding
+                if self.debug:
+                    print(f"[DEBUG] Ordinal '{v}' matches expected scaled encoding {expected_scaled.tolist()}.")
+            elif len(uniq) == 1:
+                print(f"[WARNING] Ordinal '{v}' has constant value {uniq.tolist()} — may reduce model diversity.")
             else:
-                raise ValueError(
-                    f"Ordinal '{v}' values {uniq.tolist()} do not match expected "
+                print(
+                    f"[WARNING] Ordinal '{v}' values {uniq.tolist()} do not match expected "
                     f"integers {expected_int.tolist()} or scaled floats {expected_scaled.tolist()}."
                 )
 
