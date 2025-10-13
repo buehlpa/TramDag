@@ -194,12 +194,21 @@ def get_fully_specified_tram_model(
 
         if initial_data is not None:
             # case 1: DataFrame -> write to temporary CSV
+
+            
+            
             if hasattr(initial_data, "to_csv"):
-                TEMP_CSV_PATH = f"temp_initial_data_{int(time.time())}.csv"
+                
+                TEMP_DIR = "temp"
+                os.makedirs(TEMP_DIR, exist_ok=True)
+                
+                TEMP_CSV_PATH = os.path.join(TEMP_DIR, f"initial_data_{int(time.time())}.csv")
                 initial_data.to_csv(TEMP_CSV_PATH, index=False)
                 initial_data = TEMP_CSV_PATH
                 if debug:
                     print(f"[DEBUG] Wrote DataFrame to temporary CSV: {TEMP_CSV_PATH}")
+                    
+                    
             # case 2: assume it's already a path -> check existence
             elif isinstance(initial_data, str):
                 if not os.path.exists(initial_data):

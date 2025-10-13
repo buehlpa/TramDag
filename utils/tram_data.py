@@ -460,13 +460,21 @@ class GenericDataset(Dataset):
             dt = self.parents_datatype_dict[v].lower()
             if 'ordinal' in dt and 'xn' in dt:
                 vals = set(self.df[v].dropna().unique())
-                if vals != set(range(len(vals))):
+                cfg_levels = self.all_nodes_dict.get(v, {}).get('levels', len(vals))
+                expected = set(range(cfg_levels))
+                if not vals.issubset(expected):
                     raise ValueError(
-                        f"Ordinal predictor '{v}' must be zero‑indexed; got {sorted(vals)}"
+                        f"Ordinal predictor '{v}' has invalid values {sorted(vals)} "
+                        f"for expected range {sorted(expected)}"
+                    )
+                if vals != expected:
+                    print(
+                        f"[WARNING] Ordinal predictor '{v}' has only observed levels {sorted(vals)} "
+                        f"but is configured for {cfg_levels} — keeping encoding dimension {cfg_levels}."
                     )
         if self.debug:
             print(f"[DEBUG] _check_multiclass_predictors_of_df: checked multiclass_predicitors passed")
-                
+
 
     def _check_ordinal_levels(self):
         ords = []
