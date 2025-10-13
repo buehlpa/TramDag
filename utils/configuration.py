@@ -503,22 +503,36 @@ def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
     configuration_dict['adj_matrix'] = adj_matrix.tolist()  # Convert to list for JSON serialization
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
 
-def print_data_type_modeling_setting(data_type):    
-        for variable, dtype in data_type.items():
-            if dtype == 'continous':
-                print(f"Variable '{variable}' is modeled as a continuous variable. for target and predictor.")
-            if dtype == 'ordinal_Xn_Yc':
-                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: OneHot and TARGET: continous.")
-            if dtype == 'ordinal_Xn_Yo':
-                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: OneHot and TARGET: OneHot.")
-            if dtype == 'ordinal_Xc_Yc':
-                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: continous and TARGET: continous.")
-            if dtype == 'ordinal_Xc_Yo':
-                print(f"Variable '{variable}' is modeled as an ordinal   variable. As PREDICTOR: continous and TARGET: OneHot.")
-            if dtype == 'other':
-                print(f"Variable '{variable}' is modeled as a variable with other modeling settings.")
-            
+def print_data_type_modeling_setting(data_type):
+    # header
+    print("-" * 105)
+    print(f"{'':<20}  {'':<15}  |{'MODEL SETTINGS':^60}")
+    print(f"{'Variable':<20} | {'dtype':<15} | {'As Predictor':<30} | {'As Target':<30}")
+    print("-" * 105)
 
+    for variable, dtype in data_type.items():
+        if dtype == 'continous':
+            pred, targ = "continuous [c]", "continuous [c]"
+        elif dtype == 'ordinal_Xn_Yc':
+            pred, targ = "ordinal    [0,…,K]]", "continuous [c]"
+        elif dtype == 'ordinal_Xn_Yo':
+            pred, targ = "ordinal [0,…,K]", "ordinal    [0,…,K]"
+        elif dtype == 'ordinal_Xc_Yc':
+            pred, targ = "continuous [c]", "continuous [c]"
+        elif dtype == 'ordinal_Xc_Yo':
+            pred, targ = "continuous [c]", "ordinal    [0,…,K]"
+        else:
+            pred, targ = "other", "other"
+
+        print(f"{variable:<20} | {dtype:<15} | {pred:<30} | {targ:<30}")
+    print("-" * 105)
+            
+def validate_variable_names(keys):
+    for var in keys:
+        #if variable end with _U or _u raise error : is reserved for latents variables
+        if var.endswith('_U') or var.endswith('_u'):
+            raise ValueError(f"Variable name '{var}' is invalid: names ending with '_U' or '_u' are reserved for latent variables.")
+        
     
 def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> None:
     """
@@ -531,11 +545,16 @@ def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> No
     try:
         configuration_dict = load_configuration_dict(CONF_DICT_PATH)
         configuration_dict['data_type'] = data_type
+        
+        validate_variable_names(data_type.keys())
+        
         if validate_data_types(data_type):
             pass
         else:
             raise ValueError("Invalid data types in the provided dictionary.")
         
+
+
         
         print_data_type_modeling_setting(data_type)
         
@@ -752,8 +771,15 @@ def create_nn_model_names(adj_matrix, data_type):
     # Warn if cs or ci appear anywhere
     if np.any(np.char.startswith(adj_matrix.astype(str), 'cs')) or \
        np.any(np.char.startswith(adj_matrix.astype(str), 'ci')):
-        print('*************\n Model has Complex intercepts and Complex shifts, please add your Model to the modelzoo \n*************')
-
+        print(
+            "*************\n"
+            "Model has Complex intercepts and/or Complex shifts.\n\n"
+            "For standard networks, hit the 'Generate' button.\n\n"
+            "If you want to add your own models for complex shifts and/or complex intercepts,\n"
+            "add them to models.py, reload, then enter the model name in the corresponding field\n"
+            "in this tool and hit 'Generate'.\n"
+            "*************"
+)
     # Base model name mappings
     full_model_mappings = {
         'cont': {

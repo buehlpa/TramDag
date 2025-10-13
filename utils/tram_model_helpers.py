@@ -1036,7 +1036,7 @@ def train_val_loop(
         if verbose or debug:
             total_time = time.time() - epoch_start if epoch_start is not None else 0.0
             print(f"[INFO] Epoch {epoch+1}: Train NLL={avg_train_loss:.4f} | Val NLL={avg_val_loss:.4f} | Time={total_time:.2f}s")
-        return (train_loss_hist, val_loss_hist)
+    return (train_loss_hist, val_loss_hist)
 
 
 # print training history
