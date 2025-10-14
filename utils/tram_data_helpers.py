@@ -633,7 +633,7 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
         f_vectorized,
         low,
         high,
-        max_iter=10_000,
+        max_iter=100,
         tol=1e-12
     )
 

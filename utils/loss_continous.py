@@ -375,7 +375,7 @@ def chandrupatla_root_finder(f, low, high, max_iter=10_000, tol=1e-8):
     fb = f(b)
     fc = fa.clone()
 
-    for _ in trange(max_iter, desc="Chandrupatla root finding", leave=True):
+    for _ in trange(max_iter, desc="[INFO] Chandrupatla root finding ->  iterations:", leave=True):
         cond = (fb != fc) & (fa != fc)
         s_iqi = (
             (a * fb * fc) / ((fa - fb) * (fa - fc)) +

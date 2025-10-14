@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-10-13 06:29:10",
+    "date_of_creation": "2025-10-14 08:52:00",
     "experiment_name": "ordinal_vars_test",
     "PATHS": {
         "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/ordinal_vars_test",
@@ -35,7 +35,7 @@
             "0",
             "0",
             "0",
-            "cs12"
+            "cs11"
         ],
         [
             "0",
@@ -54,8 +54,8 @@
             "0",
             "0",
             "ls",
-            "0",
-            "cs11"
+            "ls",
+            "cs12"
         ],
         [
             "0",
@@ -63,7 +63,7 @@
             "0",
             "0",
             "0",
-            "ls",
+            "0",
             "0",
             "cs22"
         ],
@@ -117,7 +117,7 @@
             "0",
             "0",
             "0",
-            "ComplexShiftDefaultTabular12"
+            "ComplexShiftDefaultTabular11"
         ],
         [
             "0",
@@ -136,8 +136,8 @@
             "0",
             "0",
             "LinearShift",
-            "0",
-            "ComplexShiftDefaultTabular11"
+            "LinearShift",
+            "ComplexShiftDefaultTabular12"
         ],
         [
             "0",
@@ -145,7 +145,7 @@
             "0",
             "0",
             "0",
-            "LinearShift",
+            "0",
             "0",
             "ComplexShiftDefaultTabular22"
         ],
@@ -223,7 +223,7 @@
         },
         "t1": {
             "Modelnr": 3,
-            "data_type": "ordinal_Xn_Yo",
+            "data_type": "ordinal_Xc_Yo",
             "node_type": "source",
             "parents": [],
             "parents_datatype": {},
@@ -237,7 +237,7 @@
         },
         "t2": {
             "Modelnr": 4,
-            "data_type": "ordinal_Xn_Yo",
+            "data_type": "ordinal_Xc_Yo",
             "node_type": "source",
             "parents": [],
             "parents_datatype": {},
@@ -254,24 +254,20 @@
             "data_type": "continous",
             "node_type": "internal",
             "parents": [
-                "t1",
-                "t2"
+                "t1"
             ],
             "parents_datatype": {
-                "t1": "ordinal_Xn_Yo",
-                "t2": "ordinal_Xn_Yo"
+                "t1": "ordinal_Xc_Yo"
             },
             "transformation_terms_in_h()": {
-                "t1": "ls",
-                "t2": "ls"
+                "t1": "ls"
             },
             "batch_size": 512,
             "epochs": 100,
             "learning_rate": 0.01,
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
-                "t1": "LinearShift",
-                "t2": "LinearShift"
+                "t1": "LinearShift"
             }
         },
         "x6": {
@@ -279,12 +275,15 @@
             "data_type": "continous",
             "node_type": "internal",
             "parents": [
+                "t1",
                 "x5"
             ],
             "parents_datatype": {
+                "t1": "ordinal_Xc_Yo",
                 "x5": "continous"
             },
             "transformation_terms_in_h()": {
+                "t1": "ls",
                 "x5": "ls"
             },
             "batch_size": 512,
@@ -292,6 +291,7 @@
             "learning_rate": 0.01,
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
+                "t1": "LinearShift",
                 "x5": "LinearShift"
             }
         },
@@ -312,16 +312,16 @@
                 "x1": "continous",
                 "x2": "continous",
                 "x3": "continous",
-                "t1": "ordinal_Xn_Yo",
-                "t2": "ordinal_Xn_Yo",
+                "t1": "ordinal_Xc_Yo",
+                "t2": "ordinal_Xc_Yo",
                 "x5": "continous",
                 "x6": "continous"
             },
             "transformation_terms_in_h()": {
                 "x1": "ls",
-                "x2": "cs12",
+                "x2": "cs11",
                 "x3": "cs21",
-                "t1": "cs11",
+                "t1": "cs12",
                 "t2": "cs22",
                 "x5": "ls",
                 "x6": "ls"
@@ -332,9 +332,9 @@
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
-                "x2": "ComplexShiftDefaultTabular12",
+                "x2": "ComplexShiftDefaultTabular11",
                 "x3": "ComplexShiftDefaultTabular21",
-                "t1": "ComplexShiftDefaultTabular11",
+                "t1": "ComplexShiftDefaultTabular12",
                 "t2": "ComplexShiftDefaultTabular22",
                 "x5": "LinearShift",
                 "x6": "LinearShift"

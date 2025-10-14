@@ -76,16 +76,28 @@ def fit_r_model_subprocess(target, dtype,theta_count, data_path, debug=False):
         raise ValueError(f"Unknown dtype: {dtype}")
 
     if dtype == "ordinal":
-        r_code = textwrap.dedent(f"""
-        library(MASS)
-        library(tram)
-        library(readr)
-
-        data <- read_csv("{data_path}")
-        data${target} <- factor(data${target}, ordered=TRUE)
-        model <- polr({target} ~ 1, data=data, method="logistic")
-        cat(model$zeta, sep="\\n")
-        """)
+        if theta_count < 2:
+            # Fall back to standard logistic regression
+            r_code = textwrap.dedent(f"""
+            library(MASS)
+            library(tram)
+            library(readr)
+            data <- read_csv("{data_path}")
+            data${target} <- as.numeric(as.factor(data${target})) - 1
+            model <- glm(`{target}` ~ 1, data=data, family=binomial(link="logit"))
+            cat(coef(model), sep="\\n")
+            """)
+        
+        else:
+            r_code = textwrap.dedent(f"""
+            library(MASS)
+            library(tram)
+            library(readr)
+            data <- read_csv("{data_path}")
+            data${target} <- factor(data${target}, ordered=TRUE)
+            model <- polr(`{target}` ~ 1, data=data, method="logistic")
+            cat(model$zeta, sep="\\n")
+            """)
     else:  # continuous
         r_code = textwrap.dedent(f"""
         library(MASS)
@@ -93,7 +105,7 @@ def fit_r_model_subprocess(target, dtype,theta_count, data_path, debug=False):
         library(readr)
 
         data <- read_csv("{data_path}")
-        model <- Colr({target} ~ 1, data=data, order={theta_count-1})
+        model <- Colr(`{target}` ~ 1, data=data, order={theta_count-1})
         cat(model$theta, sep="\\n")
         """)
 
