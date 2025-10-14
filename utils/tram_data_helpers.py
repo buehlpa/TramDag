@@ -892,8 +892,16 @@ def sample_full_dag(configuration_dict,
         SAMPLED_PATH = os.path.join(SAMPLING_DIR, "sampled.pt")
         LATENTS_PATH = os.path.join(SAMPLING_DIR, "latents.pt")
         
-
-
+        
+        ## 2. Check if the parents are already sampled -> must be given due to the causal ordering
+        for parent in target_nodes_dict[node]['parents']:
+            parent_dir = os.path.join(EXPERIMENT_DIR, parent)
+            try:
+                check_sampled_and_latents(parent_dir, debug=debug)
+            except FileNotFoundError:
+                if verbose or debug:
+                    print(f"[INFO] Skipping {node} as parent '{parent}' is not sampled yet.")
+        
         
         ## INTERVENTION, if node is to be intervened on , data is just saved
         if do_interventions and node in do_interventions.keys():
@@ -911,15 +919,15 @@ def sample_full_dag(configuration_dict,
                 # Store for immediate use
                 sampled_by_node[node] = intervention_vals
                 latents_by_node[node] = dummy_latents
-                
-                print(f'Interventional data for node {node} is saved')
-                continue  
-            
+                if verbose or debug:
+                    print(f'[INFO] Interventional data for node {node} is saved')
+                continue 
+
         ##### NO INTERVENTION, based on the sampled data from the parents the latents for each node the observational distribution is generated    
         else:
             # if latents are predefined use them
-            if predefined_latent_samples_df is not None:
-                predefinded_sample_name = node + "_U" ## TODO In config add in validator exception for _U
+            if predefined_latent_samples_df is not None and node in predefined_latent_samples_df.columns.str.replace('_U',''):
+                predefinded_sample_name = node + "_U" 
 
                 if predefinded_sample_name not in predefined_latent_samples_df.columns:
                     raise ValueError(
@@ -927,22 +935,25 @@ def sample_full_dag(configuration_dict,
                         f"Must be named '{predefinded_sample_name}'.")
                     
                 predefinded_sample = predefined_latent_samples_df[predefinded_sample_name].values
-                print(f'[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}')
+                if verbose or debug:
+                    print(f'[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}')
                 
                 latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
                 
-                ### sampling new latents
+                ## IF not predefined latents are sampled from standard logistic distribution
             else:
-                print(f'[INFO] Sampling new latents for node {node} from standard logistic distribution')
+                if verbose or debug:
+                    print(f'[INFO] Sampling new latents for node {node} from standard logistic distribution')
+                    
                 latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
-                
+            
             
             ### load modelweights
             MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
             tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=debug, device=device,verbose=verbose).to(device)
             tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
             
-            # isntead of sample loader use Generic Dataset but the df is just to sampled data from befor -> create df for each node
+            # create dataframe from sampled parents + dummy if no parents 
             sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
             
             sample_dataset = GenericDataset(sampled_df,target_col=node,
@@ -977,11 +988,11 @@ def sample_full_dag(configuration_dict,
             sampled_by_node[node] = sampled.detach().cpu()
             latents_by_node[node] = latent_sample.detach().cpu()
             
-            if verbose:
+            if verbose or debug:
                 print(f"[INFO] Completed sampling for node '{node}'")
             
         
-    if verbose:
+    if verbose or debug:
         print("[INFO] DAG sampling completed successfully for all nodes.")
 
     return sampled_by_node, latents_by_node
