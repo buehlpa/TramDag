@@ -959,6 +959,33 @@ class TramDagModel:
         if settings.get("return_history", False):
             return results
 
+    def linear_shift_history(self):
+        """
+        Load linear shift histories for all nodes.
+
+        Returns
+        -------
+        dict
+            Mapping of node names to their linear shift history DataFrames.
+        """
+        histories = {}
+        try:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        except KeyError:
+            raise ValueError(
+                "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
+                "Cannot load histories without experiment directory."
+            )
+
+        for node in self.nodes_dict.keys():
+            node_dir = os.path.join(EXPERIMENT_DIR, node)
+            history_path = os.path.join(node_dir, "linear_shifts_all_epochs.json")
+            if os.path.exists(history_path):
+                histories[node] = pd.read_json(history_path)
+            else:
+                print(f"[WARNING] No linear shift history found for node '{node}' at {history_path}")
+        return histories
+
 
     def get_latent(self, df, verbose=False):
             """
@@ -1287,6 +1314,10 @@ class TramDagModel:
             print(f"[INFO] Loaded training/validation histories for {len(all_histories)} nodes.")
 
         return all_histories
+
+
+
+
 
     def plot_history(self, variable: str = None):
             """

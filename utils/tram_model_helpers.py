@@ -612,7 +612,7 @@ def check_if_training_complete(node, NODE_DIR, epochs):
         return False
 
 
-###### orig version 
+# ##### orig version 
 # def train_val_loop(
 #     node,
 #     target_nodes,
@@ -801,250 +801,13 @@ from torch.utils.data import DataLoader
 
 
 
-# def train_val_loop( 
-#     node,
-#     target_nodes,
-#     NODE_DIR,
-#     tram_model: torch.nn.Module,
-#     train_loader,  # can be DataLoader or Dataset
-#     val_loader,    # can be DataLoader or Dataset
-#     epochs: int,
-#     optimizer: torch.optim.Optimizer,
-#     use_scheduler: bool,
-#     scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-#     save_linear_shifts: bool = False,
-#     verbose: bool = True,
-#     device: str = 'cpu',
-#     debug: bool = False,
-#     min_max=None,
-# ):
-
-#     ################################## 1. PREPARATION ##################################
-#     device = torch.device(device)
-
-#     if debug:
-#         print(f'[DEBUG] train_val_loop(): device: {device}')
-
-#     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
-#     tram_model = tram_model.to(device)
-
-#     # Prepare min/max normalization values
-#     if min_max is None:
-#         min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
-#         max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
-#         min_max = torch.stack([min_vals, max_vals], dim=0)
-
-#     # Load existing model if available
-#     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
-#         if verbose or debug:
-#             print("[INFO] Existing model found. Loading weights and history...")
-#         state_dict = torch.load(MODEL_PATH, map_location=device)
-#         tram_model.load_state_dict(state_dict)
-#         tram_model.to(device)
-#         with open(TRAIN_HIST_PATH, 'r') as f:
-#             train_loss_hist = json.load(f)
-#         with open(VAL_HIST_PATH, 'r') as f:
-#             val_loss_hist = json.load(f)
-#         start_epoch = len(train_loss_hist)
-#         best_val_loss = min(val_loss_hist)
-#     else:
-#         if verbose or debug:
-#             print("[INFO] No existing model found. Starting fresh...")
-#         train_loss_hist, val_loss_hist = [], []
-#         start_epoch = 0
-#         best_val_loss = float('inf')
-
-#     # CHECK whetere the loaders are DataLoader or Dataset
-#     train_is_dataloader = isinstance(train_loader, DataLoader)
-#     val_is_dataloader = isinstance(val_loader, DataLoader)
- 
-#     # flag to choose correct loss function
-#     is_ontram = 'yo' in target_nodes[node]['data_type'].lower()
-
-
-#     ################################## 2. MAIN LOOP ##################################
-#     for epoch in range(start_epoch, epochs):
-#         tram_model.train()
-#         train_loss = 0.0
-
-#         if verbose or debug:
-#             print(f"\n===== Epoch {epoch+1}/{epochs} =====")
-
-#         epoch_start = time.time() if (verbose or debug) else None
-
-#         if debug:
-#             prev_fetch_end = time.time()
-
-#         ################################## 2.1 TRAINING ##################################
-#         if train_is_dataloader:
-#             train_iterable = enumerate(train_loader)
-#         else:
-#             train_iterable = enumerate(range(len(train_loader)))
-
-
-#         for batch_idx, item in train_iterable:
-#             if train_is_dataloader:
-#                 (int_input, shift_list), y = item
-#             else:
-#                 (int_input, shift_list), y = train_loader[item]
-
-#                 # ensure tensors have batch dimension
-#                 if torch.is_tensor(int_input):
-#                     int_input = int_input.unsqueeze(0)
-#                 shift_list = [s.unsqueeze(0) if torch.is_tensor(s) else s for s in shift_list]
-#                 if torch.is_tensor(y):
-#                     y = y.unsqueeze(0)
-
-#             if debug:
-#                 fetch_time = time.time() - prev_fetch_end
-#                 print(f"[DEBUG] Batch {batch_idx} fetch: {fetch_time:.4f}s")
-#                 step_start = time.time()
-
-#             # Move to device
-#             if debug:
-#                 t0 = time.time()
-#             int_input = int_input.to(device)
-#             shift_list = [s.to(device) for s in shift_list]
-#             y = y.to(device)
-            
-            
-            
-#             if debug:
-#                 print(f"[DEBUG] Move to device: {time.time() - t0:.4f}s")
-
-#             # Forward
-#             if debug:
-#                 t1 = time.time()
-#             y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-#             if debug:
-#                 print(f"[DEBUG] Forward: {time.time() - t1:.4f}s")
-
-#             # Loss
-#             if debug:
-#                 t2 = time.time()
-#             if is_ontram:
-#                 loss = ontram_nll(y_pred, y)
-#             else:
-#                 loss = contram_nll(y_pred, y, min_max=min_max)
-#             if debug:
-#                 print(f"[DEBUG] Loss: {time.time() - t2:.4f}s")
-
-#             # Backward + Step
-#             if debug:
-#                 t3 = time.time()
-#             optimizer.zero_grad()
-#             loss.backward()
-#             optimizer.step()
-#             if debug:
-#                 print(f"[DEBUG] Backward+Step: {time.time() - t3:.4f}s")
-#                 print(f"[DEBUG] BATCH {batch_idx} Total time: {time.time() - step_start:.4f}s\n")
-
-#             train_loss += loss.item()
-#             if debug:
-#                 prev_fetch_end = time.time()
-
-#         # Scheduler
-#         if use_scheduler and scheduler is not None:
-#             if debug:
-#                 t_sched = time.time()
-#             scheduler.step()
-#             if debug:
-#                 print(f"[DEBUG] Scheduler step: {time.time() - t_sched:.4f}s")
-
-#         avg_train_loss = train_loss / (len(train_loader) if len(train_loader) > 0 else 1)
-#         train_loss_hist.append(avg_train_loss)
-
-#         ################################## 2.2 TRAINING ##################################
-#         tram_model.eval()
-#         val_loss = 0.0
-#         if debug:
-#             prev_val_fetch = time.time()
-#         if val_loader is not None:
-#             if val_is_dataloader:
-#                 val_iterable = enumerate(val_loader)
-#             else:
-#                 val_iterable = enumerate(range(len(val_loader)))
-
-#             with torch.no_grad():
-#                 for batch_idx, item in val_iterable:
-#                     if val_is_dataloader:
-#                         (int_input, shift_list), y = item
-#                     else:
-#                         (int_input, shift_list), y = val_loader[item]
-#                         if torch.is_tensor(int_input):
-#                             int_input = int_input.unsqueeze(0)
-#                         shift_list = [s.unsqueeze(0) if torch.is_tensor(s) else s for s in shift_list]
-#                         if torch.is_tensor(y):
-#                             y = y.unsqueeze(0)
-
-#                     if debug:
-#                         fetch_time = time.time() - prev_val_fetch
-#                         print(f"[DEBUG] VAL Batch {batch_idx} fetch: {fetch_time:.4f}s")
-#                         bval_start = time.time()
-
-#                     int_input = int_input.to(device)
-#                     shift_list = [s.to(device) for s in shift_list]
-#                     y = y.to(device)
-
-#                     if debug:
-#                         tval0 = time.time()
-#                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-#                     if debug:
-#                         print(f"[DEBUG] VAL Forward: {time.time() - tval0:.4f}s")
-
-#                     if debug:
-#                         tval1 = time.time() 
-#                     if is_ontram:
-#                         loss = ontram_nll(y_pred, y)
-#                     else:
-#                         loss = contram_nll(y_pred, y, min_max=min_max)
-                        
-                        
-#                     if debug:
-#                         print(f"[DEBUG] VAL Loss: {time.time() - tval1:.4f}s")
-#                         print(f"[DEBUG] VAL BATCH {batch_idx} Total: {time.time() - bval_start:.4f}s")
-
-#                     val_loss += loss.item()
-#                     if debug:
-#                         prev_val_fetch = time.time()
-
-#             avg_val_loss = val_loss / (len(val_loader) if len(val_loader) > 0 else 1)
-#         else:
-#             avg_val_loss = float('nan')
-
-#         val_loss_hist.append(avg_val_loss)
-
-#         ################################## 2.3 SAVING ##################################
-#         if debug:
-#             save_start = time.time()
-
-#         if avg_val_loss < best_val_loss:
-#             best_val_loss = avg_val_loss
-#             torch.save(tram_model.state_dict(), MODEL_PATH)
-#             if verbose or debug:
-#                 print("[INFO] Saved new best model.")
-
-#         torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
-#         with open(TRAIN_HIST_PATH, 'w') as f:
-#             json.dump(train_loss_hist, f)
-#         with open(VAL_HIST_PATH, 'w') as f:
-#             json.dump(val_loss_hist, f)
-
-#         if debug:
-#             print(f"[DEBUG] Saving epoch artifacts: {time.time() - save_start:.4f}s")
-
-#         if verbose or debug:
-#             total_time = time.time() - epoch_start if epoch_start is not None else 0.0
-#             print(f"[INFO] Epoch {epoch+1}: Train NLL={avg_train_loss:.4f} | Val NLL={avg_val_loss:.4f} | Time={total_time:.2f}s")
-#     return (train_loss_hist, val_loss_hist)
-
 def train_val_loop( 
     node,
     target_nodes,
     NODE_DIR,
     tram_model: torch.nn.Module,
-    train_loader,
-    val_loader,
+    train_loader,  # can be DataLoader or Dataset
+    val_loader,    # can be DataLoader or Dataset
     epochs: int,
     optimizer: torch.optim.Optimizer,
     use_scheduler: bool,
@@ -1065,11 +828,13 @@ def train_val_loop(
     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
     tram_model = tram_model.to(device)
 
+    # Prepare min/max normalization values
     if min_max is None:
         min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
         max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
         min_max = torch.stack([min_vals, max_vals], dim=0)
 
+    # Load existing model if available
     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
         if verbose or debug:
             print("[INFO] Existing model found. Loading weights and history...")
@@ -1089,8 +854,11 @@ def train_val_loop(
         start_epoch = 0
         best_val_loss = float('inf')
 
+    # CHECK whetere the loaders are DataLoader or Dataset
     train_is_dataloader = isinstance(train_loader, DataLoader)
     val_is_dataloader = isinstance(val_loader, DataLoader)
+ 
+    # flag to choose correct loss function
     is_ontram = 'yo' in target_nodes[node]['data_type'].lower()
 
 
@@ -1104,43 +872,93 @@ def train_val_loop(
 
         epoch_start = time.time() if (verbose or debug) else None
 
+        if debug:
+            prev_fetch_end = time.time()
+
+        ################################## 2.1 TRAINING ##################################
         if train_is_dataloader:
             train_iterable = enumerate(train_loader)
         else:
             train_iterable = enumerate(range(len(train_loader)))
+
 
         for batch_idx, item in train_iterable:
             if train_is_dataloader:
                 (int_input, shift_list), y = item
             else:
                 (int_input, shift_list), y = train_loader[item]
+
+                # ensure tensors have batch dimension
                 if torch.is_tensor(int_input):
                     int_input = int_input.unsqueeze(0)
                 shift_list = [s.unsqueeze(0) if torch.is_tensor(s) else s for s in shift_list]
                 if torch.is_tensor(y):
                     y = y.unsqueeze(0)
 
+            if debug:
+                fetch_time = time.time() - prev_fetch_end
+                print(f"[DEBUG] Batch {batch_idx} fetch: {fetch_time:.4f}s")
+                step_start = time.time()
+
+            # Move to device
+            if debug:
+                t0 = time.time()
             int_input = int_input.to(device)
             shift_list = [s.to(device) for s in shift_list]
             y = y.to(device)
+            
+            
+            
+            if debug:
+                print(f"[DEBUG] Move to device: {time.time() - t0:.4f}s")
 
+            # Forward
+            if debug:
+                t1 = time.time()
             y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-            loss = ontram_nll(y_pred, y) if is_ontram else contram_nll(y_pred, y, min_max=min_max)
+            if debug:
+                print(f"[DEBUG] Forward: {time.time() - t1:.4f}s")
 
+            # Loss
+            if debug:
+                t2 = time.time()
+            if is_ontram:
+                loss = ontram_nll(y_pred, y)
+            else:
+                loss = contram_nll(y_pred, y, min_max=min_max)
+            if debug:
+                print(f"[DEBUG] Loss: {time.time() - t2:.4f}s")
+
+            # Backward + Step
+            if debug:
+                t3 = time.time()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            train_loss += loss.item()
+            if debug:
+                print(f"[DEBUG] Backward+Step: {time.time() - t3:.4f}s")
+                print(f"[DEBUG] BATCH {batch_idx} Total time: {time.time() - step_start:.4f}s\n")
 
+            train_loss += loss.item()
+            if debug:
+                prev_fetch_end = time.time()
+
+        # Scheduler
         if use_scheduler and scheduler is not None:
+            if debug:
+                t_sched = time.time()
             scheduler.step()
+            if debug:
+                print(f"[DEBUG] Scheduler step: {time.time() - t_sched:.4f}s")
 
         avg_train_loss = train_loss / (len(train_loader) if len(train_loader) > 0 else 1)
         train_loss_hist.append(avg_train_loss)
 
-        ################################## 2.2 VALIDATION ##################################
+        ################################## 2.2 TRAINING ##################################
         tram_model.eval()
         val_loss = 0.0
+        if debug:
+            prev_val_fetch = time.time()
         if val_loader is not None:
             if val_is_dataloader:
                 val_iterable = enumerate(val_loader)
@@ -1148,7 +966,7 @@ def train_val_loop(
                 val_iterable = enumerate(range(len(val_loader)))
 
             with torch.no_grad():
-                for _, item in val_iterable:
+                for batch_idx, item in val_iterable:
                     if val_is_dataloader:
                         (int_input, shift_list), y = item
                     else:
@@ -1159,12 +977,36 @@ def train_val_loop(
                         if torch.is_tensor(y):
                             y = y.unsqueeze(0)
 
+                    if debug:
+                        fetch_time = time.time() - prev_val_fetch
+                        print(f"[DEBUG] VAL Batch {batch_idx} fetch: {fetch_time:.4f}s")
+                        bval_start = time.time()
+
                     int_input = int_input.to(device)
                     shift_list = [s.to(device) for s in shift_list]
                     y = y.to(device)
+
+                    if debug:
+                        tval0 = time.time()
                     y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-                    loss = ontram_nll(y_pred, y) if is_ontram else contram_nll(y_pred, y, min_max=min_max)
+                    if debug:
+                        print(f"[DEBUG] VAL Forward: {time.time() - tval0:.4f}s")
+
+                    if debug:
+                        tval1 = time.time() 
+                    if is_ontram:
+                        loss = ontram_nll(y_pred, y)
+                    else:
+                        loss = contram_nll(y_pred, y, min_max=min_max)
+                        
+                        
+                    if debug:
+                        print(f"[DEBUG] VAL Loss: {time.time() - tval1:.4f}s")
+                        print(f"[DEBUG] VAL BATCH {batch_idx} Total: {time.time() - bval_start:.4f}s")
+
                     val_loss += loss.item()
+                    if debug:
+                        prev_val_fetch = time.time()
 
             avg_val_loss = val_loss / (len(val_loader) if len(val_loader) > 0 else 1)
         else:
@@ -1172,31 +1014,41 @@ def train_val_loop(
 
         val_loss_hist.append(avg_val_loss)
 
-        ################################## 2.3 SAVE LINEAR SHIFT WEIGHTS ##################################
+        ################################## 2.2.5 SAVE LINEAR SHIFTS ##################################
         if save_linear_shifts and hasattr(tram_model, "nn_shift") and tram_model.nn_shift is not None:
             shift_path = os.path.join(NODE_DIR, "linear_shifts_all_epochs.json")
+
+            # Load existing weights if available
             if os.path.exists(shift_path):
-                with open(shift_path, 'r') as f:
+                with open(shift_path, "r") as f:
                     all_shift_weights = json.load(f)
             else:
                 all_shift_weights = {}
 
+            # Collect current epoch’s shift weights
             epoch_weights = {}
             for i, shift_layer in enumerate(tram_model.nn_shift):
-                if hasattr(shift_layer, 'fc') and hasattr(shift_layer.fc, 'weight'):
+                if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight"):
                     epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
                 else:
-                    if verbose or debug:
-                        print(f"[WARN] shift_{i}: missing 'fc' or 'weight' attribute.")
+                    if debug:
+                        print(f"[DEBUG] shift_{i}: 'fc' or 'weight' not found.")
 
+            # Append to global dict under current epoch
             all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
-            with open(shift_path, 'w') as f:
+
+            # Write back to disk
+            with open(shift_path, "w") as f:
                 json.dump(all_shift_weights, f)
 
             if verbose or debug:
-                print(f"[INFO] Saved linear shift weights for epoch {epoch+1} to {shift_path}")
+                print(f"[INFO] Saved linear shift weights for epoch {epoch+1} -> {shift_path}")
 
-        ################################## 2.4 SAVING ##################################
+
+        ################################## 2.3 SAVING ##################################
+        if debug:
+            save_start = time.time()
+
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             torch.save(tram_model.state_dict(), MODEL_PATH)
@@ -1209,10 +1061,12 @@ def train_val_loop(
         with open(VAL_HIST_PATH, 'w') as f:
             json.dump(val_loss_hist, f)
 
-        if verbose or debug:
-            total_time = time.time() - epoch_start if epoch_start else 0.0
-            print(f"[INFO] Epoch {epoch+1}: Train NLL={avg_train_loss:.4f} | Val NLL={avg_val_loss:.4f} | Time={total_time:.2f}s")
+        if debug:
+            print(f"[DEBUG] Saving epoch artifacts: {time.time() - save_start:.4f}s")
 
+        if verbose or debug:
+            total_time = time.time() - epoch_start if epoch_start is not None else 0.0
+            print(f"[INFO] Epoch {epoch+1}: Train NLL={avg_train_loss:.4f} | Val NLL={avg_val_loss:.4f} | Time={total_time:.2f}s")
     return (train_loss_hist, val_loss_hist)
 
 
