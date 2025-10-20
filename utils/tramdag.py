@@ -595,7 +595,8 @@ class TramDagModel:
         "optimizers": None,
         "schedulers": None,
         "use_scheduler": False,
-        "save_linear_shifts": True,
+        "save_linear_shifts": False,
+        "save_simple_intercepts": False,
         "debug":False,
         "verbose": True,
         "train_mode": "sequential",  # or "parallel"
