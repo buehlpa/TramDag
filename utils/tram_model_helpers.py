@@ -954,7 +954,7 @@ def train_val_loop(
         avg_train_loss = train_loss / (len(train_loader) if len(train_loader) > 0 else 1)
         train_loss_hist.append(avg_train_loss)
 
-        ################################## 2.2 TRAINING ##################################
+        ################################## 2.2 Validation ##################################
         tram_model.eval()
         val_loss = 0.0
         if debug:
