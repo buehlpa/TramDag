@@ -1119,7 +1119,7 @@ def train_val_loop(
 
 
         ################################## 2.2.6 SAVE SI INTERCEPTS ##################################
-        if save_simple_intercepts and hasattr(tram_model, "nn_int") and tram_model.nn_int is not None:
+        if save_simple_intercepts and hasattr(tram_model, "nn_int") and tram_model.nn_int is not None and isinstance(tram_model.nn_int, SimpleIntercept):
             si_path = os.path.join(NODE_DIR, "simple_intercepts_all_epochs.json")
 
             # Load existing weights if available

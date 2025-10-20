@@ -731,7 +731,6 @@ class TramDagModel:
 
         return self
 
-
     def load_or_compute_minmax(self, use_existing=False, write=True,td_train_data=None):
         EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         minmax_path = os.path.join(EXPERIMENT_DIR, "min_max_scaling.json")
@@ -760,7 +759,6 @@ class TramDagModel:
                 json.dump(self.minmax_dict, f, indent=4)
             if self.debug or self.verbose:
                 print(f"[INFO] Saved new minmax dict to {minmax_path}")
-
 
     def _ensure_dataset(self, data, is_val=False,**kwargs):
         """
@@ -808,6 +806,7 @@ class TramDagModel:
         node_lr = _resolve("learning_rate")
         node_debug = _resolve("debug")
         node_save_linear_shifts = _resolve("save_linear_shifts")
+        save_simple_intercepts  = _resolve("save_simple_intercepts")
         node_verbose = _resolve("verbose")
 
         # Optimizer & scheduler
@@ -852,6 +851,7 @@ class TramDagModel:
             use_scheduler=(scheduler is not None),
             scheduler=scheduler,
             save_linear_shifts=node_save_linear_shifts,
+            save_simple_intercepts=save_simple_intercepts,
             verbose=node_verbose,
             device=torch.device(device_str),
             debug=node_debug,
@@ -986,6 +986,32 @@ class TramDagModel:
                 print(f"[WARNING] No linear shift history found for node '{node}' at {history_path}")
         return histories
 
+    def simple_intercept_history(self):
+        """
+        Load simple_intercept_history histories for all nodes.
+
+        Returns
+        -------
+        dict
+            Mapping of node names to their simple_intercept_history history DataFrames.
+        """
+        histories = {}
+        try:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        except KeyError:
+            raise ValueError(
+                "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
+                "Cannot load histories without experiment directory."
+            )
+
+        for node in self.nodes_dict.keys():
+            node_dir = os.path.join(EXPERIMENT_DIR, node)
+            history_path = os.path.join(node_dir, "simple_intercepts_all_epochs.json")
+            if os.path.exists(history_path):
+                histories[node] = pd.read_json(history_path)
+            else:
+                print(f"[WARNING] No linear shift history found for node '{node}' at {history_path}")
+        return histories
 
     def get_latent(self, df, verbose=False):
             """
@@ -1256,8 +1282,7 @@ class TramDagModel:
 
         return sampled_by_node, latents_by_node
 
-
-    def history(self):
+    def loss_history(self):
         """
         Load training and validation loss histories for all nodes.
 
@@ -1315,22 +1340,18 @@ class TramDagModel:
 
         return all_histories
 
-
-
-
-
-    def plot_history(self, variable: str = None):
+    def plot_loss_history(self, variable: str = None):
             """
             Plot training and validation loss histories.
 
             Parameters
             ----------
             variable : str, optional
-                If given, plot only this node's history.
+                If given, plot only this node's loss_history.
                 If None, plot all nodes together.
             """
 
-            histories = self.history()
+            histories = self.loss_history()
 
             # Select which nodes to plot
             if variable is not None:
@@ -1524,6 +1545,94 @@ class TramDagModel:
             plt.tight_layout()
             plt.show()
 
+    def plot_shift_histories(self, data_dict=None, node=None):
+            """
+            Plot evolution of shift terms for one or all nodes.
+
+            Args:
+                data_dict (dict, optional): {node_name: DataFrame} with shift weights.
+                                            If None, uses self.linear_shift_history().
+                node (str, optional): If given, plot only that node; otherwise plot all.
+            """
+            if data_dict is None:
+                data_dict = self.linear_shift_history()
+                if data_dict is None:
+                    raise ValueError("No shift history data provided or stored in the class.")
+
+            nodes = [node] if node else list(data_dict.keys())
+
+            for n in nodes:
+                df = data_dict[n].copy()
+
+                # Flatten nested lists
+                df = df.applymap(
+                    lambda x: x[0][0]
+                    if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list)
+                    else (x[0] if isinstance(x, list) and len(x) == 1 else x)
+                )
+
+                # Convert epoch labels → numeric
+                df.columns = [
+                    int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
+                    for c in df.columns
+                ]
+                df = df.reindex(sorted(df.columns), axis=1)
+
+                plt.figure(figsize=(10, 6))
+                for idx in df.index:
+                    plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"shift_{idx}")
+
+                plt.xlabel("Epoch")
+                plt.ylabel("Shift Value")
+                plt.title(f"Shift Term History — Node: {n}")
+                plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
+                plt.tight_layout()
+                plt.show()
+
+    def plot_simple_intercepts(self, data_dict=None, node=None):
+        """
+        Plot evolution of simple intercept weights for one or all nodes.
+
+        Args:
+            data_dict (dict, optional): {node_name: DataFrame} with intercept weights.
+                                        If None, uses self.simple_intercept_history().
+            node (str, optional): If given, plot only that node; otherwise plot all.
+        """
+        if data_dict is None:
+            data_dict = self.simple_intercept_history()
+            if data_dict is None:
+                raise ValueError("No intercept history data provided or stored in the class.")
+
+        nodes = [node] if node else list(data_dict.keys())
+
+        for n in nodes:
+            df = data_dict[n].copy()
+
+            def extract_scalar(x):
+                if isinstance(x, list):
+                    while isinstance(x, list) and len(x) > 0:
+                        x = x[0]
+                return float(x) if isinstance(x, (int, float, np.floating)) else np.nan
+
+            df = df.applymap(extract_scalar)
+
+            # Convert epoch labels → numeric
+            df.columns = [
+                int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
+                for c in df.columns
+            ]
+            df = df.reindex(sorted(df.columns), axis=1)
+
+            plt.figure(figsize=(10, 6))
+            for idx in df.index:
+                plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"theta_{idx}")
+
+            plt.xlabel("Epoch")
+            plt.ylabel("Intercept Weight")
+            plt.title(f"Simple Intercept Evolution — Node: {n}")
+            plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
+            plt.tight_layout()
+            plt.show()
 
     def summary(self):
         """
@@ -1596,5 +1705,3 @@ class TramDagModel:
                 print(" [INFO] No experiment directory defined, cannot check checkpoints/sampling/history.")
 
         print("=" * 100 + "\n")
-
-
