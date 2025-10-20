@@ -813,11 +813,84 @@ def train_val_loop(
     use_scheduler: bool,
     scheduler: torch.optim.lr_scheduler._LRScheduler = None,
     save_linear_shifts: bool = False,
+    save_simple_intercepts: bool = False,
     verbose: bool = True,
     device: str = 'cpu',
     debug: bool = False,
     min_max=None,
 ):
+
+    """
+    Train and validate a TRAM model (TramModel) with optional saving of shift and intercept weights.
+
+    The function supports both ONTRAM and CONTRAM loss and can work with either PyTorch DataLoader
+    or Dataset objects. It manages checkpointing, model reloading, loss tracking, learning rate
+    scheduling, and optional saving of linear shift and simple intercept layer weights across epochs.
+
+    Parameters
+    ----------
+    node : str
+        Identifier for the target node being trained.
+    target_nodes : dict
+        Dictionary of all target nodes containing metadata such as min/max values and data_type.
+    NODE_DIR : str
+        Directory where model checkpoints, histories, and weight files will be saved.
+    tram_model : torch.nn.Module
+        TRAM model instance combining intercept and (optionally) shift networks.
+    train_loader : torch.utils.data.DataLoader or torch.utils.data.Dataset
+        Training data iterable or dataset.
+    val_loader : torch.utils.data.DataLoader or torch.utils.data.Dataset
+        Validation data iterable or dataset.
+    epochs : int
+        Number of training epochs.
+    optimizer : torch.optim.Optimizer
+        Optimizer for training the model.
+    use_scheduler : bool
+        Whether to use a learning rate scheduler.
+    scheduler : torch.optim.lr_scheduler._LRScheduler, optional
+        Learning rate scheduler instance to step each epoch.
+    save_linear_shifts : bool, default=False
+        If True, saves the weights of all linear shift networks per epoch.
+    save_simple_intercepts : bool, default=False
+        If True, saves the weights of the simple intercept network per epoch.
+    verbose : bool, default=True
+        If True, prints progress information per epoch.
+    device : str, default='cpu'
+        Target device for training ('cpu' or 'cuda').
+    debug : bool, default=False
+        Enables detailed timing and batch-level debug information.
+    min_max : torch.Tensor, optional
+        Precomputed tensor containing min and max normalization values (shape: [2, n_vars]).
+        If None, values are inferred from target_nodes[node].
+
+    Returns
+    -------
+    tuple[list[float], list[float]]
+        train_loss_hist : list of average training losses per epoch.
+        val_loss_hist : list of average validation losses per epoch.
+
+    Side Effects
+    -------------
+    - Saves model checkpoints:
+        * `<NODE_DIR>/model_best.pt` — best validation model
+        * `<NODE_DIR>/model_last.pt` — most recent model
+    - Saves training and validation loss histories:
+        * `<NODE_DIR>/train_loss_hist.json`
+        * `<NODE_DIR>/val_loss_hist.json`
+    - Optionally saves:
+        * `<NODE_DIR>/linear_shifts_all_epochs.json`
+        * `<NODE_DIR>/simple_intercepts_all_epochs.json`
+
+    Notes
+    -----
+    - For ONTRAM models, the `ontram_nll` loss is used.
+    - For CONTRAM models, the `contram_nll` loss is used, with normalization controlled by `min_max`.
+    - The intercept model (`SimpleIntercept`) outputs weights of shape (n_thetas, 1), default n_thetas=20.
+    - If an existing model and loss history exist, training resumes from the last epoch.
+    """
+
+
+
 
     ################################## 1. PREPARATION ##################################
     device = torch.device(device)
@@ -1045,7 +1118,36 @@ def train_val_loop(
                 print(f"[INFO] Saved linear shift weights for epoch {epoch+1} -> {shift_path}")
 
 
-        ################################## 2.3 SAVING ##################################
+        ################################## 2.2.6 SAVE SI INTERCEPTS ##################################
+        if save_simple_intercepts and hasattr(tram_model, "nn_int") and tram_model.nn_int is not None:
+            si_path = os.path.join(NODE_DIR, "simple_intercepts_all_epochs.json")
+
+            # Load existing weights if available
+            if os.path.exists(si_path):
+                with open(si_path, "r") as f:
+                    all_int_weights = json.load(f)
+            else:
+                all_int_weights = {}
+
+            # Collect current epoch’s intercept weights
+            if hasattr(tram_model.nn_int, "fc") and hasattr(tram_model.nn_int.fc, "weight"):
+                epoch_weights = tram_model.nn_int.fc.weight.detach().cpu().tolist()
+            else:
+                epoch_weights = None
+                if debug:
+                    print(f"[DEBUG] nn_int: 'fc' or 'weight' not found.")
+
+            # Append to global dict under current epoch
+            all_int_weights[f"epoch_{epoch+1}"] = epoch_weights
+
+            # Write back to disk
+            with open(si_path, "w") as f:
+                json.dump(all_int_weights, f)
+
+            if verbose or debug:
+                print(f"[INFO] Saved simple intercept weights for epoch {epoch+1} -> {si_path}")
+
+        ################################## 2.3 SAVING MODEL STATE ##################################
         if debug:
             save_start = time.time()
 
