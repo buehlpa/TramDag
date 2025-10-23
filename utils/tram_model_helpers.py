@@ -611,195 +611,7 @@ def check_if_training_complete(node, NODE_DIR, epochs):
         print(f"Error checking training status for node {node}: {e}")
         return False
 
-
-# ##### orig version 
-# def train_val_loop(
-#     node,
-#     target_nodes,
-#     NODE_DIR,
-#     tram_model: torch.nn.Module,
-#     train_loader: torch.utils.data.DataLoader,
-#     val_loader: torch.utils.data.DataLoader,
-#     epochs: int,
-#     optimizer: torch.optim.Optimizer,
-#     use_scheduler: bool,
-#     scheduler: torch.optim.lr_scheduler._LRScheduler = None,
-#     save_linear_shifts: bool = False,
-#     verbose: bool = True,
-#     device: str = 'cpu',
-#     debug: bool = False,
-#     min_max=None,
-# ):
-#     device = torch.device(device)
-
-#     if debug:
-#         print(f"[DEBUG] min_max device: {min_max.device}")
-    
-#     if debug:
-#         for name, param in tram_model.named_parameters():
-#             print(f"[DEBUG] Param {name} device: {param.device}")
-#         for name, buf in tram_model.named_buffers():
-#             print(f"[DEBUG] Buffer {name} device: {buf.device}")
-    
-#     MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
-#     tram_model = tram_model.to(device)
-
-#     if min_max is None:
-#         min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
-#         max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
-#         min_max = torch.stack([min_vals, max_vals], dim=0)
-
-#     if debug:
-#         print("[DEBUG] Device:", device)
-#         print("[DEBUG] Model paths:", MODEL_PATH, LAST_MODEL_PATH)
-#         print("[DEBUG] min_max shape:", min_max.shape)
-
-#     if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
-#         if verbose or debug:
-#             print("[INFO] Existing model found. Loading weights and history...")
-            
-#         state_dict = torch.load(MODEL_PATH, map_location=device)
-#         tram_model.load_state_dict(state_dict)
-#         tram_model.to(device)
-        
-        
-#         if debug:
-#             print(f"[DEBUG] Loaded model state dict to: {device}")
-#             for name, param in tram_model.named_parameters():
-#                 print(f"[DEBUG] Param {name} device after load: {param.device}")
-#                 break
-#         # tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-        
-#         if debug:
-#             for name, param in tram_model.named_parameters():
-#                 print(f"[DEBUG] Param {name} device: {param.device}")
-#             for name, buf in tram_model.named_buffers():
-#                 print(f"[DEBUG] Buffer {name} device: {buf.device}")
-        
-#         with open(TRAIN_HIST_PATH, 'r') as f:
-#             train_loss_hist = json.load(f)
-#         with open(VAL_HIST_PATH, 'r') as f:
-#             val_loss_hist = json.load(f)
-#         start_epoch = len(train_loss_hist)
-#         best_val_loss = min(val_loss_hist)
-#     else:
-#         if verbose or debug :
-#             print("[INFO] No existing model found. Starting fresh...")
-#         train_loss_hist, val_loss_hist = [], []
-#         start_epoch = 0
-#         best_val_loss = float('inf')
-
-#     for epoch in range(start_epoch, epochs):
-#         epoch_start = time.time()
-#         tram_model.train()
-#         train_loss = 0.0
-#         train_start = time.time()
-
-#         for batch_idx, ((int_input, shift_list), y) in enumerate(train_loader):
-
-#             # Only print once: first epoch + first batch
-#             if debug and epoch == start_epoch and batch_idx == 0:
-#                 print(f"[DEBUG] Loader batch devices: int_input={int_input.device}, "
-#                     f"y={y.device}, shift_list={[s.device for s in shift_list]}")
-
-#             int_input = int_input.to(device)
-#             shift_list = [s.to(device) for s in shift_list]
-#             y = y.to(device)
-
-#             optimizer.zero_grad()
-
-#             # Only print once: first epoch + first batch
-#             if debug and epoch == start_epoch and batch_idx == 0:
-#                 print(f"[DEBUG] int_input device: {int_input.device}")
-#                 print(f"[DEBUG] y device: {y.device}")
-#                 print(f"[DEBUG] shift_list devices: {[s.device for s in shift_list]}")
-#                 for name, param in tram_model.named_parameters():
-#                     print(f"[DEBUG] Model param {name} device: {param.device}")
-#                     break  # print only first param for brevity
-
-#             y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-
-#             if 'yo' in target_nodes[node]['data_type'].lower():
-#                 loss = ontram_nll(y_pred, y)
-#             else:
-#                 loss = contram_nll(y_pred, y, min_max=min_max)
-
-#             loss.backward()
-#             optimizer.step()
-#             train_loss += loss.item()
-
-#         if use_scheduler and scheduler is not None:
-#             scheduler.step()
-#             if debug:
-#                 print("[DEBUG] Scheduler step taken. Current LR:", scheduler.get_last_lr())
-
-#         avg_train_loss = train_loss / len(train_loader)
-#         train_loss_hist.append(avg_train_loss)
-#         train_time = time.time() - train_start
-        
-        
-#         ############ VALIDATION ############
-#         tram_model.eval()
-#         val_loss = 0.0
-#         val_start = time.time()
-#         with torch.no_grad():
-#             for (int_input, shift_list), y in val_loader:
-#                 int_input = int_input.to(device)
-#                 shift_list = [s.to(device) for s in shift_list]
-#                 y = y.to(device)
-
-#                 y_pred = tram_model(int_input=int_input, shift_input=shift_list)
-
-#                 if 'yo' in target_nodes[node]['data_type'].lower():
-#                     loss = ontram_nll(y_pred, y)
-#                 else:
-#                     loss = contram_nll(y_pred, y, min_max=min_max)
-
-#                 val_loss += loss.item()
-
-#         avg_val_loss = val_loss / len(val_loader)
-#         val_loss_hist.append(avg_val_loss)
-#         val_time = time.time() - val_start
-
-#         if save_linear_shifts and hasattr(tram_model, 'nn_shift') and tram_model.nn_shift:
-#             shift_path = os.path.join(NODE_DIR, "linear_shifts_all_epochs.json")
-#             if os.path.exists(shift_path):
-#                 with open(shift_path, 'r') as f:
-#                     all_shift_weights = json.load(f)
-#             else:
-#                 all_shift_weights = {}
-
-#             epoch_weights = {}
-#             for i, shift_layer in enumerate(tram_model.nn_shift):
-#                 if hasattr(shift_layer, 'fc') and hasattr(shift_layer.fc, 'weight'):
-#                     epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
-#             all_shift_weights[f"epoch_{epoch+1}"] = epoch_weights
-#             with open(shift_path, 'w') as f:
-#                 json.dump(all_shift_weights, f)
-
-#         if avg_val_loss < best_val_loss:
-#             best_val_loss = avg_val_loss
-#             torch.save(tram_model.state_dict(), MODEL_PATH)
-#             if verbose:
-#                 print("Saved new best model.")
-
-#         torch.save(tram_model.state_dict(), LAST_MODEL_PATH)
-#         with open(TRAIN_HIST_PATH, 'w') as f:
-#             json.dump(train_loss_hist, f)
-#         with open(VAL_HIST_PATH, 'w') as f:
-#             json.dump(val_loss_hist, f)
-
-#         if verbose:
-#             total_time = time.time() - epoch_start
-#             print(
-#                 f"Epoch {epoch+1}/{epochs}  "
-#                 f"Train NLL: {avg_train_loss:.4f}  Val NLL: {avg_val_loss:.4f}  "
-#                 f"[Train: {train_time:.2f}s  Val: {val_time:.2f}s  Total: {total_time:.2f}s]"
-#             )
-
 from torch.utils.data import DataLoader
-
-
 
 def train_val_loop( 
     node,
@@ -898,7 +710,7 @@ def train_val_loop(
     if debug:
         print(f'[DEBUG] train_val_loop(): device: {device}')
 
-    MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
+    BEST_MODEL_PATH, LAST_MODEL_PATH, TRAIN_HIST_PATH, VAL_HIST_PATH = model_train_val_paths(NODE_DIR)
     tram_model = tram_model.to(device)
 
     # Prepare min/max normalization values
@@ -908,10 +720,10 @@ def train_val_loop(
         min_max = torch.stack([min_vals, max_vals], dim=0)
 
     # Load existing model if available
-    if os.path.exists(MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
+    if os.path.exists(LAST_MODEL_PATH) and os.path.exists(TRAIN_HIST_PATH) and os.path.exists(VAL_HIST_PATH):
         if verbose or debug:
-            print("[INFO] Existing model found. Loading weights and history...")
-        state_dict = torch.load(MODEL_PATH, map_location=device)
+            print("[INFO] Existing model found. Loading weights and history from LAST model...")
+        state_dict = torch.load(LAST_MODEL_PATH, map_location=device)
         tram_model.load_state_dict(state_dict)
         tram_model.to(device)
         with open(TRAIN_HIST_PATH, 'r') as f:
@@ -922,7 +734,8 @@ def train_val_loop(
         best_val_loss = min(val_loss_hist)
     else:
         if verbose or debug:
-            print("[INFO] No existing model found. Starting fresh...")
+            print(f"[INFO] No existing trained model found.\n Starting fresh...")
+        
         train_loss_hist, val_loss_hist = [], []
         start_epoch = 0
         best_val_loss = float('inf')
@@ -1153,7 +966,7 @@ def train_val_loop(
 
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(tram_model.state_dict(), MODEL_PATH)
+            torch.save(tram_model.state_dict(), BEST_MODEL_PATH)
             if verbose or debug:
                 print("[INFO] Saved new best model.")
 

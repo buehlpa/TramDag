@@ -790,7 +790,8 @@ def sample_full_dag(configuration_dict,
                     delete_all_previously_sampled: bool = True,
                     verbose: bool = True,
                     debug: bool = False,
-                    minmax_dict=None):
+                    minmax_dict=None,
+                    use_initial_weights_for_sampling: bool = False):
     """
     Sample values for all nodes in a DAG given trained TRAM models, respecting
     parental ordering. Supports both generative sampling (new U's) and
@@ -949,10 +950,41 @@ def sample_full_dag(configuration_dict,
             
             
             ### load modelweights
-            MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
-            tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=debug, device=device,verbose=verbose).to(device)
-            tram_model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
             
+            
+            tram_model = get_fully_specified_tram_model(
+                node, configuration_dict, debug=debug, device=device, verbose=verbose
+            ).to(device)
+
+            BEST_MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
+            INIT_MODEL_PATH = os.path.join(NODE_DIR, "initial_model.pt")
+
+            try:
+                if use_initial_weights_for_sampling:
+                    if verbose or debug:
+                        print(f"[INFO] Using initial weights for sampling for node '{node}'")
+                    if not os.path.exists(INIT_MODEL_PATH):
+                        raise FileNotFoundError(f"Initial model not found at {INIT_MODEL_PATH}")
+                    tram_model.load_state_dict(torch.load(INIT_MODEL_PATH, map_location=device))
+
+                else:
+                    if os.path.exists(BEST_MODEL_PATH):
+                        tram_model.load_state_dict(torch.load(BEST_MODEL_PATH, map_location=device))
+                        if verbose or debug:
+                            print(f"[INFO] Loaded best model weights for node '{node}' from {BEST_MODEL_PATH}")
+                    elif os.path.exists(INIT_MODEL_PATH):
+                        tram_model.load_state_dict(torch.load(INIT_MODEL_PATH, map_location=device))
+                        print(f"[WARNING] Best model not found for node '{node}'. Using initial weights instead.")
+                    else:
+                        raise FileNotFoundError(
+                            f"No model weights found for node '{node}'. "
+                            f"Expected one of: {BEST_MODEL_PATH} or {INIT_MODEL_PATH}"
+                        )
+
+            except Exception as e:
+                print(f"[ERROR] Failed to load model weights for node '{node}': {e}")
+                raise
+                    
             # create dataframe from sampled parents + dummy if no parents 
             sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
             

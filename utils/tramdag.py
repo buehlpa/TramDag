@@ -674,6 +674,23 @@ class TramDagModel:
                 configuration_dict=self.cfg.conf_dict,
                 **per_node_kwargs
             )
+            
+            try:
+                EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+                NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+                os.makedirs(NODE_DIR, exist_ok=True)
+                
+                model_path = os.path.join(NODE_DIR, "initial_model.pt")
+                if not os.path.exists(model_path):
+                    torch.save(self.models[node].state_dict(), model_path)
+                    if self.debug:
+                        print(f"[DEBUG] Saved initial model state for node '{node}' to {model_path}")
+                else:
+                    if self.debug:
+                        print(f"[DEBUG] Skipped saving initial model for node '{node}' (already exists at {model_path})")
+            except Exception as e:
+                print(f"[ERROR] Could not save initial model state for node '{node}': {e}")
+                
         return self
 
     @classmethod
@@ -752,6 +769,9 @@ class TramDagModel:
         # 
         if self.debug or self.verbose:
             print("[INFO] Computing new minmax dict from training data...")
+            
+        td_train_data=self._ensure_dataset( data=td_train_data, is_val=False)    
+            
         self.minmax_dict = td_train_data.compute_scaling()
 
         if write:
@@ -1546,7 +1566,7 @@ class TramDagModel:
             plt.tight_layout()
             plt.show()
 
-    def plot_shift_histories(self, data_dict=None, node=None):
+    def plot_shift_histories(self, data_dict=None, node=None,ref_lines=None):
             """
             Plot evolution of shift terms for one or all nodes.
 
@@ -1579,10 +1599,18 @@ class TramDagModel:
                 ]
                 df = df.reindex(sorted(df.columns), axis=1)
 
+
                 plt.figure(figsize=(10, 6))
                 for idx in df.index:
                     plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"shift_{idx}")
 
+
+                if ref_lines and n in ref_lines:
+                    for v in ref_lines[n]:
+                        plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
+                        plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
+                    
+                
                 plt.xlabel("Epoch")
                 plt.ylabel("Shift Value")
                 plt.title(f"Shift Term History — Node: {n}")
@@ -1590,7 +1618,7 @@ class TramDagModel:
                 plt.tight_layout()
                 plt.show()
 
-    def plot_simple_intercepts(self, data_dict=None, node=None):
+    def plot_simple_intercepts(self, data_dict=None, node=None,ref_lines=None):
         """
         Plot evolution of simple intercept weights for one or all nodes.
 
@@ -1627,7 +1655,12 @@ class TramDagModel:
             plt.figure(figsize=(10, 6))
             for idx in df.index:
                 plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"theta_{idx}")
-
+            
+            if ref_lines and n in ref_lines:
+                for v in ref_lines[n]:
+                    plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
+                    plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
+                
             plt.xlabel("Epoch")
             plt.ylabel("Intercept Weight")
             plt.title(f"Simple Intercept Evolution — Node: {n}")
