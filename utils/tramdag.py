@@ -601,6 +601,7 @@ class TramDagModel:
         "verbose": True,
         "train_mode": "sequential",  # or "parallel"
         "return_history": False,
+        "overwrite_inital_weights": True,
     }
 
     def __init__(self):
@@ -679,18 +680,20 @@ class TramDagModel:
                 EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
                 NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
                 os.makedirs(NODE_DIR, exist_ok=True)
-                
+
                 model_path = os.path.join(NODE_DIR, "initial_model.pt")
-                if not os.path.exists(model_path):
+                overwrite = settings.get("overwrite_initial_weights", True)
+
+                if overwrite or not os.path.exists(model_path):
                     torch.save(self.models[node].state_dict(), model_path)
                     if self.debug:
-                        print(f"[DEBUG] Saved initial model state for node '{node}' to {model_path}")
+                        print(f"[DEBUG] Saved initial model state for node '{node}' to {model_path} (overwrite={overwrite})")
                 else:
                     if self.debug:
                         print(f"[DEBUG] Skipped saving initial model for node '{node}' (already exists at {model_path})")
             except Exception as e:
                 print(f"[ERROR] Could not save initial model state for node '{node}': {e}")
-                
+                            
         return self
 
     @classmethod
@@ -732,7 +735,7 @@ class TramDagModel:
         cfg = TramDagConfig(cfg_dict)
 
         # --- build model from config ---
-        self = cls.from_config(cfg, device=device, debug=debug, verbose=verbose)
+        self = cls.from_config(cfg, device=device, debug=debug, verbose=verbose, overwrite_initial_weights=False)
 
         # --- load minmax scaling ---
         minmax_path = os.path.join(EXPERIMENT_DIR, "min_max_scaling.json")
@@ -1031,7 +1034,7 @@ class TramDagModel:
             if os.path.exists(history_path):
                 histories[node] = pd.read_json(history_path)
             else:
-                print(f"[WARNING] No linear shift history found for node '{node}' at {history_path}")
+                print(f"[WARNING] No simple intercept history found for node '{node}' at {history_path}")
         return histories
 
     def get_latent(self, df, verbose=False):
@@ -1201,6 +1204,8 @@ class TramDagModel:
             "verbose": self.verbose if hasattr(self, "verbose") else False,
             "debug": self.debug if hasattr(self, "debug") else False,
             "device": self.device.type if hasattr(self, "device") else "auto",
+            "use_initial_weights_for_sampling": False,
+            
         }
         settings.update(kwargs)
 
@@ -1232,6 +1237,7 @@ class TramDagModel:
             verbose=settings["verbose"],
             debug=settings["debug"],
             minmax_dict=self.minmax_dict,
+            use_initial_weights_for_sampling=settings["use_initial_weights_for_sampling"]
         )
 
         return sampled_by_node, latents_by_node
