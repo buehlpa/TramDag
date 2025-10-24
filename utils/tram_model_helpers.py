@@ -1,6 +1,6 @@
 from utils.tram_models import *
-from utils.loss_continous import contram_nll,inverse_transform_intercepts_continous
-from utils.loss_ordinal import ontram_nll, inverse_transform_intercepts_ordinal
+from utils.loss_continous import contram_nll, inverse_transform_intercepts_continous,transform_intercepts_continous
+from utils.loss_ordinal import   ontram_nll,  inverse_transform_intercepts_ordinal,transform_intercepts_ordinal
 from utils.configuration import *
 from utils.r_helpers import fit_r_model_subprocess
 
@@ -950,7 +950,18 @@ def train_val_loop(
                 if debug:
                     print(f"[DEBUG] nn_int: 'fc' or 'weight' not found.")
 
-            # Append to global dict under current epoch
+            print(epoch_weights)
+            
+            # if is_ontram:
+            #     epoch_weights=transform_intercepts_ordinal(torch.Tensor(epoch_weights))
+            # else:
+            #     epoch_weights=transform_intercepts_continous(torch.Tensor(epoch_weights))
+                
+            # # Append to global dict under current epoch
+            # print(epoch_weights)
+            
+            epoch_weights=epoch_weights.tolist()
+            
             all_int_weights[f"epoch_{epoch+1}"] = epoch_weights
 
             # Write back to disk
