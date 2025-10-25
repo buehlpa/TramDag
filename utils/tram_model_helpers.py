@@ -509,8 +509,8 @@ def init_last_layer_COLR_POLR(
             raise RuntimeError(f"Error in inverse_transform_intercepts_ordinal: {e}")
     
     if debug:
-        print(f"[DEBUG] Transformed theta_tilde: {theta_tilde.numpy()}")
-        print(f"[DEBUG] Transformed theta_tilde shape: {theta_tilde.shape}")
+        print(f"[DEBUG] Transformed thetas -> theta_tilde: {theta_tilde.numpy()}")
+        print(f"[DEBUG] Transformed thetas -> theta_tilde shape: {theta_tilde.shape}")
     
     
     # theta_tilde = torch.tensor(theta_tilde, dtype=last_linear.weight.dtype, device=last_linear.weight.device)
@@ -952,13 +952,13 @@ def train_val_loop(
 
             print(epoch_weights)
             
-            # if is_ontram:
-            #     epoch_weights=transform_intercepts_ordinal(torch.Tensor(epoch_weights))
-            # else:
-            #     epoch_weights=transform_intercepts_continous(torch.Tensor(epoch_weights))
+            if is_ontram:
+                epoch_weights = transform_intercepts_ordinal(torch.Tensor(epoch_weights))[1:-1]
+            else:
+                epoch_weights=transform_intercepts_continous(torch.Tensor(epoch_weights))
                 
-            # # Append to global dict under current epoch
-            # print(epoch_weights)
+            # Append to global dict under current epoch
+            print(epoch_weights)
             
             epoch_weights=epoch_weights.tolist()
             
