@@ -951,15 +951,21 @@ def train_val_loop(
                     print(f"[DEBUG] nn_int: 'fc' or 'weight' not found.")
 
             print(epoch_weights)
+            print(f'epoch_weights (theta tilde) before transforamtion {epoch_weights} ')
+            
+            epoch_weights_tensor = torch.Tensor(epoch_weights)
+            
+            print(f'epoch_weights_tensor (theta tilde) {epoch_weights_tensor} ')
+            print(f'epoch_weights_tensor.shape (theta tilde) {epoch_weights_tensor.shape} ')
             
             if is_ontram:
                 # transform the theta tilde to thetas
-                epoch_weights = transform_intercepts_ordinal(torch.Tensor(epoch_weights))[1:-1]
+                epoch_weights = transform_intercepts_ordinal(epoch_weights_tensor.reshape(1, -1))
             else:
-                epoch_weights=transform_intercepts_continous(torch.Tensor(epoch_weights))
+                epoch_weights=transform_intercepts_continous(epoch_weights_tensor)
                 
             # Append to global dict under current epoch
-            print(epoch_weights)
+            print(f'epoch_weights  (theta) after transforamtion {epoch_weights} ')
             
             epoch_weights=epoch_weights.tolist()
             
