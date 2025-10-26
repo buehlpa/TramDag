@@ -953,6 +953,7 @@ def train_val_loop(
             print(epoch_weights)
             
             if is_ontram:
+                # transform the theta tilde to thetas
                 epoch_weights = transform_intercepts_ordinal(torch.Tensor(epoch_weights))[1:-1]
             else:
                 epoch_weights=transform_intercepts_continous(torch.Tensor(epoch_weights))

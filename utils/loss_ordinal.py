@@ -70,19 +70,19 @@ def ontram_nll(outputs, targets):
 
     p = torch.sigmoid(upper) - torch.sigmoid(lower)
 
-    if torch.any(torch.isnan(p)):
-        print(f"\n--- DEBUG ---")
-        print("int_in:\n", int_in)
-        print("int_trans:\n", int_trans)
-        print("shift:\n", shift if shift_in is not None else "None")
-        print("upper:\n", upper)
-        print("lower:\n", lower)
-        print("sigmoid(upper):\n", torch.sigmoid(upper))
-        print("sigmoid(lower):\n", torch.sigmoid(lower))
-        print("p (prob diff):\n", p)
-        print("targets:\n", targets)
-        print("Contains NaNs in p!", torch.isnan(p).any())
-        print("--- END DEBUG ---\n")
+    # if torch.any(torch.isnan(p)):
+    print(f"\n--- DEBUG ---")
+    print("int_in:\n", int_in)
+    print("int_trans:\n", int_trans)
+    print("shift:\n", shift if shift_in is not None else "None")
+    print("upper:\n", upper)
+    print("lower:\n", lower)
+    print("sigmoid(upper):\n", torch.sigmoid(upper))
+    print("sigmoid(lower):\n", torch.sigmoid(lower))
+    print("p (prob diff):\n", p)
+    print("targets:\n", targets)
+    print("Contains NaNs in p!", torch.isnan(p).any())
+    print("--- END DEBUG ---\n")
 
     nll = -torch.mean(torch.log(p + 1e-16))  # tiny offset to prevent log(0)
     return nll
