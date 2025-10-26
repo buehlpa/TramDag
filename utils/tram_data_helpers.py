@@ -507,6 +507,15 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
             shift_list = [s.to(device) for s in shift_list]
 
             model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+            
+            # to theta 
+            print("before transform")
+            print(model_outputs['int_out'])
+            
+            model_outputs['int_out']=transform_intercepts_ordinal(model_outputs['int_out'])[:, 1:-1]
+            print("after transform")
+            print(model_outputs['int_out'])
+            
             all_outputs.append(model_outputs)
 
             if debug:
@@ -517,7 +526,9 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
 
     # Concatenate all 'int_out' and 'shift_out' elements across batches
     int_out_all = torch.cat([out['int_out'] for out in all_outputs], dim=0)
-
+    
+    print(int_out_all)
+    
     # If shift_out is present, we assume it's a list of tensors
     if all_outputs[0]['shift_out'] is not None:
         shift_out_all = []
@@ -531,11 +542,33 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
         'int_out': int_out_all,
         'shift_out': shift_out_all
     }
-
+    
+    print("merged outputs:", merged_outputs)
+    # merged_outputs['int_out'] = transform_intercepts_ordinal(merged_outputs['int_out'])
+    
     cdf = get_cdf_ordinal(merged_outputs)
     pdf = get_pdf_ordinal(cdf)
     sampled = pdf.argmax(dim=1)
 
+    # TODO correct samppling and pdf calculation for ordinal models params are correct as in polr
+    # int_in = merged_outputs['int_out']
+    # shift_in = merged_outputs['shift_out']
+
+    # # add -inf and +inf boundaries
+    # neg_inf = torch.full((int_in.shape[0], 1), float('-inf'), device=int_in.device)
+    # pos_inf = torch.full((int_in.shape[0], 1), float('inf'), device=int_in.device)
+    # int_full = torch.cat((neg_inf, int_in, pos_inf), dim=1)
+
+    # if shift_in is not None:
+    #     shift = torch.stack(shift_in, dim=1).sum(dim=1)
+    #     cdf = torch.sigmoid(int_full - shift)
+    # else:
+    #     cdf = torch.sigmoid(int_full)
+    
+    # pdf=cdf[:, 1:] - cdf[:, :-1]
+    # sampled = pdf.argmax(dim=1)
+    
+    
     if debug:
         print("[DEBUG] Final sampled shape:", sampled.shape)
         print("[DEBUG] Sampled labels (first 3):", sampled[:3])

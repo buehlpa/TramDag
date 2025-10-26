@@ -960,7 +960,8 @@ def train_val_loop(
             
             if is_ontram:
                 # transform the theta tilde to thetas
-                epoch_weights = transform_intercepts_ordinal(epoch_weights_tensor.reshape(1, -1))
+                epoch_weights = transform_intercepts_ordinal(epoch_weights_tensor.reshape(1, -1))[:, 1:-1].reshape(-1, 1)
+                
             else:
                 epoch_weights=transform_intercepts_continous(epoch_weights_tensor)
                 
