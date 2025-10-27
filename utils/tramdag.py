@@ -22,7 +22,7 @@ from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_mo
 from utils.tram_data import GenericDataset, GenericDatasetPrecomputed
 from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
 
-
+## TODO Raise errors when arguments are missspecified while keeping kwargs style for flexibility
 
 class TramDagConfig:
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None, **kwargs):
