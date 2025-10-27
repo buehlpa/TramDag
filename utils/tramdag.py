@@ -24,6 +24,7 @@ from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_d
 
 ## TODO Raise errors when arguments are missspecified while keeping kwargs style for flexibility
 
+
 class TramDagConfig:
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None, **kwargs):
         """
@@ -575,6 +576,8 @@ class TramDagDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
+## TODO return final thetas funciton
+## TODO documentation
 
 class TramDagModel:
     
@@ -595,8 +598,8 @@ class TramDagModel:
         "optimizers": None,
         "schedulers": None,
         "use_scheduler": False,
-        "save_linear_shifts": False,
-        "save_simple_intercepts": False,
+        "save_linear_shifts": True,
+        "save_simple_intercepts": True,
         "debug":False,
         "verbose": True,
         "train_mode": "sequential",  # or "parallel"
