@@ -51,21 +51,37 @@ class TramDagConfig:
 
     @classmethod
     def load(cls, CONF_DICT_PATH: str,debug: bool = False):
-        """
-        Alternative constructor: load config directly from a file.
+        """Load a configuration from file and initialize a new instance.
+
+        Reads a configuration dictionary from the specified path and returns
+        a class instance initialized with that configuration.
+
+        Args:
+            CONF_DICT_PATH: Path to the configuration file to load.
+            debug: Whether to enable debug mode during initialization.
+
+        Returns:
+            An instance of the class initialized with the loaded configuration.
         """
         conf = load_configuration_dict(CONF_DICT_PATH)
         return cls(conf, CONF_DICT_PATH=CONF_DICT_PATH,debug=debug)
 
     def save(self, CONF_DICT_PATH: str = None):
-        """
-        Save config to file. If path is not provided, fall back to stored path.
+        """Save the current configuration to a file.
+
+        If no path is provided, the method uses the stored `self.CONF_DICT_PATH`. 
+        Raises an error if neither is available.
+
+        Args:
+            CONF_DICT_PATH: Optional. Path to the configuration file to write.
+
+        Raises:
+            ValueError: If no valid path is provided.
         """
         path = CONF_DICT_PATH or self.CONF_DICT_PATH
         if path is None:
             raise ValueError("No CONF_DICT_PATH provided to save config.")
         write_configuration_dict(self.conf_dict, path)
-
 
     def _verify_completeness(self):
         """
@@ -141,8 +157,22 @@ class TramDagConfig:
             return False
         
     def compute_levels(self, df: pd.DataFrame, write: bool = True):
-        """
-        Derive levels information from data and update configuration dict.
+        """Compute and update variable levels in the configuration.
+
+        Derives level information for each variable from the provided DataFrame
+        and updates the `nodes` section of the configuration dictionary accordingly.
+        Optionally writes the updated configuration back to disk.
+
+        Args:
+            df: Input DataFrame containing data used to infer levels.
+            write: Whether to save the updated configuration to file. Defaults to True.
+
+        Raises:
+            Exception: If saving the configuration fails when `write=True`.
+
+        Notes:
+            - Variables not found in the configuration's `nodes` dictionary trigger a warning.
+            - Updates are persisted if `write=True` and a valid `CONF_DICT_PATH` is set.
         """
         levels_dict = create_levels_dict(df, self.conf_dict['data_type'])
         
@@ -253,115 +283,72 @@ class TramDagConfig:
         plt.show()
 
 
-
 class TramDagDataset(Dataset):
     
     """
-    TramDagModel
-    =============
+    TramDagDataset
+    ==============
 
-    The `TramDagModel` class manages training, sampling, and analysis of a 
-    DAG-based (Directed Acyclic Graph) ensemble of TRAM (Transformational Regression And Marginalization)
-    models. Each node in the DAG corresponds to one TRAM model representing a variable and 
-    its conditional distribution given its parents. 
-
-    The class provides a unified interface for model construction, training (sequentially or in parallel),
-    evaluation, sampling, and diagnostics. It ensures consistent configuration management, 
-    scaling, and experiment organization.
+    The `TramDagDataset` class handles structured data preparation for TRAM-DAG
+    models. It wraps a pandas DataFrame together with its configuration and provides
+    utilities for scaling, transformation, and efficient DataLoader construction
+    for each node in a DAG-based configuration.
 
     ---------------------------------------------------------------------
     Core Responsibilities
     ---------------------------------------------------------------------
-    - Build one TRAM model per node based on a DAG configuration.
-    - Train all node models either sequentially or in parallel using multiprocessing.
-    - Automatically handle dataset creation, scaling (min-max normalization), and model checkpointing.
-    - Sample from the full DAG, optionally under interventions (do-operations).
-    - Compute and visualize latent representations and diagnostic plots.
-    - Load and visualize training histories and sampled vs. true data comparisons.
-    - Summarize experiment status, including trained models, histories, and sampling outputs.
+    - Validate and store configuration metadata (`TramDagConfig`).
+    - Manage per-node settings for DataLoader creation (batch size, shuffling, workers).
+    - Compute scaling information (quantile-based min/max).
+    - Optionally precompute and cache dataset representations.
+    - Expose PyTorch Dataset and DataLoader interfaces for model training.
 
     ---------------------------------------------------------------------
     Key Attributes
     ---------------------------------------------------------------------
+    - **df** : pandas.DataFrame  
+      The dataset content used for building loaders and computing scaling.
+
     - **cfg** : TramDagConfig  
-      Configuration object defining the DAG structure, node types, and model specifications.
+      Configuration object defining nodes and variable metadata.
 
     - **nodes_dict** : dict  
-      Mapping of node names to their structural/variable configurations.
+      Mapping of variable names to node specifications from the configuration.
 
-    - **models** : dict  
-      Mapping of node names to trained TRAM model instances.
+    - **loaders** : dict  
+      Mapping of node names to `torch.utils.data.DataLoader` instances or `GenericDataset` objects.
 
-    - **device** : torch.device  
-      Device used for computation (“cpu” or “cuda”).
-
-    - **minmax_dict** : dict  
-      Node-wise min/max scaling parameters used for normalization and rescaling.
-
-    - **settings** : dict  
-      Flattened record of resolved configuration and training hyperparameters.
-
-    ---------------------------------------------------------------------
-    Configuration Defaults
-    ---------------------------------------------------------------------
-    - **DEFAULTS_CONFIG**  
-      Settings used at model construction (e.g. debug, set_initial_weights).
-
-    - **DEFAULTS_FIT**  
-      Settings used during training (e.g. epochs, learning_rate, device, callbacks).
+    - **DEFAULTS** : dict  
+      Default DataLoader and dataset-related settings (e.g., batch_size, shuffle, num_workers, etc.).
 
     ---------------------------------------------------------------------
     Main Methods
     ---------------------------------------------------------------------
-    - **from_config(cfg, **kwargs)** → TramDagModel  
-      Build all node models from a configuration dictionary.
+    - **from_dataframe(df, cfg, **kwargs)**  
+      Construct the dataset directly from a pandas DataFrame.
 
-    - **from_directory(EXPERIMENT_DIR, ...)** → TramDagModel  
-      Load an existing experiment from disk, including configuration and scaling.
-
-    - **fit(train_data, val_data=None, **kwargs)** → dict  
-      Train all node models sequentially or in parallel; returns training histories.
-
-    - **get_latent(df)** → pd.DataFrame  
-      Compute latent variable (U) representations for all nodes.
-
-    - **show_latents(df, variable=None, confidence=0.95, simulations=1000)**  
-      Plot latent histograms and QQ plots with confidence bands.
-
-    - **sample(do_interventions=None, predefined_latent_samples_df=None, **kwargs)** → (dict, dict)  
-      Sample data from the DAG under observational or interventional regimes.
-
-    - **history()** → dict  
-      Load training and validation loss histories from experiment files.
-
-    - **plot_history(variable=None)**  
-      Visualize training/validation NLL curves for one or all nodes.
-
-    - **show_samples_vs_true(df, bins=100, ...)**  
-      Compare true vs. sampled node distributions using histograms or bar plots.
+    - **compute_scaling(df=None, write=True)**  
+      Compute per-variable min/max scaling values from data.
 
     - **summary()**  
-      Print a comprehensive overview of all node models, their checkpoints, sampling outputs, and histories.
+      Print dataset overview including shape, dtypes, statistics, and node settings.
 
     ---------------------------------------------------------------------
     Notes
     ---------------------------------------------------------------------
-    - Supports both continuous and ordinal/categorical nodes.
-    - Compatible with GPU training if individual TRAM models support CUDA.
-    - Ensures reproducibility and modular retraining per node.
-    - Requires auxiliary components such as `TramDagConfig`, `TramDagDataset`,
-      and functions like `train_val_loop`, `sample_full_dag`, and `get_fully_specified_tram_model`.
+    - Intended for training data; `compute_scaling()` should use only training subsets.
+    - Compatible with both CPU and GPU DataLoader options.
+    - Strict validation of keyword arguments against `DEFAULTS` prevents silent misconfiguration.
 
     ---------------------------------------------------------------------
     Example
     ---------------------------------------------------------------------
     >>> cfg = TramDagConfig.from_json("config.json")
-    >>> tram_dag = TramDagModel.from_config(cfg, device="cuda", debug=True)
-    >>> tram_dag.fit(train_df, val_df, epochs=50)
-    >>> samples, latents = tram_dag.sample(number_of_samples=5000)
-    >>> tram_dag.show_samples_vs_true(train_df)
-    >>> tram_dag.summary()
-
+    >>> dataset = TramDagDataset.from_dataframe(train_df, cfg, batch_size=1024, debug=True)
+    >>> dataset.summary()
+    >>> minmax = dataset.compute_scaling(train_df)
+    >>> loader = dataset.loaders["variable_x"]
+    >>> next(iter(loader))
     """
 
     DEFAULTS = {
@@ -394,10 +381,44 @@ class TramDagDataset(Dataset):
 
     @classmethod
     def from_dataframe(cls, df, cfg, **kwargs):
+        """Create a TramDagDataset instance directly from a pandas DataFrame.
+
+        This class method constructs and initializes a dataset using the provided
+        DataFrame and configuration object. It validates keyword arguments against
+        class defaults, merges them into a resolved settings dictionary, and builds
+        the internal dataloaders.
+
+        Args:
+            df: Input pandas DataFrame containing the dataset.
+            cfg: TramDagConfig instance defining variable structure and metadata.
+            **kwargs: Optional keyword overrides for dataset defaults. All keys
+                must be defined in `cls.DEFAULTS`; otherwise, a ValueError is raised.
+
+        Returns:
+            TramDagDataset: An initialized dataset instance.
+
+        Raises:
+            TypeError: If `df` is not a pandas DataFrame.
+            ValueError: If any keyword arguments are not present in `DEFAULTS`.
+
+        Notes:
+            - Validates `kwargs` via `_validate_kwargs()` to ensure strict adherence
+            to supported parameters.
+            - Prints full resolved settings if `debug=True`.
+            - Automatically infers the variable name of the provided DataFrame
+            for clearer warning messages.
+            - Issues a warning if the inferred DataFrame name suggests validation/test
+            data while `shuffle=True` is set.
+            - Applies resolved settings and constructs internal dataloaders via
+            `_apply_settings()` and `_build_dataloaders()`.
+        """
         self = cls()
         if not isinstance(df, pd.DataFrame):
             raise TypeError(f"[ERROR] df must be a pandas DataFrame, but got {type(df)}")
 
+        # validate kwargs
+        self._validate_kwargs(kwargs, context="from_dataframe")
+        
         # merge defaults with overrides
         settings = dict(cls.DEFAULTS)
         settings.update(kwargs)
@@ -406,13 +427,11 @@ class TramDagDataset(Dataset):
         self.cfg = cfg
         self.cfg._verify_completeness()
 
-
         # ouptu all setttings if debug
         if settings.get("debug", False):
             print("[DEBUG] TramDagDataset.from_dataframe() settings (after defaults + overrides):")
             for k, v in settings.items():
                 print(f"    {k}: {v}")
-
 
         # infer variable name automatically
         callers_locals = inspect.currentframe().f_back.f_locals
@@ -427,15 +446,33 @@ class TramDagDataset(Dataset):
             if any(x in df_name.lower() for x in ["val", "validation", "test"]):
                 print(f"[WARNING] DataFrame '{df_name}' looks like a validation/test set → shuffle=True. Are you sure?")
 
- # call again to ensure Warning messages if ordinal vars have missing levels
+        # call again to ensure Warning messages if ordinal vars have missing levels
         self.df = df.copy()
         self._apply_settings(settings)
         self._build_dataloaders()
         return self
 
     def compute_scaling(self, df: pd.DataFrame = None, write: bool = True):
-        """
-        Derive scaling information (min, max, levels) from data (should use training data).
+        """Compute variable-wise scaling parameters from data.
+
+        Derives approximate minimum and maximum values for each variable based on
+        the 5th and 95th percentiles of the provided DataFrame. Intended for use
+        with training data to establish normalization or clipping ranges.
+
+        Args:
+            df: Optional pandas DataFrame containing the data used to compute scaling.
+                If not provided, uses the dataset's internal `self.df`.
+            write: Unused placeholder argument for interface consistency. Reserved
+                for potential future functionality (e.g., auto-saving scaling info).
+
+        Returns:
+            dict: Mapping of variable names to [min, max] values derived from quantiles.
+
+        Notes:
+            - Prints debug information when `self.debug=True`.
+            - The returned min/max correspond to the 0.05 and 0.95 quantiles,
+            not the absolute extrema, to reduce outlier influence.
+            - Intended for normalization or scaling within the training pipeline.
         """
         if self.debug:
             print("[DEBUG] Make sure to provide only training data to compute_scaling!")     
@@ -448,6 +485,97 @@ class TramDagDataset(Dataset):
         max_vals = quantiles.loc[0.95]
         minmax_dict = pd.concat([min_vals, max_vals], axis=1).T.to_dict('list')
         return minmax_dict
+
+    def summary(self):
+        """Print a structured overview of the dataset and configuration.
+
+        Displays key properties of the internal DataFrame, including shape,
+        data types, and descriptive statistics, as well as node-level settings
+        and DataLoader configurations.
+
+        Sections printed:
+            1. **DataFrame** — Shape, column names, preview (head), dtypes, and summary statistics.
+            2. **Configuration** — Number of nodes, DataLoader usage mode, and precomputation status.
+            3. **Node Settings** — Per-node DataLoader and dataset parameters (batch_size, shuffle, etc.).
+            4. **DataLoaders** — Types and lengths of instantiated loaders per node.
+
+        Notes:
+            - Intended for quick inspection and debugging of dataset setup.
+            - Automatically adapts to dict- or scalar-style configuration attributes.
+            - Prints additional debug information when `self.debug=True`.
+        """
+        
+        print("\n[TramDagDataset Summary]")
+        print("=" * 60)
+
+        print("\n[DataFrame]")
+        print("Shape:", self.df.shape)
+        print("Columns:", list(self.df.columns))
+        print("\nHead:")
+        print(self.df.head())
+
+        print("\nDtypes:")
+        print(self.df.dtypes)
+
+        print("\nDescribe:")
+        print(self.df.describe(include="all"))
+
+        print("\n[Configuration]")
+        print(f"Nodes: {len(self.nodes_dict)}")
+        print(f"Loader mode: {'DataLoader' if self.use_dataloader else 'Direct dataset'}")
+        print(f"Precomputed: {getattr(self, 'use_precomputed', False)}")
+
+        print("\n[Node Settings]")
+        for node in self.nodes_dict.keys():
+            batch_size = self.batch_size[node] if isinstance(self.batch_size, dict) else self.batch_size
+            shuffle_flag = self.shuffle[node] if isinstance(self.shuffle, dict) else self.shuffle
+            num_workers = self.num_workers[node] if isinstance(self.num_workers, dict) else self.num_workers
+            pin_memory = self.pin_memory[node] if isinstance(self.pin_memory, dict) else self.pin_memory
+            rshift = self.return_intercept_shift[node] if isinstance(self.return_intercept_shift, dict) else self.return_intercept_shift
+            debug_flag = self.debug[node] if isinstance(self.debug, dict) else self.debug
+            transform = self.transform[node] if isinstance(self.transform, dict) else self.transform
+
+            print(
+                f" Node '{node}': "
+                f"batch_size={batch_size}, "
+                f"shuffle={shuffle_flag}, "
+                f"num_workers={num_workers}, "
+                f"pin_memory={pin_memory}, "
+                f"return_intercept_shift={rshift}, "
+                f"debug={debug_flag}, "
+                f"transform={transform}"
+            )
+
+        if hasattr(self, "loaders"):
+            print("\n[DataLoaders]")
+            for node, loader in self.loaders.items():
+                try:
+                    length = len(loader)
+                except Exception:
+                    length = "?"
+                print(f"  {node}: {type(loader).__name__}, len={length}")
+
+        print("=" * 60 + "\n")
+
+    def _validate_kwargs(self, kwargs: dict, defaults_attr: str = "DEFAULTS", context: str = None):
+        """Validate keyword arguments against a defaults attribute of the class.
+
+        Args:
+            kwargs: Dictionary of keyword arguments to validate.
+            defaults_attr: Name of the attribute containing allowed defaults (default: "DEFAULTS").
+            context: Optional string identifying the caller for clearer error messages.
+
+        Raises:
+            ValueError: If any keys in kwargs are not listed in the defaults attribute.
+        """
+        defaults = getattr(self, defaults_attr, None)
+        if defaults is None:
+            raise AttributeError(f"{self.__class__.__name__} has no attribute '{defaults_attr}'")
+
+        unknown = set(kwargs) - set(defaults)
+        if unknown:
+            prefix = f"[{context}] " if context else ""
+            raise ValueError(f"{prefix}Unknown parameter(s): {', '.join(sorted(unknown))}")
 
     def _apply_settings(self, settings: dict):
         # store everything into self (makes it easy to pass into DataLoader later)
@@ -530,54 +658,17 @@ class TramDagDataset(Dataset):
                     f"Please provide values for all variables."
                 )
 
-
-    def summary(self):
-        print("\n[TramDagDataset Summary]")
-        print("=" * 60)
-
-        # ---- DataFrame section ----
-        print("\n[DataFrame]")
-        print("Shape:", self.df.shape)
-        print("\nHead:")
-        print(self.df.head())
-
-        print("\nDtypes:")
-        print(self.df.dtypes)
-
-        print("\nDescribe:")
-        print(self.df.describe(include="all"))
-
-        # ---- Settings per node ----
-        print("\n[Node Settings]")
-        for node in self.nodes_dict.keys():
-            batch_size = self.batch_size[node] if isinstance(self.batch_size, dict) else self.batch_size
-            shuffle_flag = self.shuffle[node] if isinstance(self.shuffle, dict) else bool(self.shuffle)
-            num_workers = self.num_workers[node] if isinstance(self.num_workers, dict) else self.num_workers
-            pin_memory = self.pin_memory[node] if isinstance(self.pin_memory, dict) else self.pin_memory
-            rshift = self.return_intercept_shift[node] if isinstance(self.return_intercept_shift, dict) else self.return_intercept_shift
-            debug_flag = self.debug[node] if isinstance(self.debug, dict) else self.debug
-            transform = self.transform[node] if isinstance(self.transform, dict) else self.transform
-
-            print(
-                f" Node '{node}': "
-                f"batch_size={batch_size}, "
-                f"shuffle={shuffle_flag}, "
-                f"num_workers={num_workers}, "
-                f"pin_memory={pin_memory}, "
-                f"return_intercept_shift={rshift}, "
-                f"debug={debug_flag}, "
-                f"transform={transform}"
-            )
-        print("=" * 60 + "\n")
-
     def __getitem__(self, idx):
         return self.df.iloc[idx].to_dict()
 
     def __len__(self):
         return len(self.df)
 
-## TODO return final thetas funciton
-## TODO documentation
+## TODO return final thetas funciton 
+## TODO return final intercepts function
+
+## TODO complex shifts fucniton display
+## TODO documentation with docusaurus
 
 class TramDagModel:
     
@@ -624,13 +715,9 @@ class TramDagModel:
         self.cfg = cfg
         self.nodes_dict = self.cfg.conf_dict["nodes"] 
 
-
-        
-                
         # update defaults with kwargs
         settings = dict(cls.DEFAULTS_CONFIG)
         settings.update(kwargs)
-
 
         # resolve device
         device_arg = settings.get("device", "auto")
@@ -639,7 +726,6 @@ class TramDagModel:
         else:
             device_str = device_arg
         self.device = torch.device(device_str)
-
 
         # set flags on the instance so they are accessible later
         self.debug = settings.get("debug", False)
@@ -660,8 +746,7 @@ class TramDagModel:
                     raise ValueError(
                         f"[ERROR] the provided argument '{k}' keys are not same as in cfg.conf_dict['nodes'].keys().\n"
                         f"Expected: {expected}, but got: {given}\n"
-                        f"Please provide values for all variables."
-                    )
+                        f"Please provide values for all variables.")
 
         # build one model per node
         self.models = {}
@@ -676,8 +761,7 @@ class TramDagModel:
             self.models[node] = get_fully_specified_tram_model(
                 node=node,
                 configuration_dict=self.cfg.conf_dict,
-                **per_node_kwargs
-            )
+                **per_node_kwargs)
             
             try:
                 EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -882,9 +966,7 @@ class TramDagModel:
             verbose=node_verbose,
             device=torch.device(device_str),
             debug=node_debug,
-            min_max=min_max
-        )
-
+            min_max=min_max)
         return node, history
 
     def fit(self, train_data, val_data=None, **kwargs):
@@ -1116,8 +1198,7 @@ class TramDagModel:
 
             # QQ Plot with confidence bands
             probplot(sample, dist="logistic", plot=axs[1])
-            self._add_r_style_confidence_bands(axs[1], sample, dist=logistic,
-                                               confidence=confidence, simulations=simulations)
+            self._add_r_style_confidence_bands(axs[1], sample, dist=logistic,confidence=confidence, simulations=simulations)
             axs[1].set_title(f"Latent QQ Plot ({node})")
 
             plt.suptitle(f"Latent Diagnostics for Node: {node}", fontsize=14)
