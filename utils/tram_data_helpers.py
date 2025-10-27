@@ -439,7 +439,7 @@ def truncated_logistic_sample(n, low, high, device='cpu'):
 ################################### SAMPLING HELPERS #####################################
 
         
-from utils.loss_ordinal import get_pdf_ordinal, get_cdf_ordinal
+# from utils.loss_ordinal import get_pdf_ordinal, get_cdf_ordinal
 
 def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR, debug=False):
     sampling_dict = {}
@@ -485,7 +485,6 @@ def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR,
 
 
 
-
 def is_outcome_modelled_continous(node,target_nodes_dict):
     if 'yc'in target_nodes_dict[node]['data_type'].lower() or 'continous' in target_nodes_dict[node]['data_type'].lower():
         return True
@@ -498,6 +497,7 @@ def is_outcome_modelled_ordinal(node,target_nodes_dict):
     else:
         return False  
 
+
 def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
     all_outputs = []
     tram_model.eval()
@@ -507,73 +507,39 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
             shift_list = [s.to(device) for s in shift_list]
 
             model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
-            
-            # to theta 
-            print("before transform")
-            print(model_outputs['int_out'])
-            
-            model_outputs['int_out']=transform_intercepts_ordinal(model_outputs['int_out'])[:, 1:-1]
-            print("after transform")
-            print(model_outputs['int_out'])
-            
-            all_outputs.append(model_outputs)
+
+            # Transform intercepts
+            int_out = transform_intercepts_ordinal(model_outputs['int_out'])  # shape [B, n_cut]
+            B = int_out.shape[0]
+
+            # Handle latent shifts
+            if model_outputs['shift_out'] is not None:
+                shift_total = torch.stack(model_outputs['shift_out'], dim=1).sum(dim=1)  # [B, 1] or [B, n_nodes]
+                h = int_out - shift_total
+            else:
+                h = int_out
+
+            # Logistic CDF
+            logistic_cdf = torch.sigmoid(h)
+
+            # PDF as difference of adjacent CDFs
+            pdf = logistic_cdf[:, 1:] - logistic_cdf[:, :-1]
+
+            # Logits for categorical sampling
+            logits = torch.log(pdf + 1e-12)  # stabilize
+
+            # Sample category indices
+            samples = torch.distributions.Categorical(logits=logits).sample()  # shape [B]
+
+            all_outputs.append(samples)
 
             if debug:
-                print("[DEBUG] Batch model_outputs keys:", model_outputs.keys())
-                print("[DEBUG] int_out shape:", model_outputs['int_out'].shape)
-                if model_outputs['shift_out'] is not None:
-                    print("[DEBUG] shift_out shapes:", [s.shape for s in model_outputs['shift_out']])
+                print("[DEBUG] int_out:", int_out.shape)
+                print("[DEBUG] shift_out:", [s.shape for s in model_outputs['shift_out']] if model_outputs['shift_out'] else None)
+                print("[DEBUG] sample batch:", samples[:5])
 
-    # Concatenate all 'int_out' and 'shift_out' elements across batches
-    int_out_all = torch.cat([out['int_out'] for out in all_outputs], dim=0)
-    
-    print(int_out_all)
-    
-    # If shift_out is present, we assume it's a list of tensors
-    if all_outputs[0]['shift_out'] is not None:
-        shift_out_all = []
-        for i in range(len(all_outputs[0]['shift_out'])):
-            shift_i = torch.cat([out['shift_out'][i] for out in all_outputs], dim=0)
-            shift_out_all.append(shift_i)
-    else:
-        shift_out_all = None
+    return torch.cat(all_outputs, dim=0)
 
-    merged_outputs = {
-        'int_out': int_out_all,
-        'shift_out': shift_out_all
-    }
-    
-    print("merged outputs:", merged_outputs)
-    # merged_outputs['int_out'] = transform_intercepts_ordinal(merged_outputs['int_out'])
-    
-    cdf = get_cdf_ordinal(merged_outputs)
-    pdf = get_pdf_ordinal(cdf)
-    sampled = pdf.argmax(dim=1)
-
-    # TODO correct samppling and pdf calculation for ordinal models params are correct as in polr
-    # int_in = merged_outputs['int_out']
-    # shift_in = merged_outputs['shift_out']
-
-    # # add -inf and +inf boundaries
-    # neg_inf = torch.full((int_in.shape[0], 1), float('-inf'), device=int_in.device)
-    # pos_inf = torch.full((int_in.shape[0], 1), float('inf'), device=int_in.device)
-    # int_full = torch.cat((neg_inf, int_in, pos_inf), dim=1)
-
-    # if shift_in is not None:
-    #     shift = torch.stack(shift_in, dim=1).sum(dim=1)
-    #     cdf = torch.sigmoid(int_full - shift)
-    # else:
-    #     cdf = torch.sigmoid(int_full)
-    
-    # pdf=cdf[:, 1:] - cdf[:, :-1]
-    # sampled = pdf.argmax(dim=1)
-    
-    
-    if debug:
-        print("[DEBUG] Final sampled shape:", sampled.shape)
-        print("[DEBUG] Sampled labels (first 3):", sampled[:3])
-
-    return sampled
 
 
 

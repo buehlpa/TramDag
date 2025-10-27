@@ -88,31 +88,31 @@ def ontram_nll(outputs, targets):
     return nll
 
 
-def get_cdf_ordinal(outputs):
-    """"
-    Get cumulative distribution function
+# def get_cdf_ordinal(outputs):
+#     """"
+#     Get cumulative distribution function
     
-    Args:
-        outputs: output of a model of class OntramModel
-    """
-    int_in = outputs['int_out']
-    shift_in = outputs['shift_out']
+#     Args:
+#         outputs: output of a model of class OntramModel
+#     """
+#     int_in = outputs['int_out']
+#     shift_in = outputs['shift_out']
     
-    # transform intercepts
-    int = transform_intercepts_ordinal(int_in)
+#     # transform intercepts
+#     int = transform_intercepts_ordinal(int_in)
 
-    if shift_in is not None:
-        shift = torch.stack(shift_in, dim=1).sum(dim=1)    
-        cdf = torch.sigmoid(torch.sub(int, shift))
-    else:
-        cdf = torch.sigmoid(int)
-    return cdf
+#     if shift_in is not None:
+#         shift = torch.stack(shift_in, dim=1).sum(dim=1)    
+#         cdf = torch.sigmoid(torch.sub(int, shift))
+#     else:
+#         cdf = torch.sigmoid(int)
+#     return cdf
 
-def get_pdf_ordinal(cdf):
-    """"
-    Get probability density function
+# def get_pdf_ordinal(cdf):
+#     """"
+#     Get probability density function
     
-    Args:
-        cdf: cumulative distirbution function returning from get_cdf
-    """
-    return torch.sub(cdf[:,1:], cdf[:,:-1])
+#     Args:
+#         cdf: cumulative distirbution function returning from get_cdf
+#     """
+#     return torch.sub(cdf[:,1:], cdf[:,:-1])
