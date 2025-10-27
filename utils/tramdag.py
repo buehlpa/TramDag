@@ -417,7 +417,8 @@ class TramDagDataset(Dataset):
             raise TypeError(f"[ERROR] df must be a pandas DataFrame, but got {type(df)}")
 
         # validate kwargs
-        self._validate_kwargs(kwargs, context="from_dataframe")
+        # TODO adjust validation such thath it works when called from tramdagmodel
+        #self._validate_kwargs(kwargs, context="from_dataframe")
         
         # merge defaults with overrides
         settings = dict(cls.DEFAULTS)
@@ -676,9 +677,12 @@ class TramDagModel:
     DEFAULTS_CONFIG = {
         "set_initial_weights": False,
         "debug":False,
-        
+        "verbose": False,
+        "device":'auto',
+        "initial_data":None,
     }
 
+    
     # ---- defaults used at fit() time ----
     DEFAULTS_FIT = {
         "epochs": 100,
@@ -696,6 +700,11 @@ class TramDagModel:
         "train_mode": "sequential",  # or "parallel"
         "return_history": False,
         "overwrite_inital_weights": True,
+        "num_workers" : 0,
+        "persistent_workers" : True,
+        "prefetch_factor" : 0,
+        "batch_size":1000,
+        
     }
 
     def __init__(self):
@@ -705,15 +714,93 @@ class TramDagModel:
         self.device = 'auto'
         pass
 
+    @staticmethod
+    def get_device(settings):
+        device_arg = settings.get("device", "auto")
+        if device_arg == "auto":
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device_str = device_arg
+        return device_str
+
+    def _validate_kwargs(self, kwargs: dict, defaults_attr: str = "DEFAULTS_FIT", context: str = None):
+        """Validate keyword arguments against a defaults attribute of the class.
+
+        Args:
+            kwargs: Dictionary of keyword arguments to validate.
+            defaults_attr: Name of the attribute containing allowed defaults (default: "DEFAULTS").
+            context: Optional string identifying the caller for clearer error messages.
+
+        Raises:
+            ValueError: If any keys in kwargs are not listed in the defaults attribute.
+        """
+        defaults = getattr(self, defaults_attr, None)
+        if defaults is None:
+            raise AttributeError(f"{self.__class__.__name__} has no attribute '{defaults_attr}'")
+
+        unknown = set(kwargs) - set(defaults)
+        if unknown:
+            prefix = f"[{context}] " if context else ""
+            raise ValueError(f"{prefix}Unknown parameter(s): {', '.join(sorted(unknown))}")
+            
+    ## CREATE A TRAMDADMODEL
     @classmethod
     def from_config(cls, cfg, **kwargs):
         """
-        Build one TramModel per node based on configuration and kwargs.
-        Kwargs can be scalars (applied to all nodes) or dicts {node: value}.
+        Construct a `TramDagModel` instance by building one TramModel per node 
+        defined in the configuration file.
+
+        Each node model is initialized with its own set of settings, which can 
+        either be shared across all nodes (scalar arguments) or individually 
+        specified for each node (dictionary arguments keyed by node name).
+
+        Parameters
+        ----------
+        cfg : object
+            Configuration object containing at least:
+                - `conf_dict["nodes"]`: mapping of node names to configurations.
+                - `conf_dict["PATHS"]["EXPERIMENT_DIR"]`: directory for saving model states.
+
+        **kwargs : dict
+            Optional keyword arguments for customizing model instantiation.
+            Each argument can be either:
+                - scalar: applied to all nodes.
+                - dict: mapping `{node_name: value}` to apply per node.
+
+            Recognized keys include:
+                - `device`: "auto", "cpu", or "cuda" (default: "auto").
+                - `debug`: bool, print diagnostic information (default: False).
+                - `verbose`: bool, toggle verbose output (default: False).
+                - `overwrite_initial_weights`: bool, whether to overwrite saved model weights (default: True).
+                - Other model-specific parameters defined in `DEFAULTS_CONFIG`.
+
+        Returns
+        -------
+        self : TramDagModel
+            An initialized TramDagModel instance with one TramModel per node.
+
+        Raises
+        ------
+        ValueError
+            If a dict-typed argument does not include all nodes from 
+            `cfg.conf_dict["nodes"].keys()`.
+
+        Notes
+        -----
+        - For each node, the method:
+            1. Resolves scalar and dict arguments into per-node settings.
+            2. Builds a TramModel via `get_fully_specified_tram_model()`.
+            3. Saves the initialized model state to 
+               `<EXPERIMENT_DIR>/<node>/initial_model.pt`.
+        - If `overwrite_initial_weights` is False, existing model states will not be overwritten.
+        - Device is automatically set to "cuda" if available unless explicitly specified.
         """
+        
         self = cls()
         self.cfg = cfg
         self.nodes_dict = self.cfg.conf_dict["nodes"] 
+
+        self._validate_kwargs(kwargs, defaults_attr='DEFAULTS_CONFIG', context="from_config")
 
         # update defaults with kwargs
         settings = dict(cls.DEFAULTS_CONFIG)
@@ -782,7 +869,7 @@ class TramDagModel:
                 print(f"[ERROR] Could not save initial model state for node '{node}': {e}")
                             
         return self
-
+    
     @classmethod
     def from_directory(cls, EXPERIMENT_DIR: str, device: str = "auto", debug: bool = False, verbose: bool = False):
         """
@@ -839,7 +926,86 @@ class TramDagModel:
 
         return self
 
+    def _ensure_dataset(self, data, is_val=False,**kwargs):
+        """
+        Ensure the input is converted to a TramDagDataset if needed.
+
+        Parameters
+        ----------
+        data : pd.DataFrame, TramDagDataset, or None
+            Input data to be converted or passed through.
+        is_val : bool, default=False
+            Whether the dataset is validation data (affects shuffle flag).
+
+        Returns
+        -------
+        TramDagDataset or None
+        """
+        
+        if isinstance(data, pd.DataFrame):
+            return TramDagDataset.from_dataframe(data, self.cfg, shuffle=not is_val,**kwargs)
+        elif isinstance(data, TramDagDataset):
+            return data
+        elif data is None:
+            return None
+        else:
+            raise TypeError(
+                f"[ERROR] data must be pd.DataFrame, TramDagDataset, or None, got {type(data)}"
+            )
+
     def load_or_compute_minmax(self, use_existing=False, write=True,td_train_data=None):
+        """
+        Load an existing Min–Max scaling dictionary from disk or compute a new one 
+        from the provided training dataset.
+
+        Parameters
+        ----------
+        use_existing : bool, optional (default=False)
+            If True, attempts to load an existing `min_max_scaling.json` file 
+            from the experiment directory. Raises an error if the file is missing 
+            or unreadable.
+
+        write : bool, optional (default=True)
+            If True, writes the computed Min–Max scaling dictionary to 
+            `<EXPERIMENT_DIR>/min_max_scaling.json`.
+
+        td_train_data : object, optional
+            Training dataset used to compute scaling statistics. If not provided,
+            the method will ensure or construct it via `_ensure_dataset(data=..., is_val=False)`.
+
+        Behavior
+        --------
+        - If `use_existing=True`, loads the JSON file containing previously saved 
+          min–max values and stores it in `self.minmax_dict`.
+        - If `use_existing=False`, computes a new scaling dictionary using 
+          `td_train_data.compute_scaling()` and stores the result in 
+          `self.minmax_dict`.
+        - Optionally writes the computed dictionary to disk.
+
+        Side Effects
+        -------------
+        - Populates `self.minmax_dict` with scaling values.
+        - Writes or loads the file `min_max_scaling.json` under 
+          `<EXPERIMENT_DIR>`.
+        - Prints diagnostic output if `self.debug` or `self.verbose` is True.
+
+        Raises
+        ------
+        FileNotFoundError
+            If `use_existing=True` but the min–max file does not exist.
+
+        RuntimeError
+            If an existing min–max file cannot be read or parsed.
+
+        Notes
+        -----
+        The computed min–max dictionary is expected to contain scaling statistics 
+        per feature, typically in the form:
+            {
+                "feature_name": {"min": float, "max": float},
+                ...
+            }
+        """
         EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         minmax_path = os.path.join(EXPERIMENT_DIR, "min_max_scaling.json")
 
@@ -871,33 +1037,7 @@ class TramDagModel:
             if self.debug or self.verbose:
                 print(f"[INFO] Saved new minmax dict to {minmax_path}")
 
-    def _ensure_dataset(self, data, is_val=False,**kwargs):
-        """
-        Ensure the input is converted to a TramDagDataset if needed.
-
-        Parameters
-        ----------
-        data : pd.DataFrame, TramDagDataset, or None
-            Input data to be converted or passed through.
-        is_val : bool, default=False
-            Whether the dataset is validation data (affects shuffle flag).
-
-        Returns
-        -------
-        TramDagDataset or None
-        """
-        
-        if isinstance(data, pd.DataFrame):
-            return TramDagDataset.from_dataframe(data, self.cfg, shuffle=not is_val,**kwargs)
-        elif isinstance(data, TramDagDataset):
-            return data
-        elif data is None:
-            return None
-        else:
-            raise TypeError(
-                f"[ERROR] data must be pd.DataFrame, TramDagDataset, or None, got {type(data)}"
-            )
-
+    ## FIT METHODS
     @staticmethod
     def _fit_single_node(node, self_ref, settings, td_train_data, td_val_data, device_str):
         """
@@ -971,25 +1111,81 @@ class TramDagModel:
 
     def fit(self, train_data, val_data=None, **kwargs):
         """
-        Fit TRAM models for all specified nodes.
+        Train TRAM models for all nodes defined in the DAG configuration.
+
+        This method coordinates training across all node models, either sequentially
+        or in parallel (CPU-only), handling dataset preparation, scaling, and 
+        process-safe execution of node-level training loops.
 
         Parameters
         ----------
         train_data : pd.DataFrame or TramDagDataset
-            Training data.
+            Training dataset. Can be a pre-processed TramDagDataset or a raw DataFrame
+            that will be internally converted using `_ensure_dataset()`.
+
         val_data : pd.DataFrame or TramDagDataset, optional
-            Validation data.
-        kwargs : dict
-            May include:
-                - train_mode : "sequential" or "parallel"
-                - device : "cpu", "cuda", or "auto"
-                - num_workers, prefetch_factor, persistent_workers
-                - epochs, learning_rate, etc.
+            Validation dataset, structured similarly to `train_data`.
+
+        **kwargs : dict, optional
+            Overrides or extends default training settings (`DEFAULTS_FIT`).
+            Common keys include:
+                - train_mode : {"sequential", "parallel"}, default="sequential"
+                    "parallel" uses joblib-based multiprocessing (CPU only).
+                - device : {"auto", "cpu", "cuda"}, default="auto"
+                - num_workers : int, DataLoader workers (ignored in parallel mode)
+                - prefetch_factor : int, DataLoader prefetch (ignored in parallel mode)
+                - persistent_workers : bool, DataLoader persistence flag (ignored in parallel mode)
+                - epochs : int, training epochs per node
+                - learning_rate : float, optimizer learning rate
+                - debug : bool, print diagnostic information
+                - verbose : bool, print training progress
+                - return_history : bool, if True returns training history
+                - train_list : list[str], subset of nodes to train (default: all nodes)
+
+        Returns
+        -------
+        results : dict, optional
+            If `return_history=True`, returns a dictionary mapping each node name
+            to its training history (as returned by `_fit_single_node()`).
+
+        Behavior
+        --------
+        - Validates and merges keyword arguments with `DEFAULTS_FIT`.
+        - Determines execution device via `get_device()`.
+        - Prepares `TramDagDataset` objects for training and validation.
+        - Computes or loads min–max normalization parameters.
+        - Executes training:
+            * **Sequential mode** — runs node models one after another (default and required for CUDA).
+            * **Parallel mode** — spawns CPU workers using joblib for independent node training.
+        - Each node’s results are aggregated into a dictionary if requested.
+
+        Safety Logic
+        -------------
+        - In parallel mode, DataLoader multiprocessing parameters
+          (`num_workers`, `prefetch_factor`, `persistent_workers`) are disabled
+          to prevent nested multiprocessing errors.
+        - GPU devices automatically force sequential mode.
+
+        Raises
+        ------
+        ValueError
+            If `train_mode` is not "sequential" or "parallel".
+
+        Notes
+        -----
+        - Each node model’s training artifacts and checkpoints are stored in:
+              `<EXPERIMENT_DIR>/<node>/`
+        - For parallel mode, the number of workers is automatically limited to 
+          half of available CPU cores.
+        - Verbose and debug flags control console logging granularity.
         """
 
+        self._validate_kwargs(kwargs, defaults_attr='DEFAULTS_FIT', context="fit")
+        
         # --- merge defaults ---
         settings = dict(self.DEFAULTS_FIT)
         settings.update(kwargs)
+        
         
         self.debug = settings.get("debug", False)
         self.verbose = settings.get("verbose", False)
@@ -1067,6 +1263,65 @@ class TramDagModel:
         
         if settings.get("return_history", False):
             return results
+
+    ## FIT DIAGNOSTICS
+    def loss_history(self):
+        """
+        Load training and validation loss histories for all nodes.
+
+        Looks for JSON files in:
+            EXPERIMENT_DIR/{node}/train_loss_hist.json
+            EXPERIMENT_DIR/{node}/val_loss_hist.json
+
+        Returns
+        -------
+        dict
+            {node: {"train": train_hist, "validation": val_hist}}
+        """
+        try:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        except KeyError:
+            raise ValueError(
+                "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
+                "History retrieval requires experiment logs."
+            )
+
+        all_histories = {}
+        for node in self.nodes_dict.keys():
+            node_dir = os.path.join(EXPERIMENT_DIR, node)
+            train_path = os.path.join(node_dir, "train_loss_hist.json")
+            val_path = os.path.join(node_dir, "val_loss_hist.json")
+
+            node_hist = {}
+
+            # --- load train history ---
+            if os.path.exists(train_path):
+                try:
+                    with open(train_path, "r") as f:
+                        node_hist["train"] = json.load(f)
+                except Exception as e:
+                    print(f"[WARNING] Could not load {train_path}: {e}")
+                    node_hist["train"] = None
+            else:
+                node_hist["train"] = None
+
+            # --- load val history ---
+            if os.path.exists(val_path):
+                try:
+                    with open(val_path, "r") as f:
+                        node_hist["validation"] = json.load(f)
+                except Exception as e:
+                    print(f"[WARNING] Could not load {val_path}: {e}")
+                    node_hist["validation"] = None
+            else:
+                node_hist["validation"] = None
+
+            all_histories[node] = node_hist
+
+        if self.verbose or self.debug:
+            print(f"[INFO] Loaded training/validation histories for {len(all_histories)} nodes.")
+
+        return all_histories
 
     def linear_shift_history(self):
         """
@@ -1158,7 +1413,180 @@ class TramDagModel:
 
             return all_latents_df
 
-    def show_latents(self, df, variable: str = None, confidence: float = 0.95, simulations: int = 1000):
+    ## PLOTTING DIAGNOSTICS
+    def plot_loss_history(self, variable: str = None):
+            """
+            Plot training and validation loss histories.
+
+            Parameters
+            ----------
+            variable : str, optional
+                If given, plot only this node's loss_history.
+                If None, plot all nodes together.
+            """
+
+            histories = self.loss_history()
+
+            # Select which nodes to plot
+            if variable is not None:
+                if variable not in histories:
+                    raise ValueError(f"[ERROR] Node '{variable}' not found in histories.")
+                nodes_to_plot = [variable]
+            else:
+                nodes_to_plot = list(histories.keys())
+
+            plt.figure(figsize=(14, 12))
+
+            # --- Full history (top plot) ---
+            plt.subplot(2, 1, 1)
+            for node in nodes_to_plot:
+                node_hist = histories[node]
+                train_hist, val_hist = node_hist["train"], node_hist["validation"]
+
+                if train_hist is None or val_hist is None:
+                    print(f"[WARNING] No history found for node: {node}")
+                    continue
+
+                epochs = range(1, len(train_hist) + 1)
+                plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
+                plt.plot(epochs, val_hist, label=f"{node} - val")
+
+            plt.title("Training and Validation NLL - Full History")
+            plt.xlabel("Epoch")
+            plt.ylabel("NLL")
+            plt.legend()
+            plt.grid(True)
+
+            # --- Last 10% of epochs (bottom plot) ---
+            plt.subplot(2, 1, 2)
+            for node in nodes_to_plot:
+                node_hist = histories[node]
+                train_hist, val_hist = node_hist["train"], node_hist["validation"]
+
+                if train_hist is None or val_hist is None:
+                    continue
+
+                total_epochs = len(train_hist)
+                if total_epochs < 5:  # not enough epochs to zoom
+                    continue
+
+                start_idx = int(total_epochs * 0.9)
+                epochs = range(start_idx + 1, total_epochs + 1)
+                plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
+                plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
+
+            plt.title("Training and Validation NLL - Last 10% of Epochs")
+            plt.xlabel("Epoch")
+            plt.ylabel("NLL")
+            plt.legend()
+            plt.grid(True)
+
+            plt.tight_layout()
+            plt.show()
+
+    def plot_linear_shift_history(self, data_dict=None, node=None,ref_lines=None):
+            """
+            Plot evolution of shift terms for one or all nodes.
+
+            Args:
+                data_dict (dict, optional): {node_name: DataFrame} with shift weights.
+                                            If None, uses self.linear_shift_history().
+                node (str, optional): If given, plot only that node; otherwise plot all.
+            """
+            if data_dict is None:
+                data_dict = self.linear_shift_history()
+                if data_dict is None:
+                    raise ValueError("No shift history data provided or stored in the class.")
+
+            nodes = [node] if node else list(data_dict.keys())
+
+            for n in nodes:
+                df = data_dict[n].copy()
+
+                # Flatten nested lists
+                df = df.applymap(
+                    lambda x: x[0][0]
+                    if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list)
+                    else (x[0] if isinstance(x, list) and len(x) == 1 else x)
+                )
+
+                # Convert epoch labels → numeric
+                df.columns = [
+                    int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
+                    for c in df.columns
+                ]
+                df = df.reindex(sorted(df.columns), axis=1)
+
+
+                plt.figure(figsize=(10, 6))
+                for idx in df.index:
+                    plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"shift_{idx}")
+
+
+                if ref_lines and n in ref_lines:
+                    for v in ref_lines[n]:
+                        plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
+                        plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
+                    
+                
+                plt.xlabel("Epoch")
+                plt.ylabel("Shift Value")
+                plt.title(f"Shift Term History — Node: {n}")
+                plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
+                plt.tight_layout()
+                plt.show()
+
+    def plot_simple_intercepts_history(self, data_dict=None, node=None,ref_lines=None):
+        """
+        Plot evolution of simple intercept weights for one or all nodes.
+
+        Args:
+            data_dict (dict, optional): {node_name: DataFrame} with intercept weights.
+                                        If None, uses self.simple_intercept_history().
+            node (str, optional): If given, plot only that node; otherwise plot all.
+        """
+        if data_dict is None:
+            data_dict = self.simple_intercept_history()
+            if data_dict is None:
+                raise ValueError("No intercept history data provided or stored in the class.")
+
+        nodes = [node] if node else list(data_dict.keys())
+
+        for n in nodes:
+            df = data_dict[n].copy()
+
+            def extract_scalar(x):
+                if isinstance(x, list):
+                    while isinstance(x, list) and len(x) > 0:
+                        x = x[0]
+                return float(x) if isinstance(x, (int, float, np.floating)) else np.nan
+
+            df = df.applymap(extract_scalar)
+
+            # Convert epoch labels → numeric
+            df.columns = [
+                int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
+                for c in df.columns
+            ]
+            df = df.reindex(sorted(df.columns), axis=1)
+
+            plt.figure(figsize=(10, 6))
+            for idx in df.index:
+                plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"theta_{idx}")
+            
+            if ref_lines and n in ref_lines:
+                for v in ref_lines[n]:
+                    plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
+                    plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
+                
+            plt.xlabel("Epoch")
+            plt.ylabel("Intercept Weight")
+            plt.title(f"Simple Intercept Evolution — Node: {n}")
+            plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
+            plt.tight_layout()
+            plt.show()
+
+    def plot_latents(self, df, variable: str = None, confidence: float = 0.95, simulations: int = 1000):
         """
         Plot latent U distributions for one node or all nodes.
 
@@ -1237,15 +1665,7 @@ class TramDagModel:
                         label=f'{int(confidence*100)}% CI')
         ax.legend()
     
-    @staticmethod
-    def get_device(settings):
-        device_arg = settings.get("device", "auto")
-        if device_arg == "auto":
-            device_str = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            device_str = device_arg
-        return device_str
-    
+    ## SAMPLING METHODS
     def sample(
         self,
         do_interventions: dict = None,
@@ -1291,6 +1711,10 @@ class TramDagModel:
             "use_initial_weights_for_sampling": False,
             
         }
+        
+        # TODO adjust validation
+        # self._validate_kwargs( kwargs, defaults_attr= "settings", context="sample")
+        
         settings.update(kwargs)
 
         
@@ -1393,135 +1817,7 @@ class TramDagModel:
 
         return sampled_by_node, latents_by_node
 
-    def loss_history(self):
-        """
-        Load training and validation loss histories for all nodes.
-
-        Looks for JSON files in:
-            EXPERIMENT_DIR/{node}/train_loss_hist.json
-            EXPERIMENT_DIR/{node}/val_loss_hist.json
-
-        Returns
-        -------
-        dict
-            {node: {"train": train_hist, "validation": val_hist}}
-        """
-        try:
-            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
-        except KeyError:
-            raise ValueError(
-                "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
-                "History retrieval requires experiment logs."
-            )
-
-        all_histories = {}
-        for node in self.nodes_dict.keys():
-            node_dir = os.path.join(EXPERIMENT_DIR, node)
-            train_path = os.path.join(node_dir, "train_loss_hist.json")
-            val_path = os.path.join(node_dir, "val_loss_hist.json")
-
-            node_hist = {}
-
-            # --- load train history ---
-            if os.path.exists(train_path):
-                try:
-                    with open(train_path, "r") as f:
-                        node_hist["train"] = json.load(f)
-                except Exception as e:
-                    print(f"[WARNING] Could not load {train_path}: {e}")
-                    node_hist["train"] = None
-            else:
-                node_hist["train"] = None
-
-            # --- load val history ---
-            if os.path.exists(val_path):
-                try:
-                    with open(val_path, "r") as f:
-                        node_hist["validation"] = json.load(f)
-                except Exception as e:
-                    print(f"[WARNING] Could not load {val_path}: {e}")
-                    node_hist["validation"] = None
-            else:
-                node_hist["validation"] = None
-
-            all_histories[node] = node_hist
-
-        if self.verbose or self.debug:
-            print(f"[INFO] Loaded training/validation histories for {len(all_histories)} nodes.")
-
-        return all_histories
-
-    def plot_loss_history(self, variable: str = None):
-            """
-            Plot training and validation loss histories.
-
-            Parameters
-            ----------
-            variable : str, optional
-                If given, plot only this node's loss_history.
-                If None, plot all nodes together.
-            """
-
-            histories = self.loss_history()
-
-            # Select which nodes to plot
-            if variable is not None:
-                if variable not in histories:
-                    raise ValueError(f"[ERROR] Node '{variable}' not found in histories.")
-                nodes_to_plot = [variable]
-            else:
-                nodes_to_plot = list(histories.keys())
-
-            plt.figure(figsize=(14, 12))
-
-            # --- Full history (top plot) ---
-            plt.subplot(2, 1, 1)
-            for node in nodes_to_plot:
-                node_hist = histories[node]
-                train_hist, val_hist = node_hist["train"], node_hist["validation"]
-
-                if train_hist is None or val_hist is None:
-                    print(f"[WARNING] No history found for node: {node}")
-                    continue
-
-                epochs = range(1, len(train_hist) + 1)
-                plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
-                plt.plot(epochs, val_hist, label=f"{node} - val")
-
-            plt.title("Training and Validation NLL - Full History")
-            plt.xlabel("Epoch")
-            plt.ylabel("NLL")
-            plt.legend()
-            plt.grid(True)
-
-            # --- Last 10% of epochs (bottom plot) ---
-            plt.subplot(2, 1, 2)
-            for node in nodes_to_plot:
-                node_hist = histories[node]
-                train_hist, val_hist = node_hist["train"], node_hist["validation"]
-
-                if train_hist is None or val_hist is None:
-                    continue
-
-                total_epochs = len(train_hist)
-                if total_epochs < 5:  # not enough epochs to zoom
-                    continue
-
-                start_idx = int(total_epochs * 0.9)
-                epochs = range(start_idx + 1, total_epochs + 1)
-                plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
-                plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
-
-            plt.title("Training and Validation NLL - Last 10% of Epochs")
-            plt.xlabel("Epoch")
-            plt.ylabel("NLL")
-            plt.legend()
-            plt.grid(True)
-
-            plt.tight_layout()
-            plt.show()
-
-    def show_samples_vs_true(
+    def plot_samples_vs_true(
         self,
         df,
         bins: int = 100,
@@ -1653,108 +1949,6 @@ class TramDagModel:
 
                 axs[1].axis("off")
 
-            plt.tight_layout()
-            plt.show()
-
-    def plot_shift_histories(self, data_dict=None, node=None,ref_lines=None):
-            """
-            Plot evolution of shift terms for one or all nodes.
-
-            Args:
-                data_dict (dict, optional): {node_name: DataFrame} with shift weights.
-                                            If None, uses self.linear_shift_history().
-                node (str, optional): If given, plot only that node; otherwise plot all.
-            """
-            if data_dict is None:
-                data_dict = self.linear_shift_history()
-                if data_dict is None:
-                    raise ValueError("No shift history data provided or stored in the class.")
-
-            nodes = [node] if node else list(data_dict.keys())
-
-            for n in nodes:
-                df = data_dict[n].copy()
-
-                # Flatten nested lists
-                df = df.applymap(
-                    lambda x: x[0][0]
-                    if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list)
-                    else (x[0] if isinstance(x, list) and len(x) == 1 else x)
-                )
-
-                # Convert epoch labels → numeric
-                df.columns = [
-                    int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
-                    for c in df.columns
-                ]
-                df = df.reindex(sorted(df.columns), axis=1)
-
-
-                plt.figure(figsize=(10, 6))
-                for idx in df.index:
-                    plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"shift_{idx}")
-
-
-                if ref_lines and n in ref_lines:
-                    for v in ref_lines[n]:
-                        plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
-                        plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
-                    
-                
-                plt.xlabel("Epoch")
-                plt.ylabel("Shift Value")
-                plt.title(f"Shift Term History — Node: {n}")
-                plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
-                plt.tight_layout()
-                plt.show()
-
-    def plot_simple_intercepts(self, data_dict=None, node=None,ref_lines=None):
-        """
-        Plot evolution of simple intercept weights for one or all nodes.
-
-        Args:
-            data_dict (dict, optional): {node_name: DataFrame} with intercept weights.
-                                        If None, uses self.simple_intercept_history().
-            node (str, optional): If given, plot only that node; otherwise plot all.
-        """
-        if data_dict is None:
-            data_dict = self.simple_intercept_history()
-            if data_dict is None:
-                raise ValueError("No intercept history data provided or stored in the class.")
-
-        nodes = [node] if node else list(data_dict.keys())
-
-        for n in nodes:
-            df = data_dict[n].copy()
-
-            def extract_scalar(x):
-                if isinstance(x, list):
-                    while isinstance(x, list) and len(x) > 0:
-                        x = x[0]
-                return float(x) if isinstance(x, (int, float, np.floating)) else np.nan
-
-            df = df.applymap(extract_scalar)
-
-            # Convert epoch labels → numeric
-            df.columns = [
-                int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
-                for c in df.columns
-            ]
-            df = df.reindex(sorted(df.columns), axis=1)
-
-            plt.figure(figsize=(10, 6))
-            for idx in df.index:
-                plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"theta_{idx}")
-            
-            if ref_lines and n in ref_lines:
-                for v in ref_lines[n]:
-                    plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
-                    plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
-                
-            plt.xlabel("Epoch")
-            plt.ylabel("Intercept Weight")
-            plt.title(f"Simple Intercept Evolution — Node: {n}")
-            plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
             plt.tight_layout()
             plt.show()
 
