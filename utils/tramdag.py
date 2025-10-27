@@ -22,8 +22,6 @@ from utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_mo
 from utils.tram_data import GenericDataset, GenericDatasetPrecomputed
 from utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
 
-## TODO Raise errors when arguments are missspecified while keeping kwargs style for flexibility
-
 
 class TramDagConfig:
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None, **kwargs):
@@ -667,7 +665,7 @@ class TramDagDataset(Dataset):
 
 ## TODO return final thetas funciton 
 ## TODO return final intercepts function
-
+## TODO from x via h^-1 to latent z function for ordinal
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
 
@@ -1264,7 +1262,7 @@ class TramDagModel:
         if settings.get("return_history", False):
             return results
 
-    ## FIT DIAGNOSTICS
+    ## FIT-DIAGNOSTICS
     def loss_history(self):
         """
         Load training and validation loss histories for all nodes.
@@ -1413,7 +1411,7 @@ class TramDagModel:
 
             return all_latents_df
 
-    ## PLOTTING DIAGNOSTICS
+    ## PLOTTING FIT-DIAGNOSTICS
     def plot_loss_history(self, variable: str = None):
             """
             Plot training and validation loss histories.
