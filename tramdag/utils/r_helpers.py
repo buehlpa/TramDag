@@ -21,7 +21,38 @@ limitations under the License.
 import subprocess
 import tempfile
 import textwrap
+import shutil
 
+
+def check_r_setup():
+    """
+    Verify that Rscript is available and that required R packages are installed.
+    Raises RuntimeError if any component is missing.
+    """
+
+    if shutil.which("Rscript") is None:
+        raise RuntimeError("Rscript not found. Please install R >= 4.0 and ensure it’s on PATH.")
+
+    required_packages = ["tram", "ordinal", "readr", "MASS"]
+    missing = []
+
+    for pkg in required_packages:
+        cmd = [
+            "Rscript",
+            "-e",
+            f"if(!requireNamespace('{pkg}', quietly=TRUE)) quit(status=1)"
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            missing.append(pkg)
+
+    if missing:
+        missing_str = ", ".join(missing)
+        raise RuntimeError(
+            f"Missing R packages: {missing_str}. "
+            f"Run in R:\ninstall.packages(c({', '.join(repr(x) for x in missing)}))"
+        )
 
 def fit_r_model_subprocess(target, dtype,theta_count, data_path, debug=False):
     
@@ -88,6 +119,7 @@ def fit_r_model_subprocess(target, dtype,theta_count, data_path, debug=False):
     >>> print(values)
     [-0.42, 0.15, 0.87]
     """
+    check_r_setup()
     
     dtype = dtype.lower().strip()
     if dtype in ["continous", "continuous"]:  # handle both spellings

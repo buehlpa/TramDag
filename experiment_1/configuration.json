@@ -1,0 +1,22 @@
+{
+    "date_of_creation": "2025-10-29 17:42:58",
+    "experiment_name": "experiment_1",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/experiment_1",
+        "LOG_DIR": null,
+        "EXPERIMENT_DIR": "/home/bule/TramDag/experiment_1"
+    },
+    "data_type": {
+        "x1": "continous",
+        "x2": "continous",
+        "x3": "continous",
+        "x4": "continous",
+        "x5": "continous",
+        "x6": "continous",
+        "x7": "continous"
+    },
+    "adj_matrix": null,
+    "model_names": null,
+    "seed": null,
+    "nodes": null
+}

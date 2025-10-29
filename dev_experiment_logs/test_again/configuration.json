@@ -1,0 +1,14 @@
+{
+    "date_of_creation": "2025-10-29 17:41:52",
+    "experiment_name": "/home/bule/TramDag/dev_experiment_logs/test_again",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/dev_experiment_logs/test_again",
+        "LOG_DIR": null,
+        "EXPERIMENT_DIR": "/home/bule/TramDag/dev_experiment_logs/test_again"
+    },
+    "data_type": null,
+    "adj_matrix": null,
+    "model_names": null,
+    "seed": null,
+    "nodes": null
+}

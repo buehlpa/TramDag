@@ -1,0 +1,42 @@
+[project]
+name = "tramdag"
+version = "0.1.0a0"
+description = "Short description of your package"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "YPascal Buehler", email = "buehler1991@gmail.com" }
+]
+dependencies = [
+    "torch",
+    "torchvision",
+    "numpy",
+    "matplotlib",
+    "pandas",
+    "seaborn",
+    "ipywidgets",
+    "tqdm",
+    "statsmodels",
+    "scipy",
+    "Pillow",
+    "scikit-learn"
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tramdag*"]
+
+
+[project.urls]
+Homepage = "https://github.com/buehlpa/tramdag"
+Issues = "https://github.com/buehlpa/tramdag/issues"
