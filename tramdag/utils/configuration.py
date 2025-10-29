@@ -233,8 +233,28 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
         generate_btn.on_click(on_generate_clicked)
 
         gridbox = create_grid()
+        print("--------------HINT:-------------\n\n"
+            "Enter 0 if no arrow exists.\n\n"
+            "ls = Linear shift\n"
+            "cs = Complex shift\n\n"
+            "ci = Complex intercept\n"
+            "Simple intercepts must NOT be specified — they are automatically provided unless a complex intercept is defined.\n\n"
+            "If variables interact, specify interaction terms as follows:\n"
+            "  Example: cs(x1,x2)\n"
+            "    → at x1: cs11\n"
+            "    → at x2: cs12\n"
+            "If another interacting group exists (e.g. x3, x4) on the same node:\n"
+            "    → at x3: cs21\n"
+            "    → at x4: cs22\n\n"
+             "the sam e works for complex intercept but only one group is allowd:\n"
+            
+            "Note: The first number denotes the interaction group, and the second the participant. "
+            "This numbering scheme is used internally to maintain consistent input ordering.")
         ui = widgets.VBox([
-            widgets.Label("Fill in the adjacency matrix (upper triangle only). Use 'ls', 'cs', etc. row:FROM → column:TO."),
+            widgets.Label(
+            "Fill in the adjacency matrix (upper triangle only).: Use 'ls', 'cs', etc. to define connections (row: FROM → column: TO).\n\n"
+
+        ),
             gridbox,
             generate_btn,
             output
@@ -243,13 +263,107 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
         display(ui)
         return None
 
-def interactive_nn_names_matrix(CONF_DICT_PATH, seed=5):
+# def interactive_nn_names_matrix(CONF_DICT_PATH):
+#     """
+#     If a saved NN-names matrix exists in configuration, load & display it.
+#     Otherwise, generate defaults from the adjacency matrix, show them
+#     in an editable grid (only for non-zero entries), and let the user overwrite before saving & plotting.
+#     """
+#     # Load config, types, matrices
+#     cfg = load_configuration_dict(CONF_DICT_PATH)
+#     data_type = cfg['data_type']
+#     adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+#     nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+#     var_names = list(data_type.keys())
+#     n = len(var_names)
+
+#     # If already saved, just plot and exit
+#     if nn_names_matrix is not None:
+#         plot_nn_names_matrix(nn_names_matrix, data_type)
+#         return
+
+#     # No saved NN-names → build defaults
+#     default_nn = create_nn_model_names(adj_matrix, data_type)
+
+#     output = widgets.Output()
+#     cells = {}
+
+#     def create_grid():
+#         # Build header row
+#         header_widgets = [widgets.Label(value="")] + [widgets.Label(value=v) for v in var_names]
+#         grid = header_widgets.copy()
+
+#         for i, vi in enumerate(var_names):
+#             grid.append(widgets.Label(value=vi))
+#             for j, vj in enumerate(var_names):
+#                 if i >= j:
+#                     # Diagonal & lower triangle: non-editable blank
+#                     cell = widgets.Label(value="")
+#                 else:
+#                     default = default_nn[i, j]
+#                     if default == "0":
+#                         # Do not display zeros
+#                         cell = widgets.Label(value="")
+#                     else:
+#                         # Editable for prefilled entries only
+#                         cell = widgets.Text(
+#                             value=default,
+#                             placeholder="",
+#                             layout=widgets.Layout(width="100px")
+#                         )
+#                         cells[(i, j)] = cell
+#                 grid.append(cell)
+
+#         return widgets.GridBox(
+#             children=grid,
+#             layout=widgets.Layout(
+#                 grid_template_columns=("100px " * (n + 1)).strip(),
+#                 overflow="auto"
+#             )
+#         )
+
+#     def on_generate_clicked(b):
+#         with output:
+#             clear_output()
+#             # Build final nn_names_matrix
+#             nm = np.empty((n, n), dtype=object)
+#             for i in range(n):
+#                 for j in range(n):
+#                     if i >= j:
+#                         nm[i, j] = "0"
+#                     else:
+#                         if (i, j) in cells:
+#                             val = cells[(i, j)].value.strip()
+#                             nm[i, j] = val if val else default_nn[i, j]
+#                         else:
+#                             nm[i, j] = "0"
+#             try:
+#                 write_nn_names_matrix_to_configuration(nm, CONF_DICT_PATH)
+#                 write_nodes_information_to_configuration(CONF_DICT_PATH)
+#                 plot_nn_names_matrix(nm, data_type)
+                
+#             except Exception as e:
+#                 print(f"Error saving or plotting NN-names matrix: {e}")
+
+#     # Button to save and plot
+#     btn = widgets.Button(description="Generate NN-Names + Plot", button_style="success")
+#     btn.on_click(on_generate_clicked)
+
+#     # Layout UI
+#     grid = create_grid()
+#     ui = widgets.VBox([
+#         widgets.Label("Edit only the existing model names (non-zero entries)."),
+#         grid,
+#         btn,
+#         output
+#     ])
+#     display(ui)
+
+
+def interactive_nn_names_matrix(CONF_DICT_PATH):
     """
-    If a saved NN-names matrix exists in configuration, load & display it.
-    Otherwise, generate defaults from the adjacency matrix, show them
-    in an editable grid (only for non-zero entries), and let the user overwrite before saving & plotting.
+    Launches interactive editor for NN names matrix and returns updated config dict when saved.
     """
-    # Load config, types, matrices
     cfg = load_configuration_dict(CONF_DICT_PATH)
     data_type = cfg['data_type']
     adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
@@ -257,55 +371,39 @@ def interactive_nn_names_matrix(CONF_DICT_PATH, seed=5):
     var_names = list(data_type.keys())
     n = len(var_names)
 
-    # If already saved, just plot and exit
     if nn_names_matrix is not None:
         plot_nn_names_matrix(nn_names_matrix, data_type)
-        return
+        return cfg  # <- return loaded config
 
-    # No saved NN-names → build defaults
     default_nn = create_nn_model_names(adj_matrix, data_type)
-
     output = widgets.Output()
     cells = {}
+    result_container = {"cfg": cfg}  # mutable holder for updated state
 
     def create_grid():
-        # Build header row
         header_widgets = [widgets.Label(value="")] + [widgets.Label(value=v) for v in var_names]
         grid = header_widgets.copy()
-
         for i, vi in enumerate(var_names):
             grid.append(widgets.Label(value=vi))
             for j, vj in enumerate(var_names):
                 if i >= j:
-                    # Diagonal & lower triangle: non-editable blank
                     cell = widgets.Label(value="")
                 else:
                     default = default_nn[i, j]
                     if default == "0":
-                        # Do not display zeros
                         cell = widgets.Label(value="")
                     else:
-                        # Editable for prefilled entries only
-                        cell = widgets.Text(
-                            value=default,
-                            placeholder="",
-                            layout=widgets.Layout(width="100px")
-                        )
+                        cell = widgets.Text(value=default, layout=widgets.Layout(width="100px"))
                         cells[(i, j)] = cell
                 grid.append(cell)
-
         return widgets.GridBox(
             children=grid,
-            layout=widgets.Layout(
-                grid_template_columns=("100px " * (n + 1)).strip(),
-                overflow="auto"
-            )
+            layout=widgets.Layout(grid_template_columns=("100px " * (n + 1)).strip(), overflow="auto")
         )
 
     def on_generate_clicked(b):
         with output:
             clear_output()
-            # Build final nn_names_matrix
             nm = np.empty((n, n), dtype=object)
             for i in range(n):
                 for j in range(n):
@@ -320,25 +418,23 @@ def interactive_nn_names_matrix(CONF_DICT_PATH, seed=5):
             try:
                 write_nn_names_matrix_to_configuration(nm, CONF_DICT_PATH)
                 write_nodes_information_to_configuration(CONF_DICT_PATH)
+                result_container["cfg"] = load_configuration_dict(CONF_DICT_PATH)
                 plot_nn_names_matrix(nm, data_type)
-                
             except Exception as e:
                 print(f"Error saving or plotting NN-names matrix: {e}")
 
-    # Button to save and plot
     btn = widgets.Button(description="Generate NN-Names + Plot", button_style="success")
     btn.on_click(on_generate_clicked)
 
-    # Layout UI
-    grid = create_grid()
     ui = widgets.VBox([
         widgets.Label("Edit only the existing model names (non-zero entries)."),
-        grid,
+        create_grid(),
         btn,
         output
     ])
     display(ui)
 
+    return result_container["cfg"]
 # configuration dicitonary utils
 
 def new_conf_dict(experiment_name,EXPERIMENT_DIR,DATA_PATH,LOG_DIR):

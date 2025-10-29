@@ -61,24 +61,6 @@ class SimpleIntercept(nn.Module):
     def forward(self, x):
         return self.fc(x)
     
-    
-    
-    
-    
-    
-    
-# class LinearShift(nn.Module):
-#     """
-#     Linear shift term,  hS()
-#     Attributes:
-#         n_features (int): number of features/predictors
-#     """
-#     def __init__(self, n_features=1):
-#         super(LinearShift, self).__init__() 
-#         self.fc = nn.Linear(n_features, 1, bias=False)
-
-#     def forward(self, x):
-#         return self.fc(x)
 
 
 class LinearShift(nn.Module):

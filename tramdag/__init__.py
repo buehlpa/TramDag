@@ -1,4 +1,6 @@
 # tramdag/__init__.py
+from .TramDagConfig import TramDagConfig
+from .TramDagDataset import TramDagDataset
+from .TramDagModel import TramDagModel
 
-from .tramdag import TramDagConfig, TramDagDataset, TramDagModel
 __all__ = ["TramDagConfig", "TramDagDataset", "TramDagModel"]
