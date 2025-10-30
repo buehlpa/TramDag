@@ -765,7 +765,9 @@ def train_val_loop(
     # flag to choose correct loss function
     is_ontram = 'yo' in target_nodes[node]['data_type'].lower()
 
-
+    ## needed to save shift terms
+    _, terms_dict, _ =ordered_parents(node, target_nodes)
+    
     ################################## 2. MAIN LOOP ##################################
     for epoch in range(start_epoch, epochs):
         tram_model.train()
@@ -928,12 +930,14 @@ def train_val_loop(
                     all_shift_weights = json.load(f)
             else:
                 all_shift_weights = {}
-
+                
+            
             # Collect current epoch’s shift weights
             epoch_weights = {}
             for i, shift_layer in enumerate(tram_model.nn_shift):
-                if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight"):
-                    epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
+                module_name = shift_layer.__class__.__name__
+                if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight") and module_name == 'LinearShift': 
+                    epoch_weights[f"ls({list(terms_dict.keys())[i]})"] = shift_layer.fc.weight.detach().cpu().squeeze().tolist()
                 else:
                     if debug:
                         print(f"[DEBUG] shift_{i}: 'fc' or 'weight' not found.")

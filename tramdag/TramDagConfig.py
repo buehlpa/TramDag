@@ -24,6 +24,8 @@ import os
 
 from .utils.configuration import *
 
+
+# renamme set _meta_adj amtrix
 class TramDagConfig:
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None,  _verify: bool = False,**kwargs):
         """

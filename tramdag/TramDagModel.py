@@ -31,7 +31,7 @@ from joblib import Parallel, delayed
 from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
-from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths
+from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
 from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
 
 from .TramDagConfig import TramDagConfig
@@ -44,6 +44,9 @@ from .TramDagDataset import TramDagDataset
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
 
+## TODO add NLL for each node
+
+## TODO  allow sample plotting fucniotn to accept samples directly
 class TramDagModel:
     
     # ---- defaults used at construction time ----
@@ -737,6 +740,12 @@ class TramDagModel:
                 LOAD_PATH=BEST_MODEL_PATH
             elif state=='last':
                 LOAD_PATH=LAST_MODEL_PATH
+                
+            if not  os.path.exists(LOAD_PATH):
+                LOAD_PATH = os.path.join(NODE_DIR, 'initial_model.pt')
+                print(f"[WARNING] Model file not found for node {node} at {LOAD_PATH}. Using initial model instead.")
+            
+            _, terms_dict, _ =ordered_parents(node, self.nodes_dict)
             
             
             state_dict = torch.load(LOAD_PATH, map_location=self.device)
@@ -747,11 +756,13 @@ class TramDagModel:
             if  hasattr(tram_model, "nn_shift") and tram_model.nn_shift is not None:
                 epoch_weights = {}
                 for i, shift_layer in enumerate(tram_model.nn_shift):
-                    if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight"):
-                        epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
+                    module_name = shift_layer.__class__.__name__
+                    if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight") and module_name == 'LinearShift': 
+                        
+                        epoch_weights[f"ls({list(terms_dict.keys())[i]})"] = shift_layer.fc.weight.detach().cpu().squeeze().tolist()
                     else:
                         if self.debug:
-                            print(f"[DEBUG] shift_{i}: 'fc' or 'weight' not found.")
+                            print(f"[DEBUG] ls({list(terms_dict.keys())[i]}): 'fc' or 'weight' or LinearShift not found.")
                             
                 linear_shift_dict[node]=epoch_weights
         return linear_shift_dict
@@ -818,8 +829,6 @@ class TramDagModel:
             )
 
             return all_latents_df
-
-
 
 
     ## PLOTTING FIT-DIAGNOSTICS
@@ -1229,10 +1238,12 @@ class TramDagModel:
     def plot_samples_vs_true(
         self,
         df,
+        sampled: dict = None,
         bins: int = 100,
         hist_true_color: str = "blue",
         hist_est_color: str = "orange",
         figsize: tuple = (14, 5),
+        
     ):
         """
         Compare true vs sampled distributions for each node.
@@ -1240,7 +1251,7 @@ class TramDagModel:
         Parameters
         ----------
         df : pd.DataFrame
-            Dataframe with true observed values.
+            DataFrame with true observed values.
         bins : int, optional
             Number of bins for histograms (continuous case). Default = 100.
         hist_true_color : str, optional
@@ -1249,26 +1260,36 @@ class TramDagModel:
             Color for sampled data histogram/bar. Default = "orange".
         figsize : tuple, optional
             Figure size for each node. Default = (14, 5).
+        sampled : dict, optional
+            Optional dictionary with preloaded samples per node.
+            If provided, no loading from disk is performed.
         """
-
 
         target_nodes = self.cfg.conf_dict["nodes"]
         experiment_dir = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         for node in target_nodes:
-            sample_path = os.path.join(experiment_dir, f"{node}/sampling/sampled.pt")
-            if not os.path.isfile(sample_path):
-                print(f"[WARNING] skip {node}: {sample_path} not found.")
-                continue
+            # Load sampled data
+            if sampled is not None and node in sampled:
+                sdata = sampled[node]
+                if isinstance(sdata, torch.Tensor):
+                    sampled_vals = sdata.detach().cpu().numpy()
+                else:
+                    sampled_vals = np.asarray(sdata)
+            else:
+                sample_path = os.path.join(experiment_dir, f"{node}/sampling/sampled.pt")
+                if not os.path.isfile(sample_path):
+                    print(f"[WARNING] skip {node}: {sample_path} not found.")
+                    continue
 
-            try:
-                sampled = torch.load(sample_path, map_location=device).cpu().numpy()
-            except Exception as e:
-                print(f"[ERROR] Could not load {sample_path}: {e}")
-                continue
+                try:
+                    sampled_vals = torch.load(sample_path, map_location=device).cpu().numpy()
+                except Exception as e:
+                    print(f"[ERROR] Could not load {sample_path}: {e}")
+                    continue
 
-            sampled = sampled[np.isfinite(sampled)]
+            sampled_vals = sampled_vals[np.isfinite(sampled_vals)]
 
             if node not in df.columns:
                 print(f"[WARNING] skip {node}: column not found in DataFrame.")
@@ -1277,14 +1298,13 @@ class TramDagModel:
             true_vals = df[node].dropna().values
             true_vals = true_vals[np.isfinite(true_vals)]
 
-            if sampled.size == 0 or true_vals.size == 0:
+            if sampled_vals.size == 0 or true_vals.size == 0:
                 print(f"[WARNING] skip {node}: empty array after NaN/Inf removal.")
                 continue
 
             fig, axs = plt.subplots(1, 2, figsize=figsize)
 
             if is_outcome_modelled_continous(node, target_nodes):
-                # Continuous: histogram + QQ
                 axs[0].hist(
                     true_vals,
                     bins=bins,
@@ -1294,7 +1314,7 @@ class TramDagModel:
                     label=f"True {node}",
                 )
                 axs[0].hist(
-                    sampled,
+                    sampled_vals,
                     bins=bins,
                     density=True,
                     alpha=0.6,
@@ -1307,19 +1327,18 @@ class TramDagModel:
                 axs[0].legend()
                 axs[0].grid(True, ls="--", alpha=0.4)
 
-                qqplot_2samples(true_vals, sampled, line="45", ax=axs[1])
+                qqplot_2samples(true_vals, sampled_vals, line="45", ax=axs[1])
                 axs[1].set_xlabel("True quantiles")
                 axs[1].set_ylabel("Sampled quantiles")
                 axs[1].set_title(f"QQ plot for {node}")
                 axs[1].grid(True, ls="--", alpha=0.4)
 
             elif is_outcome_modelled_ordinal(node, target_nodes):
-                # Ordinal: bar plot only
-                unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
+                unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled_vals))
                 unique_vals = np.sort(unique_vals)
 
                 true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
-                sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
+                sampled_counts = np.array([(sampled_vals == val).sum() for val in unique_vals])
 
                 axs[0].bar(unique_vals - 0.2, true_counts / true_counts.sum(),
                            width=0.4, color=hist_true_color, alpha=0.7, label="True")
@@ -1333,15 +1352,14 @@ class TramDagModel:
                 axs[0].legend()
                 axs[0].grid(True, ls="--", alpha=0.4)
 
-                axs[1].axis("off")  # No QQ for ordinal
+                axs[1].axis("off")
 
             else:
-                # Fallback: categorical
-                unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
+                unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled_vals))
                 unique_vals = sorted(unique_vals, key=str)
 
                 true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
-                sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
+                sampled_counts = np.array([(sampled_vals == val).sum() for val in unique_vals])
 
                 axs[0].bar(np.arange(len(unique_vals)) - 0.2, true_counts / true_counts.sum(),
                            width=0.4, color=hist_true_color, alpha=0.7, label="True")
