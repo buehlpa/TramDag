@@ -405,7 +405,7 @@ class TramDagConfig:
         else:
             print(f"Configuration updated successfully at {CONF_DICT_PATH}.")
             
-    def set_tramdag_terms(self, CONF_DICT_PATH: str = None, seed: int = 5):
+    def set_meta_adj_matrix(self, CONF_DICT_PATH: str = None, seed: int = 5):
         """
         Launch the interactive TRAMDAG term editor.
 
