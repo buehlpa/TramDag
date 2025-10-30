@@ -707,6 +707,11 @@ def provide_latents_for_input_data(
 
     ##### 1. Load model 
     model_path = os.path.join(NODE_DIR, "best_model.pt")
+    if not os.path.exists(model_path):
+        print("[Warning] best_model.pt not found, falling back to initial_model.pt")
+        model_path = os.path.join(NODE_DIR, "initial_model.pt")
+    
+    
     tram_model = get_fully_specified_tram_model(
         node, configuration_dict, debug=verbose, set_initial_weights=False
     )
@@ -734,9 +739,9 @@ def provide_latents_for_input_data(
 
     # Turn into DataFrame aligned with base_df
     latents_df = pd.DataFrame({
-        node: base_df[node].values,
-        f"{node}_U": latents_list
-    }, index=base_df.index)
+                node: base_df[node].values,
+                f"{node}_U": latents_list
+            }, index=base_df.index)
 
     return latents_df
 
@@ -912,7 +917,7 @@ def sample_full_dag(configuration_dict,
         SAMPLED_PATH = os.path.join(SAMPLING_DIR, "sampled.pt")
         LATENTS_PATH = os.path.join(SAMPLING_DIR, "latents.pt")
         
-        
+        # TODO move to archive
         ## 2. Check if the parents are already sampled -> must be given due to the causal ordering
         for parent in target_nodes_dict[node]['parents']:
             parent_dir = os.path.join(EXPERIMENT_DIR, parent)
@@ -921,7 +926,7 @@ def sample_full_dag(configuration_dict,
             except FileNotFoundError:
                 if verbose or debug:
                     print(f"[INFO] Skipping {node} as parent '{parent}' is not sampled yet.")
-        
+
         
         ## INTERVENTION, if node is to be intervened on , data is just saved
         if do_interventions and node in do_interventions.keys():

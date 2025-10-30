@@ -46,7 +46,6 @@ from .TramDagDataset import TramDagDataset
 
 ## TODO add NLL for each node
 
-## TODO  allow sample plotting fucniotn to accept samples directly
 class TramDagModel:
     
     # ---- defaults used at construction time ----

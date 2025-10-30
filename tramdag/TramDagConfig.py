@@ -202,7 +202,7 @@ class TramDagConfig:
             except Exception as e:
                 print(f'[ERROR] Failed to save configuration: {e}')
 
-    def plot_dag(self, seed: int = 42, use_spring: bool = True):
+    def plot_dag(self, seed: int = 42, causal_order: bool = False):
         """
         Plot the DAG with Source, Sink, and Intermediate nodes.
 
@@ -210,9 +210,9 @@ class TramDagConfig:
         ----------
         seed : int, default=42
             Random seed for layout stability.
-        use_spring : bool, default=True
-            If True use networkx.spring_layout; 
-            if False try Graphviz “dot” (falls back to spring).
+        causal_order : bool, default=True
+            If True, use Graphviz 'dot' layout to preserve causal order.
+            If False, use networkx.spring_layout for a force-directed layout.
         """
         adj_matrix = self.conf_dict.get("adj_matrix")
         data_type  = self.conf_dict.get("data_type")
@@ -220,7 +220,6 @@ class TramDagConfig:
         if adj_matrix is None or data_type is None:
             raise ValueError("Configuration must include 'adj_matrix' and 'data_type'.")
 
-        # convert list to numpy if needed
         if isinstance(adj_matrix, list):
             adj_matrix = np.array(adj_matrix)
 
@@ -232,12 +231,10 @@ class TramDagConfig:
         node_labels = list(data_type.keys())
         G, edge_labels = create_nx_graph(adj_matrix, node_labels)
 
-        # classify nodes
         sources       = {n for n in G.nodes if G.in_degree(n) == 0}
         sinks         = {n for n in G.nodes if G.out_degree(n) == 0}
         intermediates = set(G.nodes) - sources - sinks
 
-        # assign node colors
         node_colors = [
             "green" if n in sources
             else "red" if n in sinks
@@ -245,16 +242,14 @@ class TramDagConfig:
             for n in G.nodes
         ]
 
-        # choose layout
-        if use_spring:
-            pos = nx.spring_layout(G, seed=seed, k=1.5, iterations=100)
-        else:
+        if causal_order:
             try:
                 pos = nx.nx_agraph.graphviz_layout(G, prog="dot")
             except (ImportError, nx.NetworkXException):
                 pos = nx.spring_layout(G, seed=seed, k=1.5, iterations=100)
+        else:
+            pos = nx.spring_layout(G, seed=seed, k=1.5, iterations=100)
 
-        # draw nodes and edges
         plt.figure(figsize=(8, 6))
         nx.draw(
             G, pos,
@@ -265,7 +260,6 @@ class TramDagConfig:
             arrowsize=20
         )
 
-        # draw edge labels colored by prefix
         for (u, v), lbl in edge_labels.items():
             color = (
                 "blue"  if lbl.startswith("ci")
@@ -280,7 +274,6 @@ class TramDagConfig:
                 font_size=12
             )
 
-        # build legend
         legend_items = [
             Patch(facecolor="green",     edgecolor="black", label="Source"),
             Patch(facecolor="red",       edgecolor="black", label="Sink"),
@@ -288,11 +281,12 @@ class TramDagConfig:
         ]
         plt.legend(handles=legend_items, loc="upper right", frameon=True)
 
-        plt.title("TRAM DAG")
+        plt.title(f"TRAM DAG")
         plt.axis("off")
         plt.tight_layout()
         plt.show()
-        
+
+  
     def setup_configuration(self, experiment_name=None, EXPERIMENT_DIR=None, debug=False, _verify=False):
         """
         Create or reuse a configuration for an experiment.
