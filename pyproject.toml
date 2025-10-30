@@ -16,6 +16,7 @@ dependencies = [
     "pandas",
     "seaborn",
     "ipywidgets",
+    "jupyter",
     "tqdm",
     "statsmodels",
     "scipy",

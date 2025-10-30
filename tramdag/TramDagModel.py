@@ -31,7 +31,7 @@ from joblib import Parallel, delayed
 from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
-from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model 
+from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths
 from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
 
 from .TramDagConfig import TramDagConfig
@@ -40,7 +40,6 @@ from .TramDagDataset import TramDagDataset
 
 
 ## TODO return final thetas funciton 
-## TODO return final intercepts function
 ## TODO from x via h^-1 to latent z function for ordinal
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
@@ -725,6 +724,38 @@ class TramDagModel:
                 print(f"[WARNING] No linear shift history found for node '{node}' at {history_path}")
         return histories
 
+    def linear_shifts_from_model(self,state='best'):
+        nodes_list = list(self.models.keys())
+        
+        linear_shift_dict={}
+        for node in nodes_list:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+            NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+            BEST_MODEL_PATH, LAST_MODEL_PATH, _, _ = model_train_val_paths(NODE_DIR)
+            
+            if state=='best':
+                LOAD_PATH=BEST_MODEL_PATH
+            elif state=='last':
+                LOAD_PATH=LAST_MODEL_PATH
+            
+            
+            state_dict = torch.load(LOAD_PATH, map_location=self.device)
+            tram_model=self.models[node]
+            tram_model.load_state_dict(state_dict)
+
+
+            if  hasattr(tram_model, "nn_shift") and tram_model.nn_shift is not None:
+                epoch_weights = {}
+                for i, shift_layer in enumerate(tram_model.nn_shift):
+                    if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight"):
+                        epoch_weights[f"shift_{i}"] = shift_layer.fc.weight.detach().cpu().tolist()
+                    else:
+                        if self.debug:
+                            print(f"[DEBUG] shift_{i}: 'fc' or 'weight' not found.")
+                            
+                linear_shift_dict[node]=epoch_weights
+        return linear_shift_dict
+
     def simple_intercept_history(self):
         """
         Load simple_intercept_history histories for all nodes.
@@ -787,6 +818,9 @@ class TramDagModel:
             )
 
             return all_latents_df
+
+
+
 
     ## PLOTTING FIT-DIAGNOSTICS
     def plot_loss_history(self, variable: str = None):
