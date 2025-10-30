@@ -70,6 +70,70 @@ def contram_nll(outputs, targets, min_max,return_h=False):
     else:
         return nll
 
+# def contram_nll(outputs, targets, min_max, return_h=False):
+#     """
+#     Compute NLL (and optionally latent variable h) for continuous TRAMs.
+
+#     Args:
+#         outputs: dict with keys:
+#                  - 'int_out': tensor of shape (B, n_intercepts)
+#                  - 'shift_out': list of tensors, each (B, 1) or (B,)
+#         targets: tensor of shape (B,)
+#         min_max: tensor or tuple (min, max)
+#         return_h: if True, return (h, nll)
+#     Returns:
+#         nll or (h, nll)
+#     """
+
+#     # --- Normalize min/max ---
+#     if isinstance(min_max, torch.Tensor):
+#         min_val, max_val = min_max[0].clone().detach(), min_max[1].clone().detach()
+#     else:
+#         min_val = torch.tensor(min_max[0], dtype=targets.dtype, device=targets.device)
+#         max_val = torch.tensor(min_max[1], dtype=targets.dtype, device=targets.device)
+
+#     # --- Core components ---
+#     thetas_tilde = outputs["int_out"]                      # (B, n_int)
+#     thetas = transform_intercepts_continous(thetas_tilde)  # transformed intercepts
+
+#     # --- Handle shift outputs robustly ---
+#     if outputs["shift_out"] is None or len(outputs["shift_out"]) == 0:
+#         Shifts = torch.zeros_like(targets)
+#     else:
+#         shift_tensors = outputs["shift_out"]
+#         assert isinstance(shift_tensors, (list, tuple)), "shift_out must be list/tuple of tensors"
+
+#         shapes = [s.shape for s in shift_tensors]
+#         # Expect [(B,1), (B,1), ...]
+#         for s in shift_tensors:
+#             assert s.shape[0] == targets.shape[0], f"Batch mismatch: {s.shape[0]} vs {targets.shape[0]}"
+
+#         # Safe combination of shift heads
+#         Shifts = torch.zeros_like(targets)
+#         for s in shift_tensors:
+#             s = s.squeeze(-1)
+#             if s.ndim > 1:
+#                 s = s.sum(dim=1)
+#             Shifts += s
+
+#     # --- Compute h and density terms ---
+#     h_I = h_extrapolated(thetas, targets, min_val, max_val)   # (B,)
+#     h = h_I + Shifts                                          # (B,)
+
+#     log_latent_density = -h - 2 * torch.nn.functional.softplus(-h)
+#     h_dash = h_dash_extrapolated(thetas, targets, min_val, max_val)
+#     log_hdash = torch.log(torch.abs(h_dash)) - torch.log(max_val - min_val)
+
+#     nll = -torch.mean(log_latent_density + log_hdash)
+
+#     if return_h:
+#         return h, nll
+#     return nll
+
+
+
+
+
 def transform_intercepts_continous(theta_tilde:torch.Tensor) -> torch.Tensor:
     
     """
