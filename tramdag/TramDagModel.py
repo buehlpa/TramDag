@@ -1054,6 +1054,29 @@ class TramDagModel:
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             plt.show()
 
+# TODO implement plot hdag fkt
+    # def plot_hdag(df,variables=None, plot_n_rows):
+        
+    #     """"
+    #     accepts a df but only prints up to 1 rows
+    #     # varibales: which varibales to plot hdag for
+    #     #plot_n_rows: how many hdags to plot
+    #     """"
+    #     # for each node in the tramdag now for 
+    #     # logic:
+    #     # if node is source call : plot hdag for source nodes
+    #     variables_list=variables if variables is not None else self.cfg.nodes.tolist()
+        
+    #     if is_outcome_modelled_continous(node, target_nodes):
+        
+    #     or list(self.models.keys())
+        
+        
+        
+    #         return show_hdag_for_single_source_node_continous(node=node,configuration_dict=configuration_dict,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
+    
+        
+        
     @staticmethod
     def _add_r_style_confidence_bands(ax, sample, dist, confidence=0.95, simulations=1000):
         """

@@ -979,7 +979,7 @@ def train_val_loop(
                 print(f'[DEBUG] epoch_weights_tensor.shape (theta tilde) {epoch_weights_tensor.shape} ')
                 
             if is_ontram:
-                # transform the theta tilde to thetas
+                # transform the theta tilde to thetas # removed the -inf and +inf for ordinal reshapeing to preserve order, 
                 epoch_weights = transform_intercepts_ordinal(epoch_weights_tensor.reshape(1, -1))[:, 1:-1].reshape(-1, 1)
                 
             else:
