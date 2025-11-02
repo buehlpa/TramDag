@@ -32,7 +32,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
 from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
-from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous
+from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous,show_hdag_for_single_source_node_continous
 
 from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
@@ -1055,27 +1055,24 @@ class TramDagModel:
             plt.show()
 
 # TODO implement plot hdag fkt
-    # def plot_hdag(df,variables=None, plot_n_rows):
+    def plot_hdag(self,df,variables=None, plot_n_rows=5):
         
-    #     """"
-    #     accepts a df but only prints up to 1 rows
-    #     # varibales: which varibales to plot hdag for
-    #     #plot_n_rows: how many hdags to plot
-    #     """"
-    #     # for each node in the tramdag now for 
-    #     # logic:
-    #     # if node is source call : plot hdag for source nodes
-    #     variables_list=variables if variables is not None else self.cfg.nodes.tolist()
+
+        # for each node in the tramdag now for 
+        # logic:
+        # if node is source call : plot hdag for source nodes
+        if len(df)> 1:
+            print("[WARNING] len(df)>1, function allows up to 5 rows to plot rest will be truncated, set: plot_n_rows accordingly")
         
-    #     if is_outcome_modelled_continous(node, target_nodes):
+        variables_list=variables if variables is not None else list(self.models.keys())
+        for node in variables_list:
+            print(node)
+            print(self.device)
+            
+            if is_outcome_modelled_continous(node, self.nodes_dict):
+                return show_hdag_for_single_source_node_continous(node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device)
         
-    #     or list(self.models.keys())
-        
-        
-        
-    #         return show_hdag_for_single_source_node_continous(node=node,configuration_dict=configuration_dict,EXPERIMENT_DIR=EXPERIMENT_DIR,device=device,xmin_plot=xmin_plot,xmax_plot=xmax_plot)
     
-        
         
     @staticmethod
     def _add_r_style_confidence_bands(ax, sample, dist, confidence=0.95, simulations=1000):
@@ -1476,3 +1473,6 @@ class TramDagModel:
                 print(" [INFO] No experiment directory defined, cannot check checkpoints/sampling/history.")
 
         print("=" * 100 + "\n")
+
+
+

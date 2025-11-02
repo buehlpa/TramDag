@@ -26,7 +26,7 @@ import os
 import shutil
 from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 import pandas as pd
 
@@ -80,19 +80,40 @@ def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
             print(f'Directory does not exist: {SAMPLING_DIR}')
 
 
-def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5,verbose=False,debug=False):
+def show_hdag_for_single_source_node_continous(node,configuration_dict,device='cpu',xmin_plot=None,xmax_plot=None,EXPERIMENT_DIR=None,verbose=False,debug=False,minmax_dict=None):
         target_nodes=configuration_dict["nodes"]
         
         verbose=False
         n=1000
-        #### 0.  paths
+ 
+        
+        
+        if EXPERIMENT_DIR is None:
+            EXPERIMENT_DIR=configuration_dict["PATHS"]["EXPERIMENT_DIR"]
+        
+        if minmax_dict is not None:
+            min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32).to(device)
+            max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32).to(device)
+            min_max = torch.stack([min_vals, max_vals], dim=0)    
+        
+        diff = max_vals - min_vals
+        
+        
+        if xmin_plot is None:
+            xmin_plot = (min_vals - 0.1 * diff).item()
+        if xmax_plot is None:
+            xmax_plot = (max_vals + 0.1 * diff).item()
+            
+            
+               #### 0.  paths
         NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
         
         ##### 1.  load model 
         model_path = os.path.join(NODE_DIR, "best_model.pt")
-        tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, set_initial_weights=False)
-        tram_model = tram_model.to(device)
+        tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, set_initial_weights=False,device=device)
         tram_model.load_state_dict(torch.load(model_path, map_location=device))
+        tram_model = tram_model.to(device)
+
         
         sampled_df=create_df_from_sampled(node, target_nodes, num_samples=n, EXPERIMENT_DIR=EXPERIMENT_DIR)
 
@@ -109,8 +130,12 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMEN
         with torch.no_grad():
             for (int_input, shift_list) in sample_loader:
                 # Move everything to device
-                int_input = int_input.to(device)
-                shift_list = [s.to(device) for s in shift_list]
+                print(f"Model devices: {[p.device for p in tram_model.parameters()][:3]}")
+                print(f"int_input: {int_input.device}")
+                print(f"shift_list: {[s.device for s in shift_list]}")
+                
+                int_input = int_input.to(device, non_blocking=True)
+                shift_list = [s.to(device, non_blocking=True) for s in shift_list]
                 model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
                 output_list.append(model_outputs)
                 break
@@ -121,9 +146,7 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMEN
         theta_single=transform_intercepts_continous(theta_single)
         thetas_expanded = theta_single.repeat(n, 1).to(device)  # Shape: (n, 20)
         
-        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32).to(device)
-        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32).to(device)
-        min_max = torch.stack([min_vals, max_vals], dim=0)
+
         
         if xmin_plot==None:
             xmin_plot=min_vals-1
@@ -132,9 +155,9 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,EXPERIMEN
         
         targets2 = torch.linspace(xmin_plot, xmax_plot, steps=n).to(device)  # 1000 points from 0 to 1
         
-        min_val = min_max[0].clone().detach() if isinstance(min_max[0], torch.Tensor) else torch.tensor(min_max[0], dtype=targets2.dtype, device=targets2.device)
-        max_val = min_max[1].clone().detach() if isinstance(min_max[1], torch.Tensor) else torch.tensor(min_max[1], dtype=targets2.dtype, device=targets2.device) 
-
+        min_val = torch.as_tensor(min_max[0], dtype=targets2.dtype, device=device)
+        max_val = torch.as_tensor(min_max[1], dtype=targets2.dtype, device=device)
+        
         hdag_extra_values=h_extrapolated(thetas_expanded, targets2, k_min=min_val, k_max=max_val)
         # Move to CPU for plotting
         targets2_cpu = targets2.cpu().numpy()
