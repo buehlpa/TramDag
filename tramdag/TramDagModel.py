@@ -884,15 +884,19 @@ class TramDagModel:
                     continue
 
                 total_epochs = len(train_hist)
-                if total_epochs < 5:  # not enough epochs to zoom
+                if total_epochs == 0:
                     continue
 
-                start_idx = int(total_epochs * 0.9)
+                if total_epochs < 5:
+                    start_idx = total_epochs - 1
+                else:
+                    start_idx = int(total_epochs * 0.9)
+
                 epochs = range(start_idx + 1, total_epochs + 1)
                 plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
                 plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
 
-            plt.title("Training and Validation NLL - Last 10% of Epochs")
+            plt.title("Training and Validation NLL - Last 10% of Epochs (or Last Epoch if <5)")
             plt.xlabel("Epoch")
             plt.ylabel("NLL")
             plt.legend()

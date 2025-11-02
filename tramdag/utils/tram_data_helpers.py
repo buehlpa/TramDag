@@ -585,9 +585,13 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             raise KeyError("Missing 'int_out' in model output for source node.")
         
         theta_single = output_list[0]['int_out'][0]
+        print('laoded, theta tilde',theta_single)
         theta_single = transform_intercepts_continous(theta_single)
+        
         thetas_expanded = theta_single.repeat(number_of_samples, 1)
         shifts = torch.zeros(number_of_samples, device=device)
+        print('laoded, theta ',thetas_expanded)
+        
     else:
         if debug:
             print("[DEBUG] sample_continous_modelled_target: node has parents, previously sampled data is loaded for each pa(node)")
@@ -599,6 +603,8 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             raise KeyError("Missing 'shift_out' in merged model output.")
 
         thetas = y_pred['int_out']
+        print('laoded, theta tilde',thetas)
+        
         shifts = y_pred['shift_out']
         if shifts is None:
             if debug:
@@ -606,6 +612,8 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             shifts = torch.zeros(number_of_samples, device=device)
 
         thetas_expanded = transform_intercepts_continous(thetas).squeeze()
+        print('laoded, theta ',thetas_expanded)
+        
         shifts = shifts.squeeze()
 
     # Validate shapes
@@ -652,7 +660,7 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
         f_vectorized,
         low,
         high,
-        max_iter=100,
+        max_iter=10_000,
         tol=1e-12
     )
 
@@ -964,7 +972,7 @@ def sample_full_dag(configuration_dict,
                     print(f'[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}')
                 
                 latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
-                
+                print('latent_sample',latent_sample)# TODO remove
                 ## IF not predefined latents are sampled from standard logistic distribution
             else:
                 if verbose or debug:

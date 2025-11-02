@@ -126,7 +126,7 @@ class TramDagConfig:
                 print("[DEBUG] levels are present for all ordinal variables in configuration dict.")
             pass
         else:
-            print("[WARNING] levels are missing for some ordinal variables in configuration dict. THIS will FAIL in model training later!\n"
+            print("[WARNING]  levels are missing for some ordinal variables in configuration dict. THIS will FAIL in model training later!\n"
                 " Please provide levels manually to config and reload or compute levels from data using the method compute_levels().\n"
                 " e.g. cfg.compute_levels(train_df) # computes levels from training data and writes to cfg")
 
