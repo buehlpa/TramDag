@@ -110,6 +110,10 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,device='c
         
         ##### 1.  load model 
         model_path = os.path.join(NODE_DIR, "best_model.pt")
+        if not os.path.exists(model_path):
+            print("[Warning] best_model.pt not found, falling back to initial_model.pt")
+
+            model_path = os.path.join(NODE_DIR, "initial_model.pt")
         tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, set_initial_weights=False,device=device)
         tram_model.load_state_dict(torch.load(model_path, map_location=device))
         tram_model = tram_model.to(device)
@@ -174,6 +178,157 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,device='c
         plt.plot(targets2_cpu[between_mask], hdag_extra_values_cpu[between_mask], color='blue', label='min_val <= x <= max_val')
         plt.plot(targets2_cpu[above_max_mask], hdag_extra_values_cpu[above_max_mask], color='red', label='x > max_val')
         plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
+
+
+
+
+
+def show_hdag_continous(df,
+                        node,
+                        configuration_dict,
+                        device='cpu',
+                        xmin_plot=None,
+                        xmax_plot=None,
+                        EXPERIMENT_DIR=None,
+                        verbose=False,
+                        debug=False,
+                        minmax_dict=None,
+                        plot_n_rows=5):
+    
+        target_nodes=configuration_dict["nodes"]
+        
+        verbose=False
+        n_linspace=1000
+        if EXPERIMENT_DIR is None:
+            EXPERIMENT_DIR=configuration_dict["PATHS"]["EXPERIMENT_DIR"]
+        
+        if minmax_dict is not None:
+            min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32).to(device)
+            max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32).to(device)
+            min_max = torch.stack([min_vals, max_vals], dim=0)    
+        diff = max_vals - min_vals
+        
+        if xmin_plot is None:
+            xmin_plot = (min_vals - 0.1 * diff).item()
+        if xmax_plot is None:
+            xmax_plot = (max_vals + 0.1 * diff).item()
+            
+        #### 0.  paths
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        
+        ##### 1.  load model 
+        model_path = os.path.join(NODE_DIR, "best_model.pt")
+        if not os.path.exists(model_path):
+            print("[Warning] best_model.pt not found, falling back to initial_model.pt")
+            model_path = os.path.join(NODE_DIR, "initial_model.pt")
+            
+        tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose,device=device)
+        tram_model.load_state_dict(torch.load(model_path, map_location=device))
+        tram_model = tram_model.to(device)
+        tram_model.eval()
+
+        # sampled_df=create_df_from_sampled(node, target_nodes, num_samples=n, EXPERIMENT_DIR=EXPERIMENT_DIR)
+
+        sample_dataset = GenericDataset(df,target_col=node,
+                                            target_nodes=target_nodes,
+                                            return_intercept_shift=True,
+                                            return_y=False,
+                                            verbose=verbose,
+                                            debug=debug)
+        
+        sample_loader = DataLoader(sample_dataset, batch_size=1, shuffle=True,num_workers=4, pin_memory=True)
+        
+        counter = 0
+        stop_plot = 1 if target_nodes[node]["node_type"] == "source" else min(len(df), plot_n_rows)
+
+        with torch.no_grad():
+            if target_nodes[node]["node_type"] == "source":
+                print(f"{node}: Simple intercept — identical h() for all samples.")
+
+            for i, (int_input, shift_list) in enumerate(sample_loader):
+                if counter >= stop_plot:
+                    break
+
+                if target_nodes[node]["node_type"] != "source":
+                    print(f"\n=== Sample {i+1}/{stop_plot} ===")
+                    print(df.iloc[i])  # print current row's values
+
+                int_input = int_input.to(device, non_blocking=True)
+                shift_list = [s.to(device, non_blocking=True) for s in shift_list]
+
+                model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+                theta_single = model_outputs["int_out"][0]
+                theta_single = transform_intercepts_continous(theta_single)
+                thetas_expanded = theta_single.repeat(n_linspace, 1).to(device)
+
+                if xmin_plot is None:
+                    xmin_plot = min_vals - 1
+                if xmax_plot is None:
+                    xmax_plot = max_vals + 1
+
+                targets2 = torch.linspace(xmin_plot, xmax_plot, steps=n_linspace).to(device)
+                min_val = torch.as_tensor(min_max[0], dtype=targets2.dtype, device=device)
+                max_val = torch.as_tensor(min_max[1], dtype=targets2.dtype, device=device)
+
+                hdag_extra_values = h_extrapolated(
+                    thetas_expanded, targets2, k_min=min_val, k_max=max_val
+                )
+
+                targets2_cpu = targets2.cpu().numpy()
+                hdag_extra_values_cpu = hdag_extra_values.cpu().detach().numpy()
+
+                below_min_mask = targets2_cpu < min_val.item()
+                between_mask = (targets2_cpu >= min_val.item()) & (
+                    targets2_cpu <= max_val.item()
+                )
+                above_max_mask = targets2_cpu > max_val.item()
+
+                plt.figure(figsize=(8, 6))
+                plt.plot(
+                    targets2_cpu[below_min_mask],
+                    hdag_extra_values_cpu[below_min_mask],
+                    color="red",
+                    label="x < min_val",
+                )
+                plt.plot(
+                    targets2_cpu[between_mask],
+                    hdag_extra_values_cpu[between_mask],
+                    color="blue",
+                    label="min_val <= x <= max_val",
+                )
+                plt.plot(
+                    targets2_cpu[above_max_mask],
+                    hdag_extra_values_cpu[above_max_mask],
+                    color="red",
+                    label="x > max_val",
+                )
+                plt.xlabel(f" ({node})")
+                plt.ylabel(f"h({node}|{' '.join(target_nodes[node]['parents'])})")
+                plt.title(f"transformation function {node} — sample {i+1}")
+                plt.grid(True)
+                plt.legend()
+                plt.show()
+
+                counter += 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):

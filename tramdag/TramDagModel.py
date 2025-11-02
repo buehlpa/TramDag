@@ -32,7 +32,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
 from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
-from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous,show_hdag_for_single_source_node_continous
+from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous,show_hdag_for_single_source_node_continous,show_hdag_continous
 
 from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
@@ -1066,11 +1066,10 @@ class TramDagModel:
         
         variables_list=variables if variables is not None else list(self.models.keys())
         for node in variables_list:
-            print(node)
-            print(self.device)
-            
             if is_outcome_modelled_continous(node, self.nodes_dict):
-                return show_hdag_for_single_source_node_continous(node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device)
+                
+                show_hdag_continous(df,node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device,plot_n_rows=plot_n_rows)
+                # return show_hdag_for_single_source_node_continous(node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device)
         
     
         
