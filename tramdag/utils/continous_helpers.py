@@ -70,16 +70,28 @@ def contram_nll(outputs, targets, min_max,return_h=False):
 
 
 def transform_intercepts_continous(theta_tilde:torch.Tensor) -> torch.Tensor:
-    # TODO alter docstring for continous
-    # TODO assertion error for shape of theta_tilde
     """
-    Transforms the unordered theta_tilde to ordered theta values for the bernstein polynomial
-    E.G: 
-    theta_1 = theta_tilde_1
-    theta_2 = theta_tilde_1 + exp(theta_tilde_2)
-    ..
-    :param theta_tilde: The unordered theta_tilde values
-    :return: The ordered theta values
+    Converts an unordered parameter vector `theta_tilde` into an ordered vector `theta`
+    suitable for Bernstein polynomial parameterization.
+
+    The transformation ensures that the resulting values are strictly increasing,
+    which is required for monotonicity in many continuous modeling contexts.
+
+    Steps:
+        1. Compute a global shift proportional to the number of coefficients to center the scale.
+        2. Apply a `softplus` transformation to all but the first element of `theta_tilde` to ensure
+           positive increments between successive coefficients.
+        3. Concatenate the first raw value of `theta_tilde` with the transformed positive widths.
+        4. Compute the cumulative sum across the last dimension and subtract the shift to produce
+           ordered `theta` values.
+
+    Args:
+        theta_tilde (torch.Tensor): Unordered coefficient tensor of shape (..., b),
+            where b is the number of Bernstein coefficients.
+
+    Returns:
+        torch.Tensor: Ordered coefficient tensor of the same shape (..., b),
+            with strictly increasing values along the last dimension.
     """
 
     # Compute the shift based on the last dimension size

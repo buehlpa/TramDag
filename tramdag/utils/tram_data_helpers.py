@@ -792,23 +792,23 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32, device=device)
             max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32, device=device)
             min_max = torch.stack([min_vals, max_vals], dim=0)
-            minv, maxv = minmax_dict[node][0],minmax_dict[node][1]
+            # minv, maxv = minmax_dict[node][0],minmax_dict[node][1]
 
     else:
         try:
             min_vals = torch.tensor(target_nodes_dict[node]['min'], dtype=torch.float32).to(device)
             max_vals = torch.tensor(target_nodes_dict[node]['max'], dtype=torch.float32).to(device)
-            minv, maxv = target_nodes_dict[node]['min'],target_nodes_dict[node]['max']
+            # minv, maxv = target_nodes_dict[node]['min'],target_nodes_dict[node]['max']
   
         except KeyError as e:
             raise KeyError(f"Missing 'min' or 'max' value in target_nodes_dict for node '{node}': {e}")
         min_max = torch.stack([min_vals, max_vals], dim=0)
 
     # # Root bounds
-    # low = torch.full((number_of_samples,), -1e5, device=device)
-    # high = torch.full((number_of_samples,), 1e5, device=device)
-    low = torch.full((number_of_samples,), float(minv - 2), device=device)
-    high = torch.full((number_of_samples,), float(maxv + 2), device=device)
+    low = torch.full((number_of_samples,), -1e5, device=device)
+    high = torch.full((number_of_samples,), 1e5, device=device)
+    # low = torch.full((number_of_samples,), float(minv - 2), device=device)
+    # high = torch.full((number_of_samples,), float(maxv + 2), device=device)
     
     # Vectorized root-finding function # root finder has a f as input so we need to wrap it
     def f_vectorized(targets):
@@ -1102,7 +1102,6 @@ def sample_full_dag(configuration_dict,
         SAMPLED_PATH = os.path.join(SAMPLING_DIR, "sampled.pt")
         LATENTS_PATH = os.path.join(SAMPLING_DIR, "latents.pt")
         
-        # TODO move to archive
         ## 2. Check if the parents are already sampled -> must be given due to the causal ordering
         for parent in target_nodes_dict[node]['parents']:
             parent_dir = os.path.join(EXPERIMENT_DIR, parent)
