@@ -31,21 +31,28 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from .tram_model_helpers import   get_fully_specified_tram_model     
-from .continous_helpers import   transform_intercepts_continous,h_extrapolated, vectorized_object_function ,chandrupatla_root_finder
+from .continous_helpers import   transform_intercepts_continous,h_extrapolated, vectorized_object_function ,chandrupatla_root_finder,bisection_root_finder
 from .tram_data import  GenericDataset, get_dataloader
 from .ordinal_helpers import transform_intercepts_ordinal
 from .continous_helpers import contram_nll
 # helpers
 
 def merge_outputs(dict_list, skip_nan=True):
+    import warnings
+
     int_outs = []
     shift_outs = []
     skipped_count = 0
 
     for d in dict_list:
         int_tensor = d['int_out']
-        if type(d['shift_out']) is list:
-            shift_tensor = d['shift_out'][0]
+
+        # Combine shift outputs correctly
+        if isinstance(d['shift_out'], list):
+            # Option 1: additive contribution from multiple components
+            shift_tensor = torch.stack(d['shift_out'], dim=0).sum(dim=0)
+            # Option 2 (alternative): concatenate if each shift corresponds to a theta dimension
+            # shift_tensor = torch.cat(d['shift_out'], dim=1)
         else:
             shift_tensor = d['shift_out']
 
@@ -179,10 +186,6 @@ def show_hdag_for_single_source_node_continous(node,configuration_dict,device='c
         plt.plot(targets2_cpu[above_max_mask], hdag_extra_values_cpu[above_max_mask], color='red', label='x > max_val')
         plt.xlabel('Targets (x)');plt.ylabel('h_dag_extra(x)');plt.title('h_dag output over targets');plt.grid(True);plt.legend();plt.show()
 
-
-
-
-
 def show_hdag_continous(df,
                         node,
                         configuration_dict,
@@ -310,26 +313,6 @@ def show_hdag_continous(df,
                 plt.show()
 
                 counter += 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
     target_nodes=configuration_dict["nodes"]
@@ -763,12 +746,10 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             raise KeyError("Missing 'int_out' in model output for source node.")
         
         theta_single = output_list[0]['int_out'][0]
-        print('laoded, theta tilde',theta_single)
         theta_single = transform_intercepts_continous(theta_single)
         
         thetas_expanded = theta_single.repeat(number_of_samples, 1)
         shifts = torch.zeros(number_of_samples, device=device)
-        print('laoded, theta ',thetas_expanded)
         
     else:
         if debug:
@@ -781,18 +762,19 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
             raise KeyError("Missing 'shift_out' in merged model output.")
 
         thetas = y_pred['int_out']
-        print('laoded, theta tilde',thetas)
         
         shifts = y_pred['shift_out']
+        
         if shifts is None:
             if debug:
                 print("[DEBUG] sample_continous_modelled_target: shift_out was None; defaulting to zeros.")
             shifts = torch.zeros(number_of_samples, device=device)
 
         thetas_expanded = transform_intercepts_continous(thetas).squeeze()
-        print('laoded, theta ',thetas_expanded)
         
         shifts = shifts.squeeze()
+
+    # print("thetas_expanded ",thetas_expanded ) 
 
     # Validate shapes
     if thetas_expanded.shape[0] != number_of_samples:
@@ -804,25 +786,31 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
         print("[DEBUG] sample_continous_modelled_target: shifts shape:", shifts.shape)
         print("[DEBUG] sample_continous_modelled_target: latent_sample shape:", latent_sample.shape)
 
-    # Root bounds
-    low = torch.full((number_of_samples,), -1e5, device=device)
-    high = torch.full((number_of_samples,), 1e5, device=device)
+
 
     if minmax_dict is not None:
             min_vals = torch.tensor(minmax_dict[node][0], dtype=torch.float32, device=device)
             max_vals = torch.tensor(minmax_dict[node][1], dtype=torch.float32, device=device)
             min_max = torch.stack([min_vals, max_vals], dim=0)
+            minv, maxv = minmax_dict[node][0],minmax_dict[node][1]
 
     else:
         try:
             min_vals = torch.tensor(target_nodes_dict[node]['min'], dtype=torch.float32).to(device)
             max_vals = torch.tensor(target_nodes_dict[node]['max'], dtype=torch.float32).to(device)
+            minv, maxv = target_nodes_dict[node]['min'],target_nodes_dict[node]['max']
+  
         except KeyError as e:
             raise KeyError(f"Missing 'min' or 'max' value in target_nodes_dict for node '{node}': {e}")
         min_max = torch.stack([min_vals, max_vals], dim=0)
 
+    # # Root bounds
+    # low = torch.full((number_of_samples,), -1e5, device=device)
+    # high = torch.full((number_of_samples,), 1e5, device=device)
+    low = torch.full((number_of_samples,), float(minv - 2), device=device)
+    high = torch.full((number_of_samples,), float(maxv + 2), device=device)
     
-    # Vectorized root-finding function
+    # Vectorized root-finding function # root finder has a f as input so we need to wrap it
     def f_vectorized(targets):
         return vectorized_object_function(
             thetas_expanded,
@@ -838,10 +826,21 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
         f_vectorized,
         low,
         high,
-        max_iter=10_000,
+        max_iter=100,
         tol=1e-12
     )
 
+
+    # # Root finding
+    # sampled = bisection_root_finder(
+    #     f_vectorized,
+    #     low,
+    #     high,
+    #     max_iter=100,
+    #     tol=1e-12
+    # )
+    
+    
     if sampled is None or torch.isnan(sampled).any():
         raise RuntimeError("Root finding failed: returned None or contains NaNs.")
 
@@ -1150,7 +1149,6 @@ def sample_full_dag(configuration_dict,
                     print(f'[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}')
                 
                 latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
-                print('latent_sample',latent_sample)# TODO remove
                 ## IF not predefined latents are sampled from standard logistic distribution
             else:
                 if verbose or debug:

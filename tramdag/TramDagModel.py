@@ -832,130 +832,143 @@ class TramDagModel:
 
     ## PLOTTING FIT-DIAGNOSTICS
     def plot_loss_history(self, variable: str = None):
-            """
-            Plot training and validation loss histories.
+        """
+        Plot training and validation loss histories.
 
-            Parameters
-            ----------
-            variable : str, optional
-                If given, plot only this node's loss_history.
-                If None, plot all nodes together.
-            """
+        Parameters
+        ----------
+        variable : str, optional
+            If given, plot only this node's loss_history.
+            If None, plot all nodes together.
+        """
 
-            histories = self.loss_history()
+        histories = self.loss_history()
+        if not histories:
+            print("[WARNING] No loss histories found.")
+            return
 
-            # Select which nodes to plot
-            if variable is not None:
-                if variable not in histories:
-                    raise ValueError(f"[ERROR] Node '{variable}' not found in histories.")
-                nodes_to_plot = [variable]
-            else:
-                nodes_to_plot = list(histories.keys())
+        # Select which nodes to plot
+        if variable is not None:
+            if variable not in histories:
+                raise ValueError(f"[ERROR] Node '{variable}' not found in histories.")
+            nodes_to_plot = [variable]
+        else:
+            nodes_to_plot = list(histories.keys())
 
-            plt.figure(figsize=(14, 12))
+        # Filter out nodes with no valid history
+        nodes_to_plot = [
+            n for n in nodes_to_plot
+            if histories[n].get("train") is not None and len(histories[n]["train"]) > 0
+            and histories[n].get("validation") is not None and len(histories[n]["validation"]) > 0
+        ]
 
-            # --- Full history (top plot) ---
-            plt.subplot(2, 1, 1)
-            for node in nodes_to_plot:
-                node_hist = histories[node]
-                train_hist, val_hist = node_hist["train"], node_hist["validation"]
+        if not nodes_to_plot:
+            print("[WARNING] No valid histories found to plot.")
+            return
 
-                if train_hist is None or val_hist is None:
-                    print(f"[WARNING] No history found for node: {node}")
-                    continue
+        plt.figure(figsize=(14, 12))
 
-                epochs = range(1, len(train_hist) + 1)
-                plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
-                plt.plot(epochs, val_hist, label=f"{node} - val")
+        # --- Full history (top plot) ---
+        plt.subplot(2, 1, 1)
+        for node in nodes_to_plot:
+            node_hist = histories[node]
+            train_hist, val_hist = node_hist["train"], node_hist["validation"]
 
-            plt.title("Training and Validation NLL - Full History")
+            epochs = range(1, len(train_hist) + 1)
+            plt.plot(epochs, train_hist, label=f"{node} - train", linestyle="--")
+            plt.plot(epochs, val_hist, label=f"{node} - val")
+
+        plt.title("Training and Validation NLL - Full History")
+        plt.xlabel("Epoch")
+        plt.ylabel("NLL")
+        plt.legend()
+        plt.grid(True)
+
+        # --- Last 10% of epochs (bottom plot) ---
+        plt.subplot(2, 1, 2)
+        for node in nodes_to_plot:
+            node_hist = histories[node]
+            train_hist, val_hist = node_hist["train"], node_hist["validation"]
+
+            total_epochs = len(train_hist)
+            start_idx = total_epochs - 1 if total_epochs < 5 else int(total_epochs * 0.9)
+
+            epochs = range(start_idx + 1, total_epochs + 1)
+            plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
+            plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
+
+        plt.title("Training and Validation NLL - Last 10% of Epochs (or Last Epoch if <5)")
+        plt.xlabel("Epoch")
+        plt.ylabel("NLL")
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_linear_shift_history(self, data_dict=None, node=None, ref_lines=None):
+        """
+        Plot evolution of shift terms for one or all nodes.
+
+        Args:
+            data_dict (dict, optional): {node_name: DataFrame} with shift weights.
+                                        If None, uses self.linear_shift_history().
+            node (str, optional): If given, plot only that node; otherwise plot all.
+            ref_lines (dict, optional): {node_name: [y_values]} for reference lines.
+        """
+
+
+        if data_dict is None:
+            data_dict = self.linear_shift_history()
+            if data_dict is None:
+                raise ValueError("No shift history data provided or stored in the class.")
+
+        nodes = [node] if node else list(data_dict.keys())
+
+        for n in nodes:
+            df = data_dict[n].copy()
+
+            # Flatten nested lists or list-like cells
+            def flatten(x):
+                if isinstance(x, list):
+                    if len(x) == 0:
+                        return np.nan
+                    if all(isinstance(i, (int, float)) for i in x):
+                        return np.mean(x)  # average simple list
+                    if all(isinstance(i, list) for i in x):
+                        # nested list -> flatten inner and average
+                        flat = [v for sub in x for v in (sub if isinstance(sub, list) else [sub])]
+                        return np.mean(flat) if flat else np.nan
+                    return x[0] if len(x) == 1 else np.nan
+                return x
+
+            df = df.applymap(flatten)
+
+            # Ensure numeric columns
+            df = df.apply(pd.to_numeric, errors='coerce')
+
+            # Convert epoch labels to numeric
+            df.columns = [
+                int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
+                for c in df.columns
+            ]
+            df = df.reindex(sorted(df.columns), axis=1)
+
+            plt.figure(figsize=(10, 6))
+            for idx in df.index:
+                plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"shift_{idx}")
+
+            if ref_lines and n in ref_lines:
+                for v in ref_lines[n]:
+                    plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
+                    plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
+
             plt.xlabel("Epoch")
-            plt.ylabel("NLL")
-            plt.legend()
-            plt.grid(True)
-
-            # --- Last 10% of epochs (bottom plot) ---
-            plt.subplot(2, 1, 2)
-            for node in nodes_to_plot:
-                node_hist = histories[node]
-                train_hist, val_hist = node_hist["train"], node_hist["validation"]
-
-                if train_hist is None or val_hist is None:
-                    continue
-
-                total_epochs = len(train_hist)
-                if total_epochs == 0:
-                    continue
-
-                if total_epochs < 5:
-                    start_idx = total_epochs - 1
-                else:
-                    start_idx = int(total_epochs * 0.9)
-
-                epochs = range(start_idx + 1, total_epochs + 1)
-                plt.plot(epochs, train_hist[start_idx:], label=f"{node} - train", linestyle="--")
-                plt.plot(epochs, val_hist[start_idx:], label=f"{node} - val")
-
-            plt.title("Training and Validation NLL - Last 10% of Epochs (or Last Epoch if <5)")
-            plt.xlabel("Epoch")
-            plt.ylabel("NLL")
-            plt.legend()
-            plt.grid(True)
-
+            plt.ylabel("Shift Value")
+            plt.title(f"Shift Term History — Node: {n}")
+            plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
             plt.tight_layout()
             plt.show()
-
-    def plot_linear_shift_history(self, data_dict=None, node=None,ref_lines=None):
-            """
-            Plot evolution of shift terms for one or all nodes.
-
-            Args:
-                data_dict (dict, optional): {node_name: DataFrame} with shift weights.
-                                            If None, uses self.linear_shift_history().
-                node (str, optional): If given, plot only that node; otherwise plot all.
-            """
-            if data_dict is None:
-                data_dict = self.linear_shift_history()
-                if data_dict is None:
-                    raise ValueError("No shift history data provided or stored in the class.")
-
-            nodes = [node] if node else list(data_dict.keys())
-
-            for n in nodes:
-                df = data_dict[n].copy()
-
-                # Flatten nested lists
-                df = df.applymap(
-                    lambda x: x[0][0]
-                    if isinstance(x, list) and len(x) > 0 and isinstance(x[0], list)
-                    else (x[0] if isinstance(x, list) and len(x) == 1 else x)
-                )
-
-                # Convert epoch labels → numeric
-                df.columns = [
-                    int(c.replace("epoch_", "")) if isinstance(c, str) and c.startswith("epoch_") else c
-                    for c in df.columns
-                ]
-                df = df.reindex(sorted(df.columns), axis=1)
-
-
-                plt.figure(figsize=(10, 6))
-                for idx in df.index:
-                    plt.plot(df.columns, df.loc[idx], lw=1.4, label=f"shift_{idx}")
-
-
-                if ref_lines and n in ref_lines:
-                    for v in ref_lines[n]:
-                        plt.axhline(y=v, color="k", linestyle="--", lw=1.0)
-                        plt.text(df.columns[-1], v, f"{n}: {v}", va="bottom", ha="right", fontsize=8)
-                    
-                
-                plt.xlabel("Epoch")
-                plt.ylabel("Shift Value")
-                plt.title(f"Shift Term History — Node: {n}")
-                plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
-                plt.tight_layout()
-                plt.show()
 
     def plot_simple_intercepts_history(self, data_dict=None, node=None,ref_lines=None):
         """
@@ -1054,23 +1067,59 @@ class TramDagModel:
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             plt.show()
 
-# TODO implement plot hdag fkt
-    def plot_hdag(self,df,variables=None, plot_n_rows=5):
+    def plot_hdag(self,df,variables=None, plot_n_rows=5,**kwargs):
+        
+        """
+        Visualize the transformation function h() for specified nodes or all nodes
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Input data containing node values or model predictions. 
+            Can include multiple rows (samples). Only the first `plot_n_rows` 
+            will be visualized.
+
+        variables : list of str, optional
+            List of variable names (nodes) to visualize. 
+            If None, all nodes present in `self.models.keys()` will be plotted.
+
+        plot_n_rows : int, default=5
+            Maximum number of rows from `df` to visualize. 
+            If `len(df) > plot_n_rows`, a warning is printed and the plot is truncated.
+
+        Behavior
+        --------
+        For each specified node:
+        - If the node represents a continuous outcome (as determined by 
+          `is_outcome_modelled_continous(node, self.nodes_dict)`), 
+          the function calls `show_hdag_continous()` to plot the model results 
+          using configuration parameters from `self.cfg.conf_dict` and 
+          scaling information from `self.minmax_dict`.
+        - If the node is not continuous, a warning message is printed.
+
+        Notes
+        -----
+        - This method currently supports only continuous nodes.
+        - Visualization is device-aware (uses `self.device`).
+        - Intended for inspecting model behavior across multiple samples.
+
+        Warnings
+        --------
+        Prints a warning if:
+        - `df` contains more rows than `plot_n_rows`.
+        - A node is not continuous and therefore not plotted.
+        """
         
 
-        # for each node in the tramdag now for 
-        # logic:
-        # if node is source call : plot hdag for source nodes
         if len(df)> 1:
             print("[WARNING] len(df)>1, function allows up to 5 rows to plot rest will be truncated, set: plot_n_rows accordingly")
         
         variables_list=variables if variables is not None else list(self.models.keys())
         for node in variables_list:
             if is_outcome_modelled_continous(node, self.nodes_dict):
-                
-                show_hdag_continous(df,node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device,plot_n_rows=plot_n_rows)
-                # return show_hdag_for_single_source_node_continous(node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device)
-        
+                show_hdag_continous(df,node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
+            else:
+                print(f"[WARNING] Node {node} is not continuous, not implemented yet")
     
         
     @staticmethod

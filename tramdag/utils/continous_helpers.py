@@ -37,9 +37,7 @@ def contram_nll(outputs, targets, min_max,return_h=False):
 
 
     thetas_tilde = outputs['int_out']  # shape (n, b)
-    print('thetas_tilde',thetas_tilde) # TODO remove later
     thetas = transform_intercepts_continous(thetas_tilde)
-    print('thetas',thetas) # TODO remove later
     if outputs['shift_out'] is None:
         # If no shift model is provided, set Shifts to zero
         Shifts = torch.zeros_like(thetas[:, 0])
@@ -50,11 +48,9 @@ def contram_nll(outputs, targets, min_max,return_h=False):
 
     # Compute h
     h_I = h_extrapolated(thetas, targets, min_val, max_val)  # shape (n,)
-    print('h_I',h_I) # TODO remove later
     #h = h_I + torch.sum(Shifts)  # shape (n,) old
     
     Shifts_sum = torch.sum(Shifts, dim=0).squeeze(-1)            # (B,)
-    print('Shifts_sum',Shifts_sum) # TODO remove later
     h = h_I + Shifts_sum 
     
     # Latent logistic density log-prob
@@ -71,11 +67,6 @@ def contram_nll(outputs, targets, min_max,return_h=False):
         return h,nll
     else:
         return nll
-
-
-
-
-
 
 
 def transform_intercepts_continous(theta_tilde:torch.Tensor) -> torch.Tensor:
@@ -241,7 +232,6 @@ def h_extrapolated(thetas: torch.Tensor, targets: torch.Tensor, k_min: float, k_
     h = torch.where(t_i_exp > R_tensor, h_right, h)
 
     return h.squeeze(-1)
-
 
 
 ## sampling
@@ -442,6 +432,7 @@ def chandrupatla_root_finder(f, low, high, max_iter=10_000, tol=1e-8):
 def vectorized_object_function( thetas: torch.Tensor,targets: torch.Tensor, shifts: torch.Tensor,
                                latent_sample: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
     # h(xj)-latent_sample=0 , solve for xj
+    # return h_extrapolated(thetas, targets, k_min, k_max)- latent_sample
     return h_extrapolated_with_shift(thetas, targets, shifts, k_min, k_max) - latent_sample
 
 
