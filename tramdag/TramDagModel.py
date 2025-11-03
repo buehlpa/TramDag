@@ -46,6 +46,9 @@ from .TramDagDataset import TramDagDataset
 
 ## TODO add NLL for each node
 
+# TODO create_latent_df_for_full_dag: for ordinal nodes
+
+
 class TramDagModel:
     
     # ---- defaults used at construction time ----
@@ -829,7 +832,6 @@ class TramDagModel:
 
             return all_latents_df
 
-
     ## PLOTTING FIT-DIAGNOSTICS
     def plot_loss_history(self, variable: str = None):
         """
@@ -1310,6 +1312,7 @@ class TramDagModel:
         self,
         df,
         sampled: dict = None,
+        variable: list = None,
         bins: int = 100,
         hist_true_color: str = "blue",
         hist_est_color: str = "orange",
@@ -1340,7 +1343,9 @@ class TramDagModel:
         experiment_dir = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        for node in target_nodes:
+        plot_list=variable if variable is not None else target_nodes
+
+        for node in plot_list:
             # Load sampled data
             if sampled is not None and node in sampled:
                 sdata = sampled[node]
