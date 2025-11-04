@@ -47,7 +47,7 @@ from .TramDagDataset import TramDagDataset
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
 
-# BUG if cfg is passed directy and not loaded with TD config cfg.update causes an issue 
+
 
 class TramDagModel:
     
@@ -175,8 +175,14 @@ class TramDagModel:
         
         self = cls()
         self.cfg = cfg
-        self.cfg.update()# call to ensure latest config is loaded
-        
+        self.cfg.update()  # ensure latest version from disk
+        try:
+            self.cfg.save()  # persist back to disk
+            if getattr(self, "debug", False):
+                print("[DEBUG] Configuration updated and saved.")
+        except Exception as e:
+            print(f"[WARNING] Could not save configuration after update: {e}")        
+            
         self.nodes_dict = self.cfg.conf_dict["nodes"] 
 
         self._validate_kwargs(kwargs, defaults_attr='DEFAULTS_CONFIG', context="from_config")
