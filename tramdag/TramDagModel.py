@@ -42,7 +42,7 @@ from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
 
 
-
+## TODO from _dirrectory check
 ## TODO from x via h^-1 to latent z function for ordinal
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
