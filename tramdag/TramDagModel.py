@@ -33,6 +33,10 @@ from scipy.stats import logistic, probplot
 
 from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
 from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous,show_hdag_for_single_source_node_continous,show_hdag_continous
+from .utils.continous_helpers import transform_intercepts_continous
+from .utils.ordinal_helpers import transform_intercepts_ordinal
+
+from .models.tram_models import SimpleIntercept
 
 from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
@@ -332,7 +336,7 @@ class TramDagModel:
                 f"[ERROR] data must be pd.DataFrame, TramDagDataset, or None, got {type(data)}"
             )
 
-    def load_or_compute_minmax(self, use_existing=False, write=True,td_train_data=None):
+    def load_or_compute_minmax(self, td_train_data=None,use_existing=False, write=True):
         """
         Load an existing Min–Max scaling dictionary from disk or compute a new one 
         from the provided training dataset.
@@ -729,46 +733,6 @@ class TramDagModel:
                 print(f"[WARNING] No linear shift history found for node '{node}' at {history_path}")
         return histories
 
-    def linear_shifts_from_model(self,state='best'):
-        nodes_list = list(self.models.keys())
-        
-        linear_shift_dict={}
-        for node in nodes_list:
-            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
-            NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
-            BEST_MODEL_PATH, LAST_MODEL_PATH, _, _ = model_train_val_paths(NODE_DIR)
-            
-            if state=='best':
-                LOAD_PATH=BEST_MODEL_PATH
-            elif state=='last':
-                LOAD_PATH=LAST_MODEL_PATH
-                
-            if not  os.path.exists(LOAD_PATH):
-                LOAD_PATH = os.path.join(NODE_DIR, 'initial_model.pt')
-                print(f"[WARNING] Model file not found for node {node} at {LOAD_PATH}. Using initial model instead.")
-            
-            _, terms_dict, _ =ordered_parents(node, self.nodes_dict)
-            
-            
-            state_dict = torch.load(LOAD_PATH, map_location=self.device)
-            tram_model=self.models[node]
-            tram_model.load_state_dict(state_dict)
-
-
-            if  hasattr(tram_model, "nn_shift") and tram_model.nn_shift is not None:
-                epoch_weights = {}
-                for i, shift_layer in enumerate(tram_model.nn_shift):
-                    module_name = shift_layer.__class__.__name__
-                    if hasattr(shift_layer, "fc") and hasattr(shift_layer.fc, "weight") and module_name == 'LinearShift': 
-                        
-                        epoch_weights[f"ls({list(terms_dict.keys())[i]})"] = shift_layer.fc.weight.detach().cpu().squeeze().tolist()
-                    else:
-                        if self.debug:
-                            print(f"[DEBUG] ls({list(terms_dict.keys())[i]}): 'fc' or 'weight' or LinearShift not found.")
-                            
-                linear_shift_dict[node]=epoch_weights
-        return linear_shift_dict
-
     def simple_intercept_history(self):
         """
         Load simple_intercept_history histories for all nodes.
@@ -797,45 +761,46 @@ class TramDagModel:
         return histories
 
     def get_latent(self, df, verbose=False):
-            """
-            Compute latent representations for the full DAG.
+        """
+        Compute latent representations for the full DAG.
 
-            Parameters
-            ----------
-            df : pd.DataFrame
-                Input dataframe with columns for each node.
-            verbose : bool, optional
-                If True, prints [INFO] statements during processing.
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Input dataframe with columns for each node.
+        verbose : bool, optional
+            If True, prints [INFO] statements during processing.
 
-            Returns
-            -------
-            pd.DataFrame
-                DataFrame with latent variables for each node. Columns are
-                [node, f"{node}_U"] for each continuous target.
-            """
-            try:
-                EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
-            except KeyError:
-                raise ValueError(
-                    "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
-                    "Latent extraction requires trained model checkpoints."
-                )
-            try:
-                if not hasattr(self, 'minmax_dict'):
-                    raise ValueError(
-                        "[ERROR] minmax_dict not found in the TramDagModel instance. "
-                        "Either call .load_or_compute_minmax(td_train_data=train_df) or .fit() first."
-                    )
-            
-            all_latents_df = create_latent_df_for_full_dag(
-                configuration_dict=self.cfg.conf_dict,
-                EXPERIMENT_DIR=EXPERIMENT_DIR,
-                df=df,
-                verbose=verbose,
-                min_max_dict=self.minmax_dict
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with latent variables for each node. Columns are
+            [node, f"{node}_U"] for each continuous target.
+        """
+        try:
+            EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        except KeyError:
+            raise ValueError(
+                "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
+                "Latent extraction requires trained model checkpoints."
             )
 
-            return all_latents_df
+        # ensure minmax_dict is available
+        if not hasattr(self, "minmax_dict"):
+            raise ValueError(
+                "[ERROR] minmax_dict not found in the TramDagModel instance. "
+                "Either call .load_or_compute_minmax(td_train_data=train_df) or .fit() first."
+            )
+
+        all_latents_df = create_latent_df_for_full_dag(
+            configuration_dict=self.cfg.conf_dict,
+            EXPERIMENT_DIR=EXPERIMENT_DIR,
+            df=df,
+            verbose=verbose,
+            min_max_dict=self.minmax_dict,
+        )
+
+        return all_latents_df
 
     ## PLOTTING FIT-DIAGNOSTICS
     def plot_loss_history(self, variable: str = None):
@@ -1128,7 +1093,6 @@ class TramDagModel:
             else:
                 print(f"[WARNING] Node {node} is not continuous, not implemented yet")
     
-        
     @staticmethod
     def _add_r_style_confidence_bands(ax, sample, dist, confidence=0.95, simulations=1000):
         """
@@ -1460,77 +1424,471 @@ class TramDagModel:
             plt.tight_layout()
             plt.show()
 
-    def summary(self):
+    ## SUMMARY METHODS
+    def get_train_val_nll(self, node: str, mode: str) -> tuple[float, float]:
         """
-        Print a summary of the TramDagModel:
-        1. Model architecture per node.
-        2. Whether trained model checkpoints exist on disk.
-        3. Whether sampling results exist on disk.
-        4. Whether training histories exist and number of epochs.
+        Return the training and validation NLL for the given node and mode.
+        mode ∈ {'best', 'last', 'init'}:
+            - 'best' → NLL at the epoch with the lowest val NLL
+            - 'last' → NLL from the last epoch
+            - 'init' → NLL from the first epoch (index 0)
+        """
+        NODE_DIR = os.path.join(self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"], node)
+        train_path = os.path.join(NODE_DIR, "train_loss_hist.json")
+        val_path = os.path.join(NODE_DIR, "val_loss_hist.json")
+
+        if not os.path.exists(train_path) or not os.path.exists(val_path):
+            if getattr(self, "debug", False):
+                print(f"[DEBUG] Missing loss files for node '{node}'. Returning None.")
+            return None, None
+
+        try:
+            with open(train_path, "r") as f:
+                train_hist = json.load(f)
+            with open(val_path, "r") as f:
+                val_hist = json.load(f)
+
+            train_nlls = np.array(train_hist)
+            val_nlls = np.array(val_hist)
+
+            if mode == "init":
+                idx = 0
+            elif mode == "last":
+                idx = len(val_nlls) - 1
+            elif mode == "best":
+                idx = int(np.argmin(val_nlls))
+            else:
+                raise ValueError(f"Invalid mode '{mode}' — must be one of 'best', 'last', 'init'.")
+
+            train_nll = float(train_nlls[idx])
+            val_nll = float(val_nlls[idx])
+            return train_nll, val_nll
+
+        except Exception as e:
+            print(f"[ERROR] Failed to load NLLs for node '{node}' ({mode}): {e}")
+            return None, None
+
+    def get_thetas(self, node: str, state: str = "best"):
+        """
+        Return the learned theta (intercept) parameters for a given node and model state.
+
+        If the intercept dictionary for the given state does not exist,
+        compute it using get_simple_intercepts_dict(). Otherwise, directly return
+        the entry from the cached dictionary.
+
+        Parameters
+        ----------
+        node : str
+            Node name for which to retrieve theta (intercept) parameters.
+        state : str, optional
+            Model state ("best", "last", or "init"). Defaults to "best".
+
+        Returns
+        -------
+        float, list, or None
+            Theta (intercept) parameters for the specified node and state.
         """
 
+        state = state.lower()
+        if state not in ["best", "last", "init"]:
+            raise ValueError(f"[ERROR] Invalid state '{state}'. Must be one of ['best', 'last', 'init'].")
+
+        dict_attr = "intercept_dicts"
+
+        # If no cached intercepts exist, compute them
+        if not hasattr(self, dict_attr):
+            if getattr(self, "debug", False):
+                print(f"[DEBUG] '{dict_attr}' not found, computing via get_simple_intercepts_dict().")
+            setattr(self, dict_attr, self.get_simple_intercepts_dict())
+
+        all_dicts = getattr(self, dict_attr)
+
+        # If the requested state isn’t cached, recompute
+        if state not in all_dicts:
+            if getattr(self, "debug", False):
+                print(f"[DEBUG] State '{state}' not found in cached intercepts, recomputing full dict.")
+            setattr(self, dict_attr, self.get_simple_intercepts_dict())
+            all_dicts = getattr(self, dict_attr)
+
+        state_dict = all_dicts.get(state, {})
+
+        # Return cached node intercept if present
+        if node in state_dict:
+            return state_dict[node]
+
+        # If not found, recompute full dict as fallback
+        if getattr(self, "debug", False):
+            print(f"[DEBUG] Node '{node}' not found in state '{state}', recomputing full dict.")
+        setattr(self, dict_attr, self.get_simple_intercepts_dict())
+        all_dicts = getattr(self, dict_attr)
+        return all_dicts.get(state, {}).get(node, None)
+        
+    def get_linear_shifts(self, node: str, state: str = "best"):
+        """
+        Return the learned linear shift terms for a given node and model state.
+
+        If the linear shift dictionary for the given state does not exist,
+        compute it using get_linear_shifts_dict(). Otherwise, directly return
+        the entry from the cached dictionary.
+
+        Parameters
+        ----------
+        node : str
+            Node name for which to retrieve linear shift terms.
+        state : str, optional
+            Model state ("best", "last", or "init"). Defaults to "best".
+
+        Returns
+        -------
+        dict or None
+            Linear shift terms for the specified node and state.
+        """
+
+        state = state.lower()
+        if state not in ["best", "last", "init"]:
+            raise ValueError(f"[ERROR] Invalid state '{state}'. Must be one of ['best', 'last', 'init'].")
+
+        dict_attr = "linear_shift_dicts"
+
+        # If no global dicts cached, compute once
+        if not hasattr(self, dict_attr):
+            if getattr(self, "debug", False):
+                print(f"[DEBUG] '{dict_attr}' not found, computing via get_linear_shifts_dict().")
+            setattr(self, dict_attr, self.get_linear_shifts_dict())
+
+        all_dicts = getattr(self, dict_attr)
+
+        # If the requested state isn't cached, compute all again (covers fresh runs)
+        if state not in all_dicts:
+            if getattr(self, "debug", False):
+                print(f"[DEBUG] State '{state}' not found in cached linear shifts, recomputing full dict.")
+            setattr(self, dict_attr, self.get_linear_shifts_dict())
+            all_dicts = getattr(self, dict_attr)
+
+        # Now fetch the dictionary for this state
+        state_dict = all_dicts.get(state, {})
+
+        # If the node is available, return its entry
+        if node in state_dict:
+            return state_dict[node]
+
+        # If missing, try recomputing (fallback)
+        if getattr(self, "debug", False):
+            print(f"[DEBUG] Node '{node}' not found in state '{state}', recomputing full dict.")
+        setattr(self, dict_attr, self.get_linear_shifts_dict())
+        all_dicts = getattr(self, dict_attr)
+        return all_dicts.get(state, {}).get(node, None)
+
+    def get_linear_shifts_dict(self):
+        """
+        Return a nested dictionary of linear shift terms for all nodes.
+        Output structure:
+            {
+                'best': {node: {...}},
+                'last': {node: {...}},
+                'init': {node: {...}}
+            }
+        If no best or last model exists, only 'init' is returned for that node.
+        """
+
+        EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        nodes_list = list(self.models.keys())
+        all_states = ["best", "last", "init"]
+        all_linear_shift_dicts = {state: {} for state in all_states}
+
+        for node in nodes_list:
+            NODE_DIR = os.path.join(EXPERIMENT_DIR, node)
+            BEST_MODEL_PATH, LAST_MODEL_PATH, _, _ = model_train_val_paths(NODE_DIR)
+            INIT_MODEL_PATH = os.path.join(NODE_DIR, "initial_model.pt")
+
+            state_paths = {
+                "best": BEST_MODEL_PATH,
+                "last": LAST_MODEL_PATH,
+                "init": INIT_MODEL_PATH,
+            }
+
+            for state, LOAD_PATH in state_paths.items():
+                if not os.path.exists(LOAD_PATH):
+                    if state != "init":
+                        # skip best/last if unavailable
+                        continue
+                    else:
+                        print(f"[WARNING] No models found for node '{node}'. Only initial model will be used.")
+                        if not os.path.exists(LOAD_PATH):
+                            if getattr(self, "debug", False):
+                                print(f"[DEBUG] Initial model also missing for node '{node}'. Skipping.")
+                            continue
+
+                # Load parents and model
+                _, terms_dict, _ = ordered_parents(node, self.nodes_dict)
+                state_dict = torch.load(LOAD_PATH, map_location=self.device)
+                tram_model = self.models[node]
+                tram_model.load_state_dict(state_dict)
+
+                epoch_weights = {}
+                if hasattr(tram_model, "nn_shift") and tram_model.nn_shift is not None:
+                    for i, shift_layer in enumerate(tram_model.nn_shift):
+                        module_name = shift_layer.__class__.__name__
+                        if (
+                            hasattr(shift_layer, "fc")
+                            and hasattr(shift_layer.fc, "weight")
+                            and module_name == "LinearShift"
+                        ):
+                            term_name = list(terms_dict.keys())[i]
+                            epoch_weights[f"ls({term_name})"] = (
+                                shift_layer.fc.weight.detach().cpu().squeeze().tolist()
+                            )
+                        elif getattr(self, "debug", False):
+                            term_name = list(terms_dict.keys())[i]
+                            print(f"[DEBUG] ls({term_name}): missing 'fc' or 'weight' in LinearShift.")
+                else:
+                    if getattr(self, "debug", False):
+                        print(f"[DEBUG] Tram model for node '{node}' has no nn_shift or it is None.")
+
+                all_linear_shift_dicts[state][node] = epoch_weights
+
+        # Remove empty states (e.g., when best/last not found for all nodes)
+        all_linear_shift_dicts = {k: v for k, v in all_linear_shift_dicts.items() if v}
+
+        return all_linear_shift_dicts
+
+    def get_simple_intercepts_dict(self):
+        """
+        Return a nested dictionary of transformed simple intercept (SI) weights 
+        for all nodes and model states ('best', 'last', 'init').
+        Output structure:
+            {
+                'best': {node: [...]},
+                'last': {node: [...]},
+                'init': {node: [...]}
+            }
+        If no best or last model exists, only 'init' is returned for that node.
+        """
+
+        EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+        nodes_list = list(self.models.keys())
+        all_states = ["best", "last", "init"]
+        all_si_intercept_dicts = {state: {} for state in all_states}
+
+        debug = getattr(self, "debug", False)
+        verbose = getattr(self, "verbose", False)
+        is_ontram = getattr(self, "is_ontram", False)
+
+        for node in nodes_list:
+            NODE_DIR = os.path.join(EXPERIMENT_DIR, node)
+            BEST_MODEL_PATH, LAST_MODEL_PATH, _, _ = model_train_val_paths(NODE_DIR)
+            INIT_MODEL_PATH = os.path.join(NODE_DIR, "initial_model.pt")
+
+            state_paths = {
+                "best": BEST_MODEL_PATH,
+                "last": LAST_MODEL_PATH,
+                "init": INIT_MODEL_PATH,
+            }
+
+            for state, LOAD_PATH in state_paths.items():
+                if not os.path.exists(LOAD_PATH):
+                    if state != "init":
+                        continue
+                    else:
+                        print(f"[WARNING] No models found for node '{node}'. Only initial model will be used.")
+                        if not os.path.exists(LOAD_PATH):
+                            if debug:
+                                print(f"[DEBUG] Initial model also missing for node '{node}'. Skipping.")
+                            continue
+
+                # Load model state
+                state_dict = torch.load(LOAD_PATH, map_location=self.device)
+                tram_model = self.models[node]
+                tram_model.load_state_dict(state_dict)
+
+                # Extract and transform simple intercept weights
+                si_weights = None
+                if hasattr(tram_model, "nn_int") and tram_model.nn_int is not None and isinstance(tram_model.nn_int, SimpleIntercept):
+                    if hasattr(tram_model.nn_int, "fc") and hasattr(tram_model.nn_int.fc, "weight"):
+                        weights = tram_model.nn_int.fc.weight.detach().cpu().tolist()
+                        weights_tensor = torch.Tensor(weights)
+
+                        if debug:
+                            print(f"[DEBUG] Node '{node}' ({state}) theta tilde shape: {weights_tensor.shape}")
+
+                        if is_ontram:
+                            si_weights = transform_intercepts_ordinal(weights_tensor.reshape(1, -1))[:, 1:-1].reshape(-1, 1)
+                        else:
+                            si_weights = transform_intercepts_continous(weights_tensor.reshape(1, -1)).reshape(-1, 1)
+
+                        si_weights = si_weights.tolist()
+
+                        if debug:
+                            print(f"[DEBUG] Node '{node}' ({state}) theta transformed: {si_weights}")
+                    else:
+                        if debug:
+                            print(f"[DEBUG] Node '{node}' ({state}): missing 'fc' or 'weight' in SimpleIntercept.")
+                else:
+                    if debug:
+                        print(f"[DEBUG] Tram model for node '{node}' has no nn_int or it is None.")
+
+                all_si_intercept_dicts[state][node] = si_weights
+
+        # Clean up empty states
+        all_si_intercept_dicts = {k: v for k, v in all_si_intercept_dicts.items() if v}
+        return all_si_intercept_dicts
+       
+    def summary(self, verbose=False):
+        """
+        Summarize TramDagModel training status, parameters, and checkpoints.
+        """
+
+        # ---------- SETUP ----------
         try:
             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         except KeyError:
             EXPERIMENT_DIR = None
-            print("[WARNING] No 'EXPERIMENT_DIR' found in cfg.conf_dict['PATHS'].")
+            print("[WARNING] Missing EXPERIMENT_DIR in cfg.conf_dict['PATHS'].")
 
-        print("\n[TramDagModel Summary]")
-        print("=" * 100)
+        print("\n" + "=" * 120)
+        print(f"{'TRAM DAG MODEL SUMMARY':^120}")
+        print("=" * 120)
 
-        for node, model in self.models.items():
-            print(f"\nNode '{node}':")
-            print("-" * 100)
+        # ---------- METRICS OVERVIEW ----------
+        summary_data = []
+        for node in self.models.keys():
+            node_dir = os.path.join(self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"], node)
+            train_path = os.path.join(node_dir, "train_loss_hist.json")
+            val_path = os.path.join(node_dir, "val_loss_hist.json")
 
-            # 1. Model architecture
-            print(" Model architecture:")
-            print(model)
-
-            if EXPERIMENT_DIR:
-                node_dir = os.path.join(EXPERIMENT_DIR, node)
-
-                # 2. Check trained model checkpoint
-                ckpt_exists = any(
-                    f.endswith(".pt") or f.endswith(".pth")
-                    for f in os.listdir(node_dir)
-                ) if os.path.exists(node_dir) else False
-                print(f" Trained model checkpoint found: {ckpt_exists}")
-
-                # 3. Check sampling results
-                sampling_dir = os.path.join(node_dir, "sampling")
-                sampling_exists = os.path.isdir(sampling_dir) and len(os.listdir(sampling_dir)) > 0
-                print(f" Sampling results found: {sampling_exists}")
-
-                # 4. Check training history
-                train_path = os.path.join(node_dir, "train_loss_hist.json")
-                val_path = os.path.join(node_dir, "val_loss_hist.json")
-
-                if os.path.exists(train_path):
-                    try:
-                        with open(train_path, "r") as f:
-                            train_hist = json.load(f)
-                        n_epochs = len(train_hist)
-                        print(f" Training history: found ({n_epochs} epochs)")
-                    except Exception as e:
-                        print(f" Training history: error loading ({e})")
-                else:
-                    print(" Training history: not found")
-
-                if os.path.exists(val_path):
-                    try:
-                        with open(val_path, "r") as f:
-                            val_hist = json.load(f)
-                        n_epochs_val = len(val_hist)
-                        print(f" Validation history: found ({n_epochs_val} epochs)")
-                    except Exception as e:
-                        print(f" Validation history: error loading ({e})")
-                else:
-                    print(" Validation history: not found")
-
+            if os.path.exists(train_path) and os.path.exists(val_path):
+                best_train_nll, best_val_nll = self.get_train_val_nll(node, "best")
+                last_train_nll, last_val_nll = self.get_train_val_nll(node, "last")
+                n_epochs_total = len(json.load(open(train_path)))
             else:
-                print(" [INFO] No experiment directory defined, cannot check checkpoints/sampling/history.")
+                best_train_nll = best_val_nll = last_train_nll = last_val_nll = None
+                n_epochs_total = 0
 
-        print("=" * 100 + "\n")
+            summary_data.append({
+                "Node": node,
+                "Best Train NLL": best_train_nll,
+                "Best Val NLL": best_val_nll,
+                "Last Train NLL": last_train_nll,
+                "Last Val NLL": last_val_nll,
+                "Epochs": n_epochs_total,
+            })
+
+        df_summary = pd.DataFrame(summary_data)
+        df_summary = df_summary.round(4)
+
+        print("\n[1] TRAINING METRICS OVERVIEW")
+        print("-" * 120)
+        if not df_summary.empty:
+            print(
+                df_summary.to_string(
+                    index=False,
+                    justify="center",
+                    col_space=14,
+                    float_format=lambda x: f"{x:7.4f}",
+                )
+            )
+        else:
+            print("No training history found for any node.")
+        print("-" * 120)
+
+        # ---------- NODE DETAILS ----------
+        print("\n[2] NODE-SPECIFIC DETAILS")
+        print("-" * 120)
+        for node in self.models.keys():
+            print(f"\n{f'NODE: {node}':^120}")
+            print("-" * 120)
+
+            # THETAS & SHIFTS
+            for state in ["init", "last", "best"]:
+                print(f"\n  [{state.upper()} STATE]")
+
+                # ---- Thetas ----
+                try:
+                    thetas = getattr(self, "get_thetas", lambda n, s=None: None)(node, state)
+                    if thetas is not None:
+                        if isinstance(thetas, (list, np.ndarray, pd.Series)):
+                            thetas_flat = np.array(thetas).flatten()
+                            compact = np.round(thetas_flat, 4)
+                            arr_str = np.array2string(
+                                compact,
+                                max_line_width=110,
+                                threshold=np.inf,
+                                separator=", "
+                            )
+                            lines = arr_str.split("\n")
+                            if len(lines) > 2:
+                                arr_str = "\n".join(lines[:2]) + " ..."
+                            print(f"    Θ ({len(thetas_flat)}): {arr_str}")
+                        elif isinstance(thetas, dict):
+                            for k, v in thetas.items():
+                                print(f"     Θ[{k}]: {v}")
+                        else:
+                            print(f"    Θ: {thetas}")
+                    else:
+                        print("    Θ: not available")
+                except Exception as e:
+                    print(f"    [Error loading thetas] {e}")
+
+                # ---- Linear Shifts ----
+                try:
+                    linear_shifts = getattr(self, "get_linear_shifts", lambda n, s=None: None)(node, state)
+                    if linear_shifts is not None:
+                        if isinstance(linear_shifts, dict):
+                            for k, v in linear_shifts.items():
+                                print(f"     {k}: {np.round(v, 4)}")
+                        elif isinstance(linear_shifts, (list, np.ndarray, pd.Series)):
+                            arr = np.round(linear_shifts, 4)
+                            print(f"    Linear shifts ({len(arr)}): {arr}")
+                        else:
+                            print(f"    Linear shifts: {linear_shifts}")
+                    else:
+                        print("    Linear shifts: not available")
+                except Exception as e:
+                    print(f"    [Error loading linear shifts] {e}")
+
+            # ---- Verbose info directly below node ----
+            if verbose:
+                print("\n  [DETAILS]")
+                node_dir = os.path.join(EXPERIMENT_DIR, node) if EXPERIMENT_DIR else None
+                model = self.models[node]
+
+                print(f"    Model Architecture:")
+                arch_str = str(model).split("\n")
+                for line in arch_str:
+                    print(f"      {line}")
+                print(f"    Parameter count: {sum(p.numel() for p in model.parameters()):,}")
+
+                if node_dir and os.path.exists(node_dir):
+                    ckpt_exists = any(f.endswith(('.pt', '.pth')) for f in os.listdir(node_dir))
+                    print(f"    Checkpoints found: {ckpt_exists}")
+
+                    sampling_dir = os.path.join(node_dir, "sampling")
+                    sampling_exists = os.path.isdir(sampling_dir) and len(os.listdir(sampling_dir)) > 0
+                    print(f"    Sampling results found: {sampling_exists}")
+
+                    for label, filename in [("Train", "train_loss_hist.json"), ("Validation", "val_loss_hist.json")]:
+                        path = os.path.join(node_dir, filename)
+                        if os.path.exists(path):
+                            try:
+                                with open(path, "r") as f:
+                                    hist = json.load(f)
+                                print(f"    {label} history: {len(hist)} epochs")
+                            except Exception as e:
+                                print(f"    {label} history: failed to load ({e})")
+                        else:
+                            print(f"    {label} history: not found")
+                else:
+                    print("    [INFO] No experiment directory defined or missing for this node.")
+            print("-" * 120)
+
+        # ---------- TRAINING DATAFRAME ----------
+        print("\n[3] TRAINING DATAFRAME")
+        print("-" * 120)
+        try:
+            self.train_df.info()
+        except AttributeError:
+            print("No training DataFrame attached to this TramDagModel.")
+        print("=" * 120 + "\n")
 
 
 
