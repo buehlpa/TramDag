@@ -47,6 +47,7 @@ from .TramDagDataset import TramDagDataset
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
 
+## TODO psuh latest version to pypi
 
 
 class TramDagModel:
