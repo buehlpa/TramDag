@@ -820,7 +820,12 @@ class TramDagModel:
                     "[ERROR] Missing 'EXPERIMENT_DIR' in cfg.conf_dict['PATHS']. "
                     "Latent extraction requires trained model checkpoints."
                 )
-
+            try:
+                if not hasattr(self, 'minmax_dict'):
+                    raise ValueError(
+                        "[ERROR] minmax_dict not found in the TramDagModel instance. "
+                        "Either call .load_or_compute_minmax(td_train_data=train_df) or .fit() first."
+                    )
             
             all_latents_df = create_latent_df_for_full_dag(
                 configuration_dict=self.cfg.conf_dict,
