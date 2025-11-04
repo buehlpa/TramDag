@@ -1025,6 +1025,103 @@ def train_val_loop(
     return (train_loss_hist, val_loss_hist)
 
 
+def evaluate_tramdag_model(
+    node: str,
+    target_nodes: dict,
+    NODE_DIR: str,
+    tram_model: torch.nn.Module,
+    data_loader,
+    min_max=None,
+    device: str = 'cpu',
+    debug: bool = False,
+):
+    """
+    Evaluate a trained TRAM model by computing the average NLL loss on a given dataset.
+
+    This function performs forward passes only (no gradients, no saving, no checkpointing)
+    and returns the mean NLL value across all batches.
+
+    Parameters
+    ----------
+    node : str
+        Identifier for the target node being evaluated.
+    target_nodes : dict
+        Dictionary of all target nodes containing metadata such as min/max values and data_type.
+    NODE_DIR : str
+        Directory path (only used for context consistency).
+    tram_model : torch.nn.Module
+        Trained TRAM model to be evaluated.
+    data_loader : torch.utils.data.DataLoader or torch.utils.data.Dataset
+        Iterable or dataset containing evaluation data.
+    min_max : torch.Tensor, optional
+        Precomputed tensor containing min and max normalization values.
+        If None, will be inferred from target_nodes[node].
+    device : str, default='cpu'
+        Device for model evaluation.
+    debug : bool, default=False
+        Enables timing and detailed debug information.
+
+    Returns
+    -------
+    float
+        Average NLL loss value over the dataset.
+    """
+
+    device = torch.device(device)
+    tram_model = tram_model.to(device)
+    tram_model.eval()
+
+    if min_max is None:
+        min_vals = torch.tensor(target_nodes[node]['min'], dtype=torch.float32, device=device)
+        max_vals = torch.tensor(target_nodes[node]['max'], dtype=torch.float32, device=device)
+        min_max = torch.stack([min_vals, max_vals], dim=0)
+
+    is_ontram = 'yo' in target_nodes[node]['data_type'].lower()
+    is_dataloader = isinstance(data_loader, torch.utils.data.DataLoader)
+
+    total_loss = 0.0
+    n_batches = len(data_loader) if len(data_loader) > 0 else 1
+
+    with torch.no_grad():
+        if is_dataloader:
+            iterable = enumerate(data_loader)
+        else:
+            iterable = enumerate(range(len(data_loader)))
+
+        for batch_idx, item in iterable:
+            if is_dataloader:
+                (int_input, shift_list), y = item
+            else:
+                (int_input, shift_list), y = data_loader[item]
+                if torch.is_tensor(int_input):
+                    int_input = int_input.unsqueeze(0)
+                shift_list = [s.unsqueeze(0) if torch.is_tensor(s) else s for s in shift_list]
+                if torch.is_tensor(y):
+                    y = y.unsqueeze(0)
+
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+            y = y.to(device)
+
+            if debug:
+                t0 = time.time()
+            y_pred = tram_model(int_input=int_input, shift_input=shift_list)
+            if debug:
+                print(f"[DEBUG] Forward batch {batch_idx}: {time.time() - t0:.4f}s")
+
+            if is_ontram:
+                loss = ontram_nll(y_pred, y)
+            else:
+                loss = contram_nll(y_pred, y, min_max=min_max)
+
+            total_loss += loss.item()
+
+    avg_nll = total_loss / n_batches
+    if debug:
+        print(f"[DEBUG] Evaluation done. Average NLL: {avg_nll:.4f}")
+
+    return avg_nll
+
 # print training history
 def load_history(node, experiment_dir):
     node_dir = os.path.join(experiment_dir, node)

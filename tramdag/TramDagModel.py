@@ -31,7 +31,7 @@ from joblib import Parallel, delayed
 from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
-from .utils.tram_model_helpers import train_val_loop, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
+from .utils.tram_model_helpers import train_val_loop,evaluate_tramdag_model, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
 from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous,show_hdag_for_single_source_node_continous,show_hdag_continous
 from .utils.continous_helpers import transform_intercepts_continous
 from .utils.ordinal_helpers import transform_intercepts_ordinal
@@ -43,15 +43,11 @@ from .TramDagDataset import TramDagDataset
 
 
 
-## TODO return final thetas funciton 
 ## TODO from x via h^-1 to latent z function for ordinal
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
 
-## TODO add NLL for each node
-
-# TODO create_latent_df_for_full_dag: for ordinal nodes
-
+# BUG if cfg is passed directy and not loaded with TD config cfg.update causes an issue 
 
 class TramDagModel:
     
@@ -64,7 +60,6 @@ class TramDagModel:
         "initial_data":None,
     }
 
-    
     # ---- defaults used at fit() time ----
     DEFAULTS_FIT = {
         "epochs": 100,
@@ -181,6 +176,7 @@ class TramDagModel:
         self = cls()
         self.cfg = cfg
         self.cfg.update()# call to ensure latest config is loaded
+        
         self.nodes_dict = self.cfg.conf_dict["nodes"] 
 
         self._validate_kwargs(kwargs, defaults_attr='DEFAULTS_CONFIG', context="from_config")
@@ -802,7 +798,9 @@ class TramDagModel:
 
         return all_latents_df
 
+    
     ## PLOTTING FIT-DIAGNOSTICS
+    
     def plot_loss_history(self, variable: str = None):
         """
         Plot training and validation loss histories.
@@ -1039,7 +1037,7 @@ class TramDagModel:
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             plt.show()
 
-    def plot_hdag(self,df,variables=None, plot_n_rows=5,**kwargs):
+    def plot_hdag(self,df,variables=None, plot_n_rows=1,**kwargs):
         
         """
         Visualize the transformation function h() for specified nodes or all nodes
@@ -1084,7 +1082,7 @@ class TramDagModel:
         
 
         if len(df)> 1:
-            print("[WARNING] len(df)>1, function allows up to 5 rows to plot rest will be truncated, set: plot_n_rows accordingly")
+            print("[WARNING] len(df)>1, set: plot_n_rows accordingly")
         
         variables_list=variables if variables is not None else list(self.models.keys())
         for node in variables_list:
@@ -1425,6 +1423,59 @@ class TramDagModel:
             plt.show()
 
     ## SUMMARY METHODS
+    def nll(self,data,variables=None):
+        """
+        Compute the Negative Log-Likelihood (NLL) for all or selected TRAM nodes.
+
+        This function evaluates trained TRAM models for each specified variable (node) 
+        on the provided dataset. It performs forward passes only—no training, no weight 
+        updates—and returns the mean NLL per node.
+
+        Parameters
+        ----------
+        data : object
+            Input dataset or data source compatible with `_ensure_dataset`, containing 
+            both inputs and targets for each node.
+        variables : list[str], optional
+            List of variable (node) names to evaluate. If None, all nodes in 
+            `self.models` are evaluated.
+
+        Returns
+        -------
+        dict[str, float]
+            Dictionary mapping each node name to its average NLL value.
+
+        Notes
+        -----
+        - Each model is evaluated independently on its respective DataLoader.
+        - The normalization values (`min_max`) for each node are retrieved from 
+          `self.minmax_dict[node]`.
+        - The function uses `evaluate_tramdag_model()` for per-node evaluation.
+        - Expected directory structure:
+              `<EXPERIMENT_DIR>/<node>/`
+          where each node directory contains the trained model.
+        """
+
+        td_data = self._ensure_dataset(data, is_val=True)  
+        variables_list = variables if variables != None else list(self.models.keys())
+        nll_dict = {}
+        for node in variables_list:  
+                min_vals = torch.tensor(self.minmax_dict[node][0], dtype=torch.float32)
+                max_vals = torch.tensor(self.minmax_dict[node][1], dtype=torch.float32)
+                min_max = torch.stack([min_vals, max_vals], dim=0)
+                data_loader = td_data.loaders[node]
+                model = self.models[node]
+                EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
+                NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+                nll= evaluate_tramdag_model(node=node,
+                                            target_nodes=self.nodes_dict,
+                                            NODE_DIR=NODE_DIR,
+                                            tram_model=model,
+                                            data_loader=data_loader,
+                                            min_max=min_max)
+                nll_dict[node]=nll
+        return nll_dict
+    
     def get_train_val_nll(self, node: str, mode: str) -> tuple[float, float]:
         """
         Return the training and validation NLL for the given node and mode.
