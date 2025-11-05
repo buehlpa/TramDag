@@ -15,7 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -46,7 +45,6 @@ from .TramDagDataset import TramDagDataset
 ## TODO from x via h^-1 to latent z function for ordinal
 ## TODO complex shifts fucniton display
 ## TODO documentation with docusaurus
-
 ## TODO psuh latest version to pypi
 
 
