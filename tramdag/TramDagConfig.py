@@ -74,6 +74,8 @@ class TramDagConfig:
         """
         if not hasattr(self, "CONF_DICT_PATH") or self.CONF_DICT_PATH is None:
             raise ValueError("CONF_DICT_PATH not set — cannot update configuration.")
+        
+        
         self.conf_dict = load_configuration_dict(self.CONF_DICT_PATH)
 
 

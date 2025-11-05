@@ -59,6 +59,7 @@ class TramDagModel:
         "verbose": False,
         "device":'auto',
         "initial_data":None,
+        "overwrite_initial_weights": True,
     }
 
     # ---- defaults used at fit() time ----
@@ -291,8 +292,8 @@ class TramDagModel:
         with open(config_path, "r") as f:
             cfg_dict = json.load(f)
 
-        # Create TramConfig wrapper (adjust if your cfg is a dict already)
-        cfg = TramDagConfig(cfg_dict)
+        # Create TramConfig wrapper 
+        cfg = TramDagConfig(cfg_dict, CONF_DICT_PATH=config_path)
 
         # --- build model from config ---
         self = cls.from_config(cfg, device=device, debug=debug, verbose=verbose, overwrite_initial_weights=False)

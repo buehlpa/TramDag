@@ -56,8 +56,8 @@ def get_fully_specified_tram_model(
     initial_data: str = None,
     verbose: bool = True,
     debug: bool = False,
-    device='auto'
-    ) -> TramModel:
+    device='auto',
+    **kwargs) -> TramModel:
     """
     Construct and return a fully specified TramModel for a given node based on
     its configuration (ordinal or continuous outcome) and parent inputs.
