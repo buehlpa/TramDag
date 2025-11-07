@@ -46,7 +46,8 @@ from .TramDagDataset import TramDagDataset
 ## TODO documentation with docusaurus
 ## TODO psuh latest version to pypi
 
-
+## TODO
+# at sampling implement counterfactual with sampling between c1 and c2  -> generate distribution for ordinal vars
 class TramDagModel:
     
     # ---- defaults used at construction time ----
