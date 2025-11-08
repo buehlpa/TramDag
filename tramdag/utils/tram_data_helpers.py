@@ -17,6 +17,7 @@ limitations under the License.
 
 
 
+#TODO implement hdag_ordinal 
 
 import torch
 from torch.utils.data import  DataLoader
@@ -196,7 +197,7 @@ def show_hdag_continous(df,
                         verbose=False,
                         debug=False,
                         minmax_dict=None,
-                        plot_n_rows=5):
+                        plot_n_rows=1):
     
         target_nodes=configuration_dict["nodes"]
         
@@ -239,7 +240,7 @@ def show_hdag_continous(df,
                                             verbose=verbose,
                                             debug=debug)
         
-        sample_loader = DataLoader(sample_dataset, batch_size=1, shuffle=True,num_workers=4, pin_memory=True)
+        sample_loader = DataLoader(sample_dataset, batch_size=1, shuffle=False,num_workers=4, pin_memory=True)
         
         counter = 0
         stop_plot = 1 if target_nodes[node]["node_type"] == "source" else min(len(df), plot_n_rows)
@@ -313,6 +314,224 @@ def show_hdag_continous(df,
                 plt.show()
 
                 counter += 1
+
+
+# TODO VALIDATE THE ORDINAL CUTPOINTS PLOTTING
+def show_hdag_ordinal(df,
+                      node,
+                      configuration_dict,
+                      device='cpu',
+                      xmin_plot=None,
+                      xmax_plot=None,
+                      EXPERIMENT_DIR=None,
+                      verbose=False,
+                      debug=False,
+                      plot_n_rows=1): 
+
+    target_nodes = configuration_dict["nodes"]
+    verbose = False
+    if EXPERIMENT_DIR is None:
+        EXPERIMENT_DIR = configuration_dict["PATHS"]["EXPERIMENT_DIR"]
+
+    # === Paths ===
+    NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+    model_path = os.path.join(NODE_DIR, "best_model.pt")
+    if not os.path.exists(model_path):
+        print("[Warning] best_model.pt not found, falling back to initial_model.pt")
+        model_path = os.path.join(NODE_DIR, "initial_model.pt")
+
+    # === Load model ===
+    tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, device=device)
+    tram_model.load_state_dict(torch.load(model_path, map_location=device))
+    tram_model = tram_model.to(device)
+    tram_model.eval()
+
+    # === Dataset and loader ===
+    sample_dataset = GenericDataset(
+        df,
+        target_col=node,
+        target_nodes=target_nodes,
+        return_intercept_shift=True,
+        return_y=False,
+        verbose=verbose,
+        debug=debug
+    )
+    sample_loader = DataLoader(sample_dataset, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
+
+    counter = 0
+    stop_plot = 1 if target_nodes[node]["node_type"] == "source" else min(len(df), plot_n_rows)
+
+    with torch.no_grad():
+        if target_nodes[node]["node_type"] == "source":
+            print(f"{node}: Simple intercept — identical h() for all samples.")
+
+        for i, (int_input, shift_list) in enumerate(sample_loader):
+            if counter >= stop_plot:
+                break
+
+            if target_nodes[node]["node_type"] != "source":
+                print(f"\n=== Sample {i+1}/{stop_plot} ===")
+                print(df.iloc[i])
+
+            int_input = int_input.to(device, non_blocking=True)
+            shift_list = [s.to(device, non_blocking=True) for s in shift_list]
+
+            # === Forward pass ===
+            model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+
+            # === Extract and transform intercepts ===
+            int_in = model_outputs['int_out']
+            shift_in = model_outputs['shift_out']
+            int_trans = transform_intercepts_ordinal(int_in)  # [B, K+1]
+
+            # === Handle shifts ===
+            if shift_in is not None:
+                shift = torch.stack(shift_in, dim=1).sum(dim=1).view(-1)
+                int_shifted = int_trans - shift.unsqueeze(1)
+            else:
+                int_shifted = int_trans
+
+            # === Select first (and only) sample in batch ===
+            cutpoints = int_shifted[0, 1:-1].cpu().numpy()
+
+            # === Plot cutpoints vs class indices ===
+            plt.figure(figsize=(6, 4))
+            x_classes = np.arange(1, len(cutpoints) + 1)
+
+            plt.plot(x_classes, cutpoints, 'o', color='C1', linewidth=2, markersize=8)
+            plt.xticks(x_classes)
+            plt.xlabel("Ordinal class index (k)")
+            plt.ylabel("Shifted cutpoint (θₖ - ηᵢ)")
+            plt.title(f"{node} — Sample {i+1}")
+            plt.grid(True, linestyle="--", alpha=0.6)
+            plt.tight_layout()
+            plt.show()
+
+            counter += 1
+            
+def plot_cutpoints_with_logistic(df,
+                                 node,
+                                 configuration_dict,
+                                 device='cpu',
+                                 xmin_plot=-6,
+                                 xmax_plot=6,
+                                 EXPERIMENT_DIR=None,
+                                 verbose=False,
+                                 debug=False,
+                                 plot_n_rows=5):
+    import os
+    import torch
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    from torch.utils.data import DataLoader
+    from datetime import datetime
+
+    target_nodes = configuration_dict["nodes"]
+    if EXPERIMENT_DIR is None:
+        EXPERIMENT_DIR = configuration_dict["PATHS"]["EXPERIMENT_DIR"]
+
+    NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+    model_path = os.path.join(NODE_DIR, "best_model.pt")
+    if not os.path.exists(model_path):
+        print("[Warning] best_model.pt not found, using initial_model.pt")
+        model_path = os.path.join(NODE_DIR, "initial_model.pt")
+
+    # === Load model ===
+    tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, device=device)
+    tram_model.load_state_dict(torch.load(model_path, map_location=device))
+    tram_model.to(device).eval()
+
+    # === Dataset ===
+    dataset = GenericDataset(
+        df,
+        target_col=node,
+        target_nodes=target_nodes,
+        return_intercept_shift=True,
+        return_y=False,
+        verbose=verbose,
+        debug=debug
+    )
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
+
+    results = []
+
+    with torch.no_grad():
+        for i, (int_input, shift_list) in enumerate(loader):
+            if i >= plot_n_rows:
+                break
+
+            row = df.iloc[i].to_dict()
+
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+
+            # === identical logic to sampler ===
+            model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+            int_out = transform_intercepts_ordinal(model_outputs['int_out'])  # shape [B, n_cut]
+            B = int_out.shape[0]
+
+            if model_outputs['shift_out'] is not None:
+                shift_total = torch.stack(model_outputs['shift_out'], dim=1).sum(dim=1)
+                h = int_out - shift_total
+            else:
+                h = int_out
+
+            logistic_cdf = torch.sigmoid(h)
+            pdf = logistic_cdf[:, 1:] - logistic_cdf[:, :-1]
+            probs = pdf[0].cpu().numpy()
+            cutpoints = h[0, 1:-1].cpu().numpy()
+            pred_class = int(np.argmax(probs))
+
+            # === record output ===
+            sample_record = {
+                "sample_index": i,
+                "pred_class": pred_class,
+                "probs": probs.tolist(),
+                "cutpoints": cutpoints.tolist(),
+            }
+            sample_record.update(row)
+            results.append(sample_record)
+
+            if debug:
+                print(f"\nSample {i}  →  probs={np.round(probs,3)}  pred_class={pred_class}")
+                print(f"cutpoints (θ-η): {np.round(cutpoints,3)}")
+
+            # === plot logistic PDF with regions ===
+            x = np.linspace(xmin_plot, xmax_plot, 1000)
+            pdf_base = np.exp(-x) / (1 + np.exp(-x))**2
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(x, pdf_base, color='black', lw=2)
+
+            cp_full = np.concatenate(([-np.inf], cutpoints, [np.inf]))
+            colors = plt.cm.viridis(np.linspace(0, 1, len(probs)))
+
+            for k in range(len(probs)):
+                x_fill = x[(x > cp_full[k]) & (x < cp_full[k + 1])]
+                y_fill = np.exp(-x_fill) / (1 + np.exp(-x_fill))**2
+                ax.fill_between(x_fill, 0, y_fill, color=colors[k], alpha=0.6)
+                if len(x_fill) > 0:
+                    x_mid = np.median(x_fill)
+                    y_text = np.max(y_fill) * 0.85
+                    ax.text(x_mid, y_text, f"P(Y={k})={probs[k]:.2f}",
+                            ha='center', va='center', fontsize=9, weight='bold')
+
+            ax.scatter(cutpoints, [0]*len(cutpoints), color='red', s=50, zorder=5)
+            ax.set_xlim(xmin_plot, xmax_plot)
+            ax.set_xlabel("Latent variable z (θₖ − ηᵢ)")
+            ax.set_ylabel("Logistic density f(z)")
+            ax.set_title(f"{node} — Sample {i+1} (pred_class={pred_class})")
+            plt.tight_layout()
+            plt.show()
+
+    # === Write CSV ===
+    out_path = os.path.join(
+        EXPERIMENT_DIR,
+        f"{node}_ordinal_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    pd.DataFrame(results).to_csv(out_path, index=False)
+    print(f"\nSaved predictions and argmaxes to: {out_path}")
+
 
 def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
     target_nodes=configuration_dict["nodes"]

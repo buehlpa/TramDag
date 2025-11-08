@@ -31,7 +31,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
 from .utils.tram_model_helpers import train_val_loop,evaluate_tramdag_model, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
-from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,is_outcome_modelled_continous,show_hdag_for_single_source_node_continous,show_hdag_continous
+from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,plot_cutpoints_with_logistic,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal
 from .utils.continous_helpers import transform_intercepts_continous
 from .utils.ordinal_helpers import transform_intercepts_ordinal
 
@@ -41,13 +41,16 @@ from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
 
 
-## TODO from x via h^-1 to latent z function for ordinal
-## TODO complex shifts fucniton display
-## TODO documentation with docusaurus
-## TODO psuh latest version to pypi
 
 ## TODO
 # at sampling implement counterfactual with sampling between c1 and c2  -> generate distribution for ordinal vars
+## TODO complex shifts fucniton display
+
+## TODO ordinal cutpoints trafo plot
+## TODO documentation with docusaurus
+## TODO psuh latest version to pypi
+
+
 class TramDagModel:
     
     # ---- defaults used at construction time ----
@@ -1094,8 +1097,13 @@ class TramDagModel:
         for node in variables_list:
             if is_outcome_modelled_continous(node, self.nodes_dict):
                 show_hdag_continous(df,node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
+            
+            elif is_outcome_modelled_ordinal(node, self.nodes_dict):
+                print(f"[WARNING] Node {node} is categorical, not implemented yet")
+                # show_hdag_ordinal(df,node=node,configuration_dict=self.cfg.conf_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
+                plot_cutpoints_with_logistic(df,node=node,configuration_dict=self.cfg.conf_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
             else:
-                print(f"[WARNING] Node {node} is not continuous, not implemented yet")
+                print(f"[WARNING] Node {node} is wheter ordinal nor continous, not implemented yet")
     
     @staticmethod
     def _add_r_style_confidence_bands(ax, sample, dist, confidence=0.95, simulations=1000):
