@@ -1495,32 +1495,35 @@ def sample_full_dag(configuration_dict,
                 continue 
 
         ##### NO INTERVENTION, based on the sampled data from the parents the latents for each node the observational distribution is generated    
-        else:
-            # if latents are predefined use them
-            if predefined_latent_samples_df is not None and node in predefined_latent_samples_df.columns.str.replace('_U',''):
-                predefinded_sample_name = node + "_U" 
+        else:#TODO write down all cases for sampling here
+            # handle predefined or generated latents
+            has_interval_latents = (
+                predefined_latent_samples_df is not None
+                and f"{node}_U_lower" in predefined_latent_samples_df.columns
+                and f"{node}_U_upper" in predefined_latent_samples_df.columns
+            )
 
-                if predefinded_sample_name not in predefined_latent_samples_df.columns:
-                    raise ValueError(
-                        f"Predefined latent samples for node '{node}' not found in dataframe columns. "
-                        f"Must be named '{predefinded_sample_name}'.")
-                    
+            if (
+                predefined_latent_samples_df is not None
+                and f"{node}_U" in predefined_latent_samples_df.columns
+                and not has_interval_latents
+            ):
+                predefinded_sample_name = f"{node}_U"
                 predefinded_sample = predefined_latent_samples_df[predefinded_sample_name].values
                 if verbose or debug:
-                    print(f'[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}')
-                
+                    print(f"[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}")
                 latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
-                ## IF not predefined latents are sampled from standard logistic distribution
+
             else:
                 if verbose or debug:
-                    print(f'[INFO] Sampling new latents for node {node} from standard logistic distribution')
-                    
+                    if has_interval_latents:
+                        print(f"[INFO] Detected '{node}_U_lower' and '{node}_U_upper' — switching to counterfactual logistic sampling mode. NOT IMPLEMENTED YET. defaulting to jsut logistic sampling")
+                    else:
+                        print(f"[INFO] Sampling new latents for node {node} from standard logistic distribution")
+                        
                 latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
-            
-            
-            ### load modelweights
-            
-            
+                    
+            #################################### load model and weigths 
             tram_model = get_fully_specified_tram_model(
                 node, configuration_dict, debug=debug, device=device, verbose=verbose
             ).to(device)
@@ -1553,7 +1556,7 @@ def sample_full_dag(configuration_dict,
             except Exception as e:
                 print(f"[ERROR] Failed to load model weights for node '{node}': {e}")
                 raise
-                    
+            ##############################################        
             # create dataframe from sampled parents + dummy if no parents 
             sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
             
