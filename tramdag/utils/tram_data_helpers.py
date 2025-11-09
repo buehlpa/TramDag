@@ -1070,7 +1070,8 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
         shifts = shifts.squeeze()
 
     # print("thetas_expanded ",thetas_expanded ) 
-
+    if thetas_expanded.ndim == 1:
+        thetas_expanded = thetas_expanded.unsqueeze(0)
     # Validate shapes
     if thetas_expanded.shape[0] != number_of_samples:
         raise ValueError(f"Mismatch in sample count: thetas_expanded has shape {thetas_expanded.shape}, expected {number_of_samples} rows.")
