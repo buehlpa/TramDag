@@ -187,6 +187,7 @@ class TramDagConfig:
             - Variables not found in the configuration's `nodes` dictionary trigger a warning.
             - Updates are persisted if `write=True` and a valid `CONF_DICT_PATH` is set.
         """
+        self.update()
         levels_dict = create_levels_dict(df, self.conf_dict['data_type'])
         
         # update nodes dict with levels
@@ -415,6 +416,7 @@ class TramDagConfig:
             CONF_DICT_PATH (str, optional): Path to the configuration file.
             seed (int, optional): Random seed for reproducibility.
         """
+        self.update()
         is_class_call = isinstance(self, type)
 
         # resolve path

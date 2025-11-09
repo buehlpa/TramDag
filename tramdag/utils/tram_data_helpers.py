@@ -37,7 +37,6 @@ from .tram_data import  GenericDataset, get_dataloader
 from .ordinal_helpers import transform_intercepts_ordinal
 from .continous_helpers import contram_nll
 # helpers
-
 def merge_outputs(dict_list, skip_nan=True):
     import warnings
 
@@ -86,7 +85,6 @@ def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
             print(f'Deleted directory: {SAMPLING_DIR}')
         else:
             print(f'Directory does not exist: {SAMPLING_DIR}')
-
 
 def show_hdag_for_single_source_node_continous(node,configuration_dict,device='cpu',xmin_plot=None,xmax_plot=None,EXPERIMENT_DIR=None,verbose=False,debug=False,minmax_dict=None):
         target_nodes=configuration_dict["nodes"]
@@ -315,7 +313,6 @@ def show_hdag_continous(df,
 
                 counter += 1
 
-
 # TODO VALIDATE THE ORDINAL CUTPOINTS PLOTTING
 def show_hdag_ordinal(df,
                       node,
@@ -532,7 +529,92 @@ def plot_cutpoints_with_logistic(df,
     pd.DataFrame(results).to_csv(out_path, index=False)
     print(f"\nSaved predictions and argmaxes to: {out_path}")
 
+def save_cutpoints_with_logistic(df,
+                                 node,
+                                 configuration_dict,
+                                 device='cpu',
+                                 EXPERIMENT_DIR=None,
+                                 verbose=False,
+                                 debug=False):
+    import os
+    import torch
+    import numpy as np
+    import pandas as pd
+    from torch.utils.data import DataLoader
+    from datetime import datetime
 
+    target_nodes = configuration_dict["nodes"]
+    if EXPERIMENT_DIR is None:
+        EXPERIMENT_DIR = configuration_dict["PATHS"]["EXPERIMENT_DIR"]
+
+    NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+    model_path = os.path.join(NODE_DIR, "best_model.pt")
+    if not os.path.exists(model_path):
+        print("[Warning] best_model.pt not found, using initial_model.pt")
+        model_path = os.path.join(NODE_DIR, "initial_model.pt")
+
+    # === Load model ===
+    tram_model = get_fully_specified_tram_model(node, configuration_dict, debug=verbose, device=device)
+    tram_model.load_state_dict(torch.load(model_path, map_location=device))
+    tram_model.to(device).eval()
+
+    # === Dataset ===
+    dataset = GenericDataset(
+        df,
+        target_col=node,
+        target_nodes=target_nodes,
+        return_intercept_shift=True,
+        return_y=False,
+        verbose=verbose,
+        debug=debug
+    )
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
+
+    results = []
+
+    with torch.no_grad():
+        for i, (int_input, shift_list) in enumerate(loader):
+            row = df.iloc[i].to_dict()
+
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+
+            # === identical logic to sampler ===
+            model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+            int_out = transform_intercepts_ordinal(model_outputs['int_out'])  # shape [B, n_cut]
+
+            if model_outputs['shift_out'] is not None:
+                shift_total = torch.stack(model_outputs['shift_out'], dim=1).sum(dim=1)
+                h = int_out - shift_total
+            else:
+                h = int_out
+
+            logistic_cdf = torch.sigmoid(h)
+            pdf = logistic_cdf[:, 1:] - logistic_cdf[:, :-1]
+            probs = pdf[0].cpu().numpy()
+            cutpoints = h[0, 1:-1].cpu().numpy()
+            pred_class = int(np.argmax(probs))
+
+            sample_record = {
+                "sample_index": i,
+                "pred_class": pred_class,
+                "probs": probs.tolist(),
+                "cutpoints": cutpoints.tolist(),
+            }
+            sample_record.update(row)
+            results.append(sample_record)
+
+            if debug:
+                print(f"Sample {i} → probs={np.round(probs,3)}  pred_class={pred_class}")
+                print(f"cutpoints (θ-η): {np.round(cutpoints,3)}")
+
+    out_path = os.path.join(
+        EXPERIMENT_DIR,
+        f"{node}_ordinal_predictions_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    pd.DataFrame(results).to_csv(out_path, index=False)
+    print(f"Saved full predictions to: {out_path}")
+    
 def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plot=-5,xmax_plot=5):
     target_nodes=configuration_dict["nodes"]
     for node in target_nodes:
@@ -548,8 +630,7 @@ def show_hdag_for_source_nodes(configuration_dict,EXPERIMENT_DIR,device,xmin_plo
             
             if is_outcome_modelled_ordinal(node, target_nodes):
                 print('not implemeneted yet for ordinal (nominally encoded)')
-
-        
+ 
 def inspect_trafo_standart_logistic(configuration_dict, EXPERIMENT_DIR, train_df, val_df, device, verbose=False):
     target_nodes = configuration_dict["nodes"]
     h_train_outputs = []
@@ -662,8 +743,6 @@ def inspect_single_standart_logistic(
 
     return h_train_array, h_val_array
 
-
-
 def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95, simulations=1000):
     """
     Adds accurate confidence bands to a QQ plot using simulation under the null hypothesis.
@@ -690,9 +769,7 @@ def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95, sim
     # Confidence band
     ax.fill_between(theo_q, lower, upper, color='gray', alpha=0.3, label=f'{int(confidence*100)}% CI')
     ax.legend()
-
-
-        
+   
 def show_samples_vs_true(
     df,
     target_nodes,
@@ -836,10 +913,7 @@ def truncated_logistic_sample(n, low, high, device='cpu'):
         samples.extend(valid)
     return torch.tensor(samples, dtype=torch.float32).to(device)
 
-
-
 ################################### SAMPLING HELPERS #####################################
-
 
 def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR, debug=False):
     sampling_dict = {}
@@ -883,8 +957,6 @@ def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR,
     
     return sampling_df
 
-
-
 def is_outcome_modelled_continous(node,target_nodes_dict):
     if 'yc'in target_nodes_dict[node]['data_type'].lower() or 'continous' in target_nodes_dict[node]['data_type'].lower():
         return True
@@ -896,7 +968,6 @@ def is_outcome_modelled_ordinal(node,target_nodes_dict):
         return True
     else:
         return False  
-
 
 def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
     all_outputs = []
@@ -939,9 +1010,6 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=Fals
                 print("[DEBUG] sample batch:", samples[:5])
 
     return torch.cat(all_outputs, dim=0)
-
-
-
 
 def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample,device, debug=False,minmax_dict=None):
     number_of_samples = len(latent_sample)
@@ -1068,8 +1136,6 @@ def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tra
 
     return sampled
 
-
-
 def check_sampled_and_latents(NODE_DIR, debug=True):
     sampling_dir = os.path.join(NODE_DIR, 'sampling')
     root_path = os.path.join(sampling_dir, 'sampled.pt')
@@ -1086,7 +1152,7 @@ def check_sampled_and_latents(NODE_DIR, debug=True):
 
     return True
 
-def provide_latents_for_input_data(
+def provide_latents_for_continous(
     node,
     configuration_dict,
     EXPERIMENT_DIR,
@@ -1149,6 +1215,62 @@ def provide_latents_for_input_data(
 
     return latents_df
 
+def provide_latents_for_ordinal(
+    node,
+    configuration_dict,
+    EXPERIMENT_DIR,
+    data_loader,
+    base_df,
+    verbose=False
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    target_nodes = configuration_dict["nodes"]
+    if not is_outcome_modelled_ordinal(node, target_nodes):
+        raise ValueError("Only for ordinal targets")
+
+    NODE_DIR = os.path.join(EXPERIMENT_DIR, f"{node}")
+    model_path = os.path.join(NODE_DIR, "best_model.pt")
+    if not os.path.exists(model_path):
+        print("[Warning] best_model.pt not found, using initial_model.pt")
+        model_path = os.path.join(NODE_DIR, "initial_model.pt")
+
+    tram_model = get_fully_specified_tram_model(
+        node, configuration_dict, debug=verbose, set_initial_weights=False
+    ).to(device)
+    tram_model.load_state_dict(torch.load(model_path, map_location=device))
+    tram_model.eval()
+
+    # collect all cutpoints
+    all_cutpoints = []
+    with torch.no_grad():
+        for (int_input, shift_list), _ in data_loader:
+            int_input = int_input.to(device)
+            shift_list = [s.to(device) for s in shift_list]
+            out = tram_model(int_input=int_input, shift_input=shift_list)
+            int_in = out["int_out"]
+            shift_in = out["shift_out"]
+            int_trans = transform_intercepts_ordinal(int_in)
+            if shift_in is not None:
+                shift = torch.stack(shift_in, dim=1).sum(dim=1).view(-1)
+                int_trans = int_trans - shift.unsqueeze(1)
+            all_cutpoints.append(int_trans.cpu().numpy())
+
+    # concatenate to single array [N, K+1]
+    all_cutpoints = np.concatenate(all_cutpoints, axis=0)
+
+    # observed categories (assumed 0-based)
+    k_obs = base_df[node].to_numpy().astype(int)
+
+    # lower = θ_k, upper = θ_{k+1}
+    u_low = all_cutpoints[np.arange(len(k_obs)), k_obs]
+    u_upper = all_cutpoints[np.arange(len(k_obs)), k_obs + 1]
+
+    latents_df = pd.DataFrame({
+        node: base_df[node].values,
+        f"{node}_U_lower": u_low,
+        f"{node}_U_upper": u_upper
+    }, index=base_df.index)
+    return latents_df
 
 def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbose=False, min_max_dict=None):
 
@@ -1156,22 +1278,12 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbos
 
     for node in configuration_dict["nodes"]:
         
-        if min_max_dict is not None and node in min_max_dict:
-            min_vals = torch.tensor(min_max_dict[node][0], dtype=torch.float32)
-            max_vals = torch.tensor(min_max_dict[node][1], dtype=torch.float32)
-            min_max = torch.stack([min_vals, max_vals], dim=0)
-        else:
-            min_max=None
-            
-        # Skip ordinal outcomes if not supported
-        if is_outcome_modelled_ordinal(node, configuration_dict["nodes"]):
-            print(f"[INFO] Skipping node '{node}' (ordinal targets not yet supported).")
-            continue
-
+        
         if verbose:
-            print(f"[INFO] Processing node '{node}'")
+                print(f"[INFO] Processing node '{node}'")
+        
+            # Build dataset and dataloader for this node
 
-        # Build dataset and dataloader for this node
         node_dataset = GenericDataset(
             df,
             target_col=node,
@@ -1184,19 +1296,42 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbos
             num_workers=4,
             pin_memory=True
         )
+            
+        # Skip ordinal outcomes if not supported
+        if is_outcome_modelled_ordinal(node, configuration_dict["nodes"]):
+            
+            node_latents_df =provide_latents_for_ordinal(
+                node,
+                configuration_dict,
+                EXPERIMENT_DIR,
+                data_loader=node_loader,
+                base_df=df,
+                verbose=False
+            )
+            all_latents_dfs.append(node_latents_df)
+            
+        
+        elif is_outcome_modelled_continous(node, configuration_dict["nodes"]):
+            
+            if min_max_dict is not None and node in min_max_dict:
+                min_vals = torch.tensor(min_max_dict[node][0], dtype=torch.float32)
+                max_vals = torch.tensor(min_max_dict[node][1], dtype=torch.float32)
+                min_max = torch.stack([min_vals, max_vals], dim=0)
+            else:
+                min_max=None
 
-        # Compute latents
-        node_latents_df = provide_latents_for_input_data(
-            node=node,
-            configuration_dict=configuration_dict,
-            EXPERIMENT_DIR=EXPERIMENT_DIR,
-            data_loader=node_loader,
-            base_df=df,
-            verbose=verbose,
-            min_max=min_max
-        )
+            # Compute latents
+            node_latents_df = provide_latents_for_continous(
+                                                            node=node,
+                                                            configuration_dict=configuration_dict,
+                                                            EXPERIMENT_DIR=EXPERIMENT_DIR,
+                                                            data_loader=node_loader,
+                                                            base_df=df,
+                                                            verbose=verbose,
+                                                            min_max=min_max
+                                                            )
 
-        all_latents_dfs.append(node_latents_df)
+            all_latents_dfs.append(node_latents_df)
 
     # Concatenate all node-specific latent dataframes
     all_latents_df = pd.concat(all_latents_dfs, axis=1)
@@ -1206,7 +1341,6 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbos
 
     print("[INFO] Final latent DataFrame shape:", all_latents_df.shape)
     return all_latents_df
-    
     
 def sample_full_dag(configuration_dict,
                     EXPERIMENT_DIR,
