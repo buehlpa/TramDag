@@ -969,48 +969,6 @@ def is_outcome_modelled_ordinal(node,target_nodes_dict):
     else:
         return False  
 
-#### R equivalent sampling for ordinal target variable
-# def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
-#     all_outputs = []
-#     tram_model.eval()
-#     with torch.no_grad():
-#         for (int_input, shift_list) in sample_loader:
-#             int_input = int_input.to(device)
-#             shift_list = [s.to(device) for s in shift_list]
-
-#             model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
-
-#             # Transform intercepts
-#             int_out = transform_intercepts_ordinal(model_outputs['int_out'])  # shape [B, n_cut]
-#             B = int_out.shape[0]
-
-#             # Handle latent shifts
-#             if model_outputs['shift_out'] is not None:
-#                 shift_total = torch.stack(model_outputs['shift_out'], dim=1).sum(dim=1)  # [B, 1] or [B, n_nodes]
-#                 h = int_out - shift_total
-#             else:
-#                 h = int_out
-
-#             # Logistic CDF
-#             logistic_cdf = torch.sigmoid(h)
-
-#             # PDF as difference of adjacent CDFs
-#             pdf = logistic_cdf[:, 1:] - logistic_cdf[:, :-1]
-
-#             # Logits for categorical sampling
-#             logits = torch.log(pdf + 1e-12)  # stabilize
-
-#             # Sample category indices
-#             samples = torch.distributions.Categorical(logits=logits).sample()  # shape [B]
-
-#             all_outputs.append(samples)
-
-#             if debug:
-#                 print("[DEBUG] int_out:", int_out.shape)
-#                 print("[DEBUG] shift_out:", [s.shape for s in model_outputs['shift_out']] if model_outputs['shift_out'] else None)
-#                 print("[DEBUG] sample batch:", samples[:5])
-
-#     return torch.cat(all_outputs, dim=0)
 
 
 def sample_ordinal_modelled_target(sample_loader, tram_model, latent_sample, device, debug=False):
