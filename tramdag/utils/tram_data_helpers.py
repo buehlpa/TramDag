@@ -969,47 +969,97 @@ def is_outcome_modelled_ordinal(node,target_nodes_dict):
     else:
         return False  
 
-def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
-    all_outputs = []
+#### R equivalent sampling for ordinal target variable
+# def sample_ordinal_modelled_target(sample_loader, tram_model, device, debug=False):
+#     all_outputs = []
+#     tram_model.eval()
+#     with torch.no_grad():
+#         for (int_input, shift_list) in sample_loader:
+#             int_input = int_input.to(device)
+#             shift_list = [s.to(device) for s in shift_list]
+
+#             model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+
+#             # Transform intercepts
+#             int_out = transform_intercepts_ordinal(model_outputs['int_out'])  # shape [B, n_cut]
+#             B = int_out.shape[0]
+
+#             # Handle latent shifts
+#             if model_outputs['shift_out'] is not None:
+#                 shift_total = torch.stack(model_outputs['shift_out'], dim=1).sum(dim=1)  # [B, 1] or [B, n_nodes]
+#                 h = int_out - shift_total
+#             else:
+#                 h = int_out
+
+#             # Logistic CDF
+#             logistic_cdf = torch.sigmoid(h)
+
+#             # PDF as difference of adjacent CDFs
+#             pdf = logistic_cdf[:, 1:] - logistic_cdf[:, :-1]
+
+#             # Logits for categorical sampling
+#             logits = torch.log(pdf + 1e-12)  # stabilize
+
+#             # Sample category indices
+#             samples = torch.distributions.Categorical(logits=logits).sample()  # shape [B]
+
+#             all_outputs.append(samples)
+
+#             if debug:
+#                 print("[DEBUG] int_out:", int_out.shape)
+#                 print("[DEBUG] shift_out:", [s.shape for s in model_outputs['shift_out']] if model_outputs['shift_out'] else None)
+#                 print("[DEBUG] sample batch:", samples[:5])
+
+#     return torch.cat(all_outputs, dim=0)
+
+
+def sample_ordinal_modelled_target(sample_loader, tram_model, latent_sample, device, debug=False):
     tram_model.eval()
+    model_outputs_list = []
+
     with torch.no_grad():
         for (int_input, shift_list) in sample_loader:
             int_input = int_input.to(device)
             shift_list = [s.to(device) for s in shift_list]
+            outputs = tram_model(int_input=int_input, shift_input=shift_list)
+            model_outputs_list.append(outputs)
 
-            model_outputs = tram_model(int_input=int_input, shift_input=shift_list)
+    y_pred = merge_outputs(model_outputs_list, skip_nan=True)
 
-            # Transform intercepts
-            int_out = transform_intercepts_ordinal(model_outputs['int_out'])  # shape [B, n_cut]
-            B = int_out.shape[0]
+    if 'int_out' not in y_pred:
+        raise KeyError("Missing 'int_out' in merged model output.")
+    if 'shift_out' not in y_pred:
+        raise KeyError("Missing 'shift_out' in merged model output.")
 
-            # Handle latent shifts
-            if model_outputs['shift_out'] is not None:
-                shift_total = torch.stack(model_outputs['shift_out'], dim=1).sum(dim=1)  # [B, 1] or [B, n_nodes]
-                h = int_out - shift_total
-            else:
-                h = int_out
+    int_out = transform_intercepts_ordinal(y_pred['int_out'])  # [N, n_cut]
+    shifts = y_pred['shift_out']
 
-            # Logistic CDF
-            logistic_cdf = torch.sigmoid(h)
+    if shifts is not None:
+        shift_total = torch.stack(shifts, dim=1).sum(dim=1) if isinstance(shifts, list) else shifts
+        h = int_out - shift_total
+    else:
+        h = int_out
 
-            # PDF as difference of adjacent CDFs
-            pdf = logistic_cdf[:, 1:] - logistic_cdf[:, :-1]
+    # h includes [-inf, thresholds..., inf]
+    N = h.shape[0]
 
-            # Logits for categorical sampling
-            logits = torch.log(pdf + 1e-12)  # stabilize
+    if latent_sample.shape[0] != N:
+        raise ValueError(f"latent_sample mismatch: got {latent_sample.shape[0]}, expected {N}")
 
-            # Sample category indices
-            samples = torch.distributions.Categorical(logits=logits).sample()  # shape [B]
+    latent_sample = latent_sample.to(device).unsqueeze(1)
 
-            all_outputs.append(samples)
+    # Classification based on latent space thresholds
+    # Class k is selected if h[:, k] < latent <= h[:, k+1]
+    categories = (latent_sample > h[:, :-1]) & (latent_sample <= h[:, 1:])
+    samples = categories.float().argmax(dim=1)
 
-            if debug:
-                print("[DEBUG] int_out:", int_out.shape)
-                print("[DEBUG] shift_out:", [s.shape for s in model_outputs['shift_out']] if model_outputs['shift_out'] else None)
-                print("[DEBUG] sample batch:", samples[:5])
+    if debug:
+        print("[DEBUG] h:", h[:5])
+        print("[DEBUG] latent_sample:", latent_sample[:5])
+        print("[DEBUG] samples:", samples[:5])
 
-    return torch.cat(all_outputs, dim=0)
+    return samples
+
 
 def sample_continous_modelled_target(node, target_nodes_dict, sample_loader, tram_model, latent_sample,device, debug=False,minmax_dict=None):
     number_of_samples = len(latent_sample)
@@ -1559,12 +1609,12 @@ def sample_full_dag(configuration_dict,
             ###*************************************************** Continous Modelled Outcome ************************************************
             
             if is_outcome_modelled_continous(node,target_nodes_dict):
-                sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample,device=device, debug=debug,minmax_dict=minmax_dict)
+                sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample=latent_sample,device=device, debug=debug,minmax_dict=minmax_dict)
                 
             ###*************************************************** Ordinal Modelled Outcome ************************************************
             
             elif is_outcome_modelled_ordinal(node,target_nodes_dict):
-                sampled=sample_ordinal_modelled_target(sample_loader,tram_model,device=device, debug=debug)
+                sampled=sample_ordinal_modelled_target(sample_loader,tram_model,latent_sample=latent_sample,device=device, debug=debug)
             
             else:
                 raise ValueError(f"Unsupported data_type '{target_nodes_dict[node]['data_type']}' for node '{node}' in sampling.")
