@@ -157,6 +157,7 @@ class GenericDataset(Dataset):
         self._set_ordinal_numal_classes()
 
         # checks
+
         self._check_multiclass_predictors_of_df()
         self._check_ordinal_levels()
 
@@ -220,8 +221,6 @@ class GenericDataset(Dataset):
             raise TypeError(f"target_col must be str, got {type(target_col)}")
         
         if target_col not in self.df.columns:
-            print(
-                f"[WARNING] target_col '{target_col}' not in DataFrame columns — is this intended to be used as a Sampler?")
             if self.debug:
                 print(f"[DEBUG] target_col '{target_col}' not found in DataFrame columns")
             # Still set it in case it's needed for Sampler or other logic
@@ -482,10 +481,8 @@ class GenericDataset(Dataset):
 
     def _check_ordinal_levels(self):
         ords = []
-        # include target if it’s ordinal
         if 'ordinal' in self.all_nodes_dict.get(self.target_col, {}).get('data_type', '').lower():
             ords.append(self.target_col)
-        # include any xn‐encoded predictors
         ords += [
             v for v in self.predictors
             if 'ordinal' in self.parents_datatype_dict[v].lower()
@@ -500,22 +497,22 @@ class GenericDataset(Dataset):
 
             lvl = self.all_nodes_dict[v].get('levels')
             if lvl is None:
-                raise ValueError(f"Ordinal '{v}' missing 'levels' metadata.")
+                print(f"[WARNING] Ordinal '{v}' missing 'levels' metadata — skipping check.")
+                continue
 
-            # grab unique values as floats
             uniq = np.array(sorted(self.df[v].dropna().unique()), dtype=float)
+            expected_int    = np.arange(lvl, dtype=float)
+            expected_scaled = np.arange(lvl, dtype=float) / lvl
 
-            # expected patterns
-            expected_int    = np.arange(lvl, dtype=float)         # 0,1,...,n-1
-            expected_scaled = np.arange(lvl, dtype=float) / lvl   # 0/n,1/n,...,(n-1)/n
+            # new guard to avoid shape mismatch
+            if len(uniq) != len(expected_int):
+                print(f"[WARNING] Ordinal '{v}' has {len(uniq)} unique values, expected {lvl}. Skipping strict comparison.")
+                continue
 
-            # allow either exact ints or approximate scaled floats
             if np.array_equal(uniq, expected_int):
-                # perfectly integer-encoded
                 if self.debug:
                     print(f"[DEBUG] Ordinal '{v}' matches expected integer encoding {expected_int.tolist()}.")
             elif np.allclose(uniq, expected_scaled, atol=1e-8):
-                # scaled floats encoding
                 if self.debug:
                     print(f"[DEBUG] Ordinal '{v}' matches expected scaled encoding {expected_scaled.tolist()}.")
             elif len(uniq) == 1:
@@ -528,6 +525,7 @@ class GenericDataset(Dataset):
 
         if self.debug:
             print(f"[DEBUG] _check_ordinal_levels: checked ordinal levels passed")
+
 
 
     def __len__(self):

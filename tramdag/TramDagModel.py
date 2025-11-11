@@ -31,7 +31,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
 from .utils.tram_model_helpers import train_val_loop,evaluate_tramdag_model, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
-from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,is_outcome_modelled_ordinal,plot_cutpoints_with_logistic,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal,save_cutpoints_with_logistic
+from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,sample_full_dag_v2, is_outcome_modelled_ordinal,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal
 from .utils.continous_helpers import transform_intercepts_continous
 from .utils.ordinal_helpers import transform_intercepts_ordinal
 
@@ -42,14 +42,17 @@ from .TramDagDataset import TramDagDataset
 
 
 
-## TODO
-# at sampling implement counterfactual with sampling between c1 and c2  -> generate distribution for ordinal vars
 ## TODO complex shifts fucniton display
 
 ## TODO ordinal cutpoints trafo plot
 ## TODO documentation with docusaurus
 ## TODO psuh latest version to pypi
 
+## TODO check the cutpoints >= <= for correct cutoffs
+
+## TODO what happens if parents are proba but node is continous?
+
+## TODO solve visualizatin for probabalistic samples
 
 class TramDagModel:
     
@@ -1206,7 +1209,7 @@ class TramDagModel:
             print(f"[DEBUG] sample(): device: {self.device}")
 
         # ---- perform sampling ----
-        sampled_by_node, latents_by_node = sample_full_dag(
+        sampled_by_node, latents_by_node = sample_full_dag_v2(
             configuration_dict=self.cfg.conf_dict,
             EXPERIMENT_DIR=EXPERIMENT_DIR,
             device=self.device,
@@ -1299,33 +1302,12 @@ class TramDagModel:
         hist_true_color: str = "blue",
         hist_est_color: str = "orange",
         figsize: tuple = (14, 5),
-        
     ):
-        """
-        Compare true vs sampled distributions for each node.
-
-        Parameters
-        ----------
-        df : pd.DataFrame
-            DataFrame with true observed values.
-        bins : int, optional
-            Number of bins for histograms (continuous case). Default = 100.
-        hist_true_color : str, optional
-            Color for true data histogram/bar. Default = "blue".
-        hist_est_color : str, optional
-            Color for sampled data histogram/bar. Default = "orange".
-        figsize : tuple, optional
-            Figure size for each node. Default = (14, 5).
-        sampled : dict, optional
-            Optional dictionary with preloaded samples per node.
-            If provided, no loading from disk is performed.
-        """
-
         target_nodes = self.cfg.conf_dict["nodes"]
         experiment_dir = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        plot_list=variable if variable is not None else target_nodes
+        plot_list = variable if variable is not None else target_nodes
 
         for node in plot_list:
             # Load sampled data
@@ -1347,6 +1329,10 @@ class TramDagModel:
                     print(f"[ERROR] Could not load {sample_path}: {e}")
                     continue
 
+            # If logits/probabilities per sample, take argmax
+            if sampled_vals.ndim == 2:
+                sampled_vals = np.argmax(sampled_vals, axis=1)
+
             sampled_vals = sampled_vals[np.isfinite(sampled_vals)]
 
             if node not in df.columns:
@@ -1363,22 +1349,10 @@ class TramDagModel:
             fig, axs = plt.subplots(1, 2, figsize=figsize)
 
             if is_outcome_modelled_continous(node, target_nodes):
-                axs[0].hist(
-                    true_vals,
-                    bins=bins,
-                    density=True,
-                    alpha=0.6,
-                    color=hist_true_color,
-                    label=f"True {node}",
-                )
-                axs[0].hist(
-                    sampled_vals,
-                    bins=bins,
-                    density=True,
-                    alpha=0.6,
-                    color=hist_est_color,
-                    label="Sampled",
-                )
+                axs[0].hist(true_vals, bins=bins, density=True, alpha=0.6,
+                            color=hist_true_color, label=f"True {node}")
+                axs[0].hist(sampled_vals, bins=bins, density=True, alpha=0.6,
+                            color=hist_est_color, label="Sampled")
                 axs[0].set_xlabel("Value")
                 axs[0].set_ylabel("Density")
                 axs[0].set_title(f"Histogram overlay for {node}")
@@ -1394,36 +1368,31 @@ class TramDagModel:
             elif is_outcome_modelled_ordinal(node, target_nodes):
                 unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled_vals))
                 unique_vals = np.sort(unique_vals)
-
                 true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
                 sampled_counts = np.array([(sampled_vals == val).sum() for val in unique_vals])
 
                 axs[0].bar(unique_vals - 0.2, true_counts / true_counts.sum(),
-                           width=0.4, color=hist_true_color, alpha=0.7, label="True")
+                        width=0.4, color=hist_true_color, alpha=0.7, label="True")
                 axs[0].bar(unique_vals + 0.2, sampled_counts / sampled_counts.sum(),
-                           width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
-
+                        width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
                 axs[0].set_xticks(unique_vals)
                 axs[0].set_xlabel("Ordinal Level")
                 axs[0].set_ylabel("Relative Frequency")
                 axs[0].set_title(f"Ordinal bar plot for {node}")
                 axs[0].legend()
                 axs[0].grid(True, ls="--", alpha=0.4)
-
                 axs[1].axis("off")
 
             else:
                 unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled_vals))
                 unique_vals = sorted(unique_vals, key=str)
-
                 true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
                 sampled_counts = np.array([(sampled_vals == val).sum() for val in unique_vals])
 
                 axs[0].bar(np.arange(len(unique_vals)) - 0.2, true_counts / true_counts.sum(),
-                           width=0.4, color=hist_true_color, alpha=0.7, label="True")
+                        width=0.4, color=hist_true_color, alpha=0.7, label="True")
                 axs[0].bar(np.arange(len(unique_vals)) + 0.2, sampled_counts / sampled_counts.sum(),
-                           width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
-
+                        width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
                 axs[0].set_xticks(np.arange(len(unique_vals)))
                 axs[0].set_xticklabels(unique_vals, rotation=45)
                 axs[0].set_xlabel("Category")
@@ -1431,7 +1400,6 @@ class TramDagModel:
                 axs[0].set_title(f"Categorical bar plot for {node}")
                 axs[0].legend()
                 axs[0].grid(True, ls="--", alpha=0.4)
-
                 axs[1].axis("off")
 
             plt.tight_layout()

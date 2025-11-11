@@ -562,6 +562,12 @@ def add_r_style_confidence_bands(ax, sample, dist=logistic, confidence=0.95, sim
     ax.fill_between(theo_q, lower, upper, color='gray', alpha=0.3, label=f'{int(confidence*100)}% CI')
     ax.legend()
    
+import os
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+from statsmodels.graphics.gofplots import qqplot_2samples
+
 def show_samples_vs_true(
     df,
     target_nodes,
@@ -586,6 +592,9 @@ def show_samples_vs_true(
             print(f"[ERROR] Could not load {sample_path}: {e}")
             continue
 
+        if sampled.ndim == 2:
+            sampled = np.argmax(sampled, axis=1)
+
         sampled = sampled[np.isfinite(sampled)]
 
         if node not in df.columns:
@@ -602,23 +611,10 @@ def show_samples_vs_true(
         fig, axs = plt.subplots(1, 2, figsize=figsize)
 
         if is_outcome_modelled_continous(node, target_nodes):
-            # Continuous: histogram + QQ
-            axs[0].hist(
-                true_vals,
-                bins=bins,
-                density=True,
-                alpha=0.6,
-                color=hist_true_color,
-                label=f"True {node}",
-            )
-            axs[0].hist(
-                sampled,
-                bins=bins,
-                density=True,
-                alpha=0.6,
-                color=hist_est_color,
-                label="Sampled",
-            )
+            axs[0].hist(true_vals, bins=bins, density=True, alpha=0.6,
+                        color=hist_true_color, label=f"True {node}")
+            axs[0].hist(sampled, bins=bins, density=True, alpha=0.6,
+                        color=hist_est_color, label="Sampled")
             axs[0].set_xlabel("Value")
             axs[0].set_ylabel("Density")
             axs[0].set_title(f"Histogram overlay for {node}")
@@ -632,10 +628,8 @@ def show_samples_vs_true(
             axs[1].grid(True, ls="--", alpha=0.4)
 
         elif is_outcome_modelled_ordinal(node, target_nodes):
-            # Ordinal: bar plot only
             unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
             unique_vals = np.sort(unique_vals)
-
             true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
             sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
 
@@ -643,21 +637,17 @@ def show_samples_vs_true(
                        width=0.4, color=hist_true_color, alpha=0.7, label="True")
             axs[0].bar(unique_vals + 0.2, sampled_counts / sampled_counts.sum(),
                        width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
-
             axs[0].set_xticks(unique_vals)
             axs[0].set_xlabel("Ordinal Level")
             axs[0].set_ylabel("Relative Frequency")
             axs[0].set_title(f"Ordinal bar plot for {node}")
             axs[0].legend()
             axs[0].grid(True, ls="--", alpha=0.4)
-
-            axs[1].axis("off")  # No QQ for ordinal
+            axs[1].axis("off")
 
         else:
-            # Fallback: assume categorical
             unique_vals = np.union1d(np.unique(true_vals), np.unique(sampled))
             unique_vals = sorted(unique_vals, key=str)
-
             true_counts = np.array([(true_vals == val).sum() for val in unique_vals])
             sampled_counts = np.array([(sampled == val).sum() for val in unique_vals])
 
@@ -665,7 +655,6 @@ def show_samples_vs_true(
                        width=0.4, color=hist_true_color, alpha=0.7, label="True")
             axs[0].bar(np.arange(len(unique_vals)) + 0.2, sampled_counts / sampled_counts.sum(),
                        width=0.4, color=hist_est_color, alpha=0.7, label="Sampled")
-
             axs[0].set_xticks(np.arange(len(unique_vals)))
             axs[0].set_xticklabels(unique_vals, rotation=45)
             axs[0].set_xlabel("Category")
@@ -673,11 +662,11 @@ def show_samples_vs_true(
             axs[0].set_title(f"Categorical bar plot for {node}")
             axs[0].legend()
             axs[0].grid(True, ls="--", alpha=0.4)
-
             axs[1].axis("off")
 
         plt.tight_layout()
         plt.show()
+
         
 def show_latent_sampling(EXPERIMENT_DIR,conf_dict):
     for node in conf_dict.keys():
@@ -815,9 +804,9 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, latent_sample, dev
     samples = categories.float().argmax(dim=1)
 
     if debug:
-        print("[DEBUG] h:", h[:5])
-        print("[DEBUG] latent_sample:", latent_sample[:5])
-        print("[DEBUG] samples:", samples[:5])
+        print("[DEBUG] sample_ordinal_modelled_target: h:", h[:5])
+        print("[DEBUG] sample_ordinal_modelled_target: latent_sample:", latent_sample[:5])
+        print("[DEBUG] sample_ordinal_modelled_target: samples:", samples[:5])
 
     return samples
 
@@ -1099,7 +1088,8 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbos
         node_dataset = GenericDataset(
             df,
             target_col=node,
-            target_nodes=configuration_dict["nodes"]
+            target_nodes=configuration_dict["nodes"],
+            skip_checks=True
         )
         node_loader = DataLoader(
             node_dataset,
@@ -1403,3 +1393,544 @@ def sample_full_dag(configuration_dict,
         print("[INFO] DAG sampling completed successfully for all nodes.")
 
     return sampled_by_node, latents_by_node
+
+
+
+######## new fct for counterfactuals
+
+
+def sample_full_dag_v2(configuration_dict,
+                    EXPERIMENT_DIR,
+                    device,
+                    do_interventions={},
+                    predefined_latent_samples_df: pd.DataFrame = None,
+                    number_of_samples: int = 10_000,
+                    number_of_counterfactual_samples: int=1_000,
+                    batch_size: int = 256,
+                    delete_all_previously_sampled: bool = True,
+                    verbose: bool = True,
+                    debug: bool = False,
+                    minmax_dict=None,
+                    use_initial_weights_for_sampling: bool = False):
+    """
+    Sample values for all nodes in a DAG given trained TRAM models, respecting
+    parental ordering. Supports both generative sampling (new U's) and
+    reconstruction sampling (predefined U's), as well as node-level interventions.
+
+    Parameters
+    ----------
+    configuration_dict : dict
+        Full experiment configuration. Must contain a "nodes" entry where each node
+        has metadata including:
+            - 'node_type': str, either 'source' or other
+            - 'parents': list of parent node names
+            - 'min': float, minimum allowed value for the node
+            - 'max': float, maximum allowed value for the node
+            - 'data_type': str, e.g. "continuous" or "ordinal"
+    EXPERIMENT_DIR : str
+        Base directory where per-node models and sampling results are stored.
+    device : torch.device
+        Device for model evaluation (e.g., 'cuda' or 'cpu').
+    do_interventions : dict, optional
+        Mapping of node names to fixed values. For intervened nodes, the model is
+        bypassed and all samples are set to the specified value. Example:
+        {'x1': 1.0}.
+    predefined_latent_samples_df : pd.DataFrame, optional
+        DataFrame of predefined latent variables (U's) for reconstruction. Must
+        contain one column per node in the form "{node}_U". If provided, the number
+        of samples is set to the number of rows in this DataFrame.
+    number_of_samples : int, default=10_000
+        Number of samples to draw per node when no predefined latent samples are given.
+    batch_size : int, default=32
+        Batch size for DataLoader evaluation during sampling.
+    delete_all_previously_sampled : bool, default=True
+        If True, deletes all existing sampled.pt/latents.pt files before starting.
+    verbose : bool, default=True
+        If True, print progress information.
+    debug : bool, default=False
+        If True, print detailed debug information for troubleshooting.
+
+    Returns
+    -------
+    sampled_by_node : dict
+        Mapping from node name to a tensor of sampled values (on CPU).
+    latents_by_node : dict
+        Mapping from node name to the latent variables (U's) used to generate
+        those samples (on CPU).
+
+    Notes
+    -----
+    - The function respects DAG ordering by ensuring parents are sampled before
+      their children.
+    - In generative mode (no predefined_latent_samples_df), latent U's are sampled
+      from a standard logistic distribution and parents are taken from sampled.pt.
+    - In reconstruction mode (with predefined_latent_samples_df), latent U's are
+      read from the DataFrame, but parent values are still loaded from sampled.pt
+      unless explicitly overridden upstream.
+    - Models are loaded from "best_model.pt" in each node's directory and applied
+      in eval mode with no gradient tracking.
+    - Continuous outcomes are sampled via vectorized root finding
+      (Chandrupatla's algorithm), while ordinal outcomes use categorical sampling.
+    """
+    if verbose or debug:
+        print(f"[INFO] Starting full DAG sampling with {number_of_samples} samples per node.")
+        if do_interventions:
+            print(f"[INFO] Interventions specified for nodes: {list(do_interventions.keys())}")
+            
+    if debug:
+        print('[DEBUG] sample_full_dag: device:', device)
+        
+        
+    if predefined_latent_samples_df is not None:
+        number_of_samples = len(predefined_latent_samples_df)
+        if verbose or debug:
+            print(f'[INFO] Using predefined latents samples from dataframe -> therefore n_samples is set to the number of rows in the dataframe: {len(predefined_latent_samples_df)}')
+    
+    
+    
+    target_nodes_dict=configuration_dict["nodes"]
+
+    # Collect results for direct use in notebooks
+    sampled_by_node = {}
+    latents_by_node = {}
+
+
+    if delete_all_previously_sampled:
+        if verbose or debug:
+            print("[INFO] Deleting all previously sampled data.")
+        delete_all_samplings(target_nodes_dict, EXPERIMENT_DIR)
+    
+    
+    #### FOLLOWING ALONG THE CAUSAL ORDERING OF THE SPECIFICATION IN THE TARGET_NODES_DICT:
+    for node in target_nodes_dict: # for each node in the target_nodes_dict
+                    
+        print(f'\n----*----------*-------------*--------Sample Node: {node} ------------*-----------------*-------------------*--') 
+        
+        ## 1. Paths collect samplings for each node in a subdirectory
+        NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
+        SAMPLING_DIR = os.path.join(NODE_DIR, 'sampling')
+        os.makedirs(SAMPLING_DIR, exist_ok=True)
+        SAMPLED_PATH = os.path.join(SAMPLING_DIR, "sampled.pt")
+        LATENTS_PATH = os.path.join(SAMPLING_DIR, "latents.pt")
+        
+        ## 2. Check if the parents are already sampled -> must be given due to the causal ordering
+        for parent in target_nodes_dict[node]['parents']:
+            parent_dir = os.path.join(EXPERIMENT_DIR, parent)
+            try:
+                check_sampled_and_latents(parent_dir, debug=debug)
+            except FileNotFoundError:
+                if verbose or debug:
+                    print(f"[INFO] Skipping {node} as parent '{parent}' is not sampled yet.")
+
+        
+        ## INTERVENTION, if node is to be intervened on , data is just saved
+        if do_interventions and node in do_interventions.keys():
+                # For interventions make all the values the same for 
+                intervention_value = do_interventions[node]
+                if verbose or debug:
+                    print(f"[INFO] Applying intervention for node '{node}' with value {intervention_value}")
+                intervention_vals = torch.full((number_of_samples,), intervention_value)
+                torch.save(intervention_vals, SAMPLED_PATH)
+                
+                ### dummy latents jsut for the check , not needed
+                dummy_latents = torch.full((number_of_samples,), float('nan'))  
+                torch.save(dummy_latents, LATENTS_PATH)
+                
+                # Store for immediate use
+                sampled_by_node[node] = intervention_vals
+                latents_by_node[node] = dummy_latents
+                if verbose or debug:
+                    print(f'[INFO] Interventional data for node {node} is saved')
+                continue 
+
+        ##### NO INTERVENTION, based on the sampled data from the parents the latents for each node the observational distribution is generated    
+        else:#TODO write down all cases for sampling here
+
+            #################################### load model and weigths 
+            tram_model=load_tram_model_weights(node,configuration_dict, NODE_DIR,debug=False,verbose=False, device='cpu',  use_initial_weights_for_sampling=False)
+            
+            
+            #### latens and laten intervals
+            has_interval_latents = (
+                predefined_latent_samples_df is not None
+                and f"{node}_U_lower" in predefined_latent_samples_df.columns
+                and f"{node}_U_upper" in predefined_latent_samples_df.columns
+            )
+
+            if (
+                predefined_latent_samples_df is not None
+                and f"{node}_U" in predefined_latent_samples_df.columns
+                and not has_interval_latents
+            ):
+                predefinded_sample_name = f"{node}_U"
+                predefinded_sample = predefined_latent_samples_df[predefinded_sample_name].values
+                if verbose or debug:
+                    print(f"[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}")
+                latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
+
+            else:
+                if verbose or debug:
+                    if has_interval_latents:
+                        print(f"[INFO] Detected '{node}_U_lower' and '{node}_U_upper' — switching to counterfactual logistic sampling mode.")
+                        # latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
+                    else:
+                        print(f"[INFO] Sampling new latents for node {node} from standard logistic distribution")
+                        
+                        latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
+            
+            
+            ###################################################### Counterfactual logic #########################################
+            
+            # NO Probablistic parents samplings
+            if not has_proba_parents(target_nodes_dict,node,debug=debug,EXPERIMENT_DIR=EXPERIMENT_DIR):
+                if not has_interval_latents:
+                    sampled=det_parents_det_node_sampling(node=node,
+                                                          device=device,
+                                                          target_nodes_dict=target_nodes_dict,
+                                                          number_of_samples=number_of_counterfactual_samples,
+                                                          batch_size=batch_size,
+                                                          tram_model=tram_model,
+                                                          latent_sample=latent_sample,
+                                                          debug=debug,
+                                                          minmax_dict=minmax_dict,
+                                                          EXPERIMENT_DIR=EXPERIMENT_DIR)
+                if has_interval_latents:
+                    sampled=det_parents_proba_node_sampling(node=node,
+                                                            device=device,
+                                                            target_nodes_dict=target_nodes_dict,
+                                                            number_of_samples=number_of_counterfactual_samples,
+                                                            batch_size=batch_size,
+                                                            tram_model=tram_model,
+                                                            predefined_latent_samples_df=predefined_latent_samples_df,
+                                                            debug=debug,
+                                                            EXPERIMENT_DIR=EXPERIMENT_DIR)
+            
+            # Probabalistic paretns sampling 
+            if has_proba_parents(target_nodes_dict,node,debug=debug,EXPERIMENT_DIR=EXPERIMENT_DIR):
+                if has_interval_latents:
+                    sampled=proba_parents_proba_node_sampling(node=node,
+                                                              device=device,
+                                                              target_nodes_dict=target_nodes_dict,
+                                                              number_of_samples=number_of_counterfactual_samples,
+                                                              batch_size=batch_size,
+                                                              tram_model=tram_model,
+                                                              predefined_latent_samples_df=predefined_latent_samples_df,
+                                                              debug=debug,
+                                                              EXPERIMENT_DIR=EXPERIMENT_DIR)  
+                if not has_interval_latents:
+                    sampled=proba_parents_det_node_sampling(node=node,
+                                                            device=device,
+                                                            target_nodes_dict=target_nodes_dict,
+                                                            number_of_samples=number_of_counterfactual_samples,
+                                                            batch_size=batch_size,
+                                                            tram_model=tram_model,
+                                                            predefined_latent_samples_df=predefined_latent_samples_df,
+                                                            latent_sample=latent_sample,
+                                                            debug=debug,
+                                                            minmax_dict=minmax_dict,
+                                                            EXPERIMENT_DIR=EXPERIMENT_DIR)
+                    
+                
+            ###*************************************************** Saving the latenst and sampled  ************************************************
+            if torch.isnan(sampled).any():
+                print(f"[WARNING] NaNs detected in sampled output for node '{node}'")
+                
+            torch.save(sampled, SAMPLED_PATH)
+            torch.save(latent_sample, LATENTS_PATH)
+            
+            # Store CPU copies for immediate use
+            sampled_by_node[node] = sampled.detach().cpu()
+            latents_by_node[node] = latent_sample.detach().cpu()
+            
+            if verbose or debug:
+                print(f"[INFO] Completed sampling for node '{node}'")
+            
+        
+    if verbose or debug:
+        print("[INFO] DAG sampling completed successfully for all nodes.")
+
+    return sampled_by_node, latents_by_node
+
+
+def det_parents_det_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,latent_sample,debug,minmax_dict,EXPERIMENT_DIR,device):
+    
+        # create dataframe from sampled parents + dummy if no parents 
+        sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
+        
+        sample_dataset = GenericDataset(sampled_df,target_col=node,
+                                            target_nodes=target_nodes_dict,
+                                            return_intercept_shift=True,
+                                            return_y=False,
+                                            debug=debug)
+        
+        sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=False,num_workers=4, pin_memory=True)
+        
+        ###*************************************************** Continous Modelled Outcome ************************************************
+        
+        if is_outcome_modelled_continous(node,target_nodes_dict):
+            sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample=latent_sample,device=device, debug=debug,minmax_dict=minmax_dict)
+            
+        ###*************************************************** Ordinal Modelled Outcome ************************************************
+        
+        elif is_outcome_modelled_ordinal(node,target_nodes_dict):
+            sampled=sample_ordinal_modelled_target(sample_loader,tram_model,latent_sample=latent_sample,device=device, debug=debug)
+        
+        else:
+            raise ValueError(f"Unsupported data_type '{target_nodes_dict[node]['data_type']}' for node '{node}' in sampling.")
+        return sampled
+
+def det_parents_proba_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
+    if debug:
+            print(f"[DEBUG] -------det_parents_proba_node_sampling: start sampling for {node}---------")    
+    sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
+    counterfactual_frequency=[]
+    for i ,_ in enumerate(predefined_latent_samples_df[f"{node}"]):
+        ### Sampling from truncated logistic
+        u_lower=predefined_latent_samples_df.iloc[i][f"{node}_U_lower"]
+        u_upper=predefined_latent_samples_df.iloc[i][f"{node}_U_upper"]
+        latents_from_range=standart_logistic_truncated(u_lower, u_upper, number_of_samples)
+        # save the sampled latens to csv
+        RANGED_LATENT_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_range_obs_{i}.csv')
+        # save to csv
+        os.makedirs(os.path.dirname(RANGED_LATENT_PATH), exist_ok=True)
+        np.savetxt(RANGED_LATENT_PATH, latents_from_range, delimiter=",")
+
+        # repeat the i-th row number_of_samples times
+        df_rep_i = sample_df.iloc[np.repeat(i, number_of_samples)].reset_index(drop=True)
+
+
+        sample_dataset = GenericDataset(df_rep_i,target_col=node,
+                                            target_nodes=target_nodes_dict,
+                                            return_intercept_shift=True,
+                                            return_y=False,
+                                            debug=debug)
+        sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=False,num_workers=4, pin_memory=True)  
+        
+        
+        
+        
+        if is_outcome_modelled_ordinal(node,target_nodes_dict):
+            range_sampled=sample_ordinal_modelled_target(sample_loader,tram_model,latent_sample=torch.tensor(latents_from_range, dtype=torch.float32).to(device),device=device, debug=debug)
+        
+
+        RANGED_SAMPLED_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_sampled_obs_{i}.csv')
+        os.makedirs(os.path.dirname(RANGED_SAMPLED_PATH), exist_ok=True)
+        if isinstance(range_sampled, torch.Tensor):
+            range_sampled = range_sampled.detach().cpu().squeeze().numpy()
+            range_sampled = np.atleast_1d(range_sampled)
+            np.savetxt(RANGED_SAMPLED_PATH, range_sampled, delimiter=",")
+
+        # frequency count of how many times each category was sampled as proba distributin e.g. 3 classes: [0.1,0.3,0.6]     
+        
+        levels = target_nodes_dict[node]['levels']
+        counts = np.bincount(range_sampled, minlength=levels)
+        frequencies = counts / counts.sum()
+        counterfactual_frequency.append(frequencies)
+    if debug:
+        print(f"[DEBUG] saved counterfactual range latents to e.g. {RANGED_LATENT_PATH}")
+        print(f"[DEBUG] saved counterfactual sampling to e.g. {RANGED_SAMPLED_PATH}")
+        print(f"[DEBUG]  Counterfactual frequencies: {counterfactual_frequency}")
+        print(f"[DEBUG] -------det_parents_proba_node_sampling: sampling completed for {node}-------")    
+    
+    return torch.Tensor(np.array(counterfactual_frequency))
+
+# TODO validiate sampling
+def proba_parents_proba_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
+    sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
+    counterfactual_frequency=[]
+    parents=target_nodes_dict[node]['parents']
+    counterfactual_frequency=[]
+    for i ,_ in enumerate(predefined_latent_samples_df[f"{node}"]):
+                u_lower=predefined_latent_samples_df.iloc[i][f"{node}_U_lower"]
+                u_upper=predefined_latent_samples_df.iloc[i][f"{node}_U_upper"]
+                latents_from_range=standart_logistic_truncated(u_lower, u_upper, number_of_samples)
+                RANGED_LATENT_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_range_obs_{i}.csv')
+                # save to csv
+                os.makedirs(os.path.dirname(RANGED_LATENT_PATH), exist_ok=True)
+                np.savetxt(RANGED_LATENT_PATH, latents_from_range, delimiter=",")
+                df_rep_i=load_parents_with_range(sample_df, i, parents, number_of_samples, EXPERIMENT_DIR, debug=False)
+
+                sample_dataset = GenericDataset(df_rep_i,target_col=node,
+                                                    target_nodes=target_nodes_dict,
+                                                    return_intercept_shift=True,
+                                                    return_y=False,
+                                                    debug=debug)
+                sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=False,num_workers=4, pin_memory=True)  
+                
+                
+                
+                if is_outcome_modelled_ordinal(node,target_nodes_dict):
+                    range_sampled=sample_ordinal_modelled_target(sample_loader,tram_model,latent_sample=torch.tensor(latents_from_range, dtype=torch.float32).to(device),device=device, debug=debug)
+                
+                RANGED_SAMPLED_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_sampled_obs_{i}.csv')
+                os.makedirs(os.path.dirname(RANGED_SAMPLED_PATH), exist_ok=True)
+                if isinstance(range_sampled, torch.Tensor):
+                    range_sampled = range_sampled.detach().cpu().squeeze().numpy()
+                    range_sampled = np.atleast_1d(range_sampled)
+                    np.savetxt(RANGED_SAMPLED_PATH, range_sampled, delimiter=",")
+                # frequency count of how many times each category was sampled as proba distributin e.g. 3 classes: [0.1,0.3,0.6]     
+                levels = target_nodes_dict[node]['levels']
+                counts = np.bincount(range_sampled, minlength=levels)
+                frequencies = counts / counts.sum()
+                counterfactual_frequency.append(frequencies)
+    if debug:
+        print(f"[DEBUG] saved counterfactual range latents to e.g. {RANGED_LATENT_PATH}")
+        print(f"[DEBUG] saved counterfactual sampling to e.g. {RANGED_SAMPLED_PATH}")
+        print(f"[DEBUG] proba_parents_proba_node_sampling: Counterfactual frequencies: {counterfactual_frequency}")
+        print(f"[DEBUG]------- proba_parents_proba_node_sampling: sampling completed for {node}-------")    
+                
+    return torch.Tensor(np.array(counterfactual_frequency))
+
+
+# TODO solve sampling here
+def proba_parents_det_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,latent_sample,debug,minmax_dict,EXPERIMENT_DIR):
+    
+    
+    sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
+    counterfactual_frequency=[]
+    parents=target_nodes_dict[node]['parents']
+    counterfactual_frequency=[]
+    if debug:
+        print(f"[DEBUG] starting proba_parents_det_node_sampling for node {node} with {number_of_samples} samples")
+    for i ,_ in enumerate(predefined_latent_samples_df[f"{node}"]):
+
+                df_rep_i=load_parents_with_range(sample_df, i, parents, number_of_samples, EXPERIMENT_DIR, debug=False)
+
+                sample_dataset = GenericDataset(df_rep_i,target_col=node,
+                                                    target_nodes=target_nodes_dict,
+                                                    return_intercept_shift=True,
+                                                    return_y=False,
+                                                    debug=debug)
+                sample_loader = DataLoader(sample_dataset, batch_size=batch_size, shuffle=False,num_workers=4, pin_memory=True)  
+                
+                
+                if is_outcome_modelled_continous(node,target_nodes_dict):
+                    range_sampled=sample_continous_modelled_target(node,target_nodes_dict,sample_loader,tram_model,latent_sample=latent_sample,device=device, debug=debug,minmax_dict=minmax_dict)
+                     
+                if is_outcome_modelled_ordinal(node,target_nodes_dict):
+                    range_sampled=sample_ordinal_modelled_target(sample_loader,tram_model,latent_sample=latents,device=device, debug=debug)
+                
+                RANGED_SAMPLED_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_sampled_obs_{i}.csv')
+                os.makedirs(os.path.dirname(RANGED_SAMPLED_PATH), exist_ok=True)
+                if isinstance(range_sampled, torch.Tensor):
+                    range_sampled = range_sampled.detach().cpu().squeeze().numpy()
+                    range_sampled = np.atleast_1d(range_sampled)
+                    np.savetxt(RANGED_SAMPLED_PATH, range_sampled, delimiter=",")
+
+                # frequency count of how many times each category was sampled as proba distributin e.g. 3 classes: [0.1,0.3,0.6]     
+                levels = target_nodes_dict[node]['levels']
+                counts = np.bincount(range_sampled, minlength=levels)
+                frequencies = counts / counts.sum()
+                counterfactual_frequency.append(frequencies)
+    if debug:
+        print(f"[DEBUG] saved counterfactual sampling to e.g. {RANGED_SAMPLED_PATH}")
+        print(f"[DEBUG] Counterfactual frequencies: {counterfactual_frequency}")
+        print(f"[DEBUG] -------proba_parents_det_node_sampling: sampling completed for {node}-------")    
+
+                # TODO what happens if node is continous and has porba parents
+    return torch.Tensor(np.array(counterfactual_frequency))
+
+
+def has_proba_parents(target_nodes_dict,node,debug=False,EXPERIMENT_DIR=None):
+        for parent in target_nodes_dict[node]['parents']:
+            path = os.path.join(EXPERIMENT_DIR, parent, "sampling", "sampled.pt")
+            if os.path.exists(path):
+                try:
+                    sampled=torch.load(path, map_location="cpu")
+                    if sampled.ndim > 1 and sampled.shape[1] > 1:
+                        if debug:
+                            print(f"[DEBUG] has_proba_parents:  '{parent}' (shape {tuple(sampled.shape)}) - looks like probabilities")
+                        return True
+                    else:
+                        continue
+                except FileNotFoundError:
+                    if debug:
+                        print(f"[DEBUG] has_proba_parents: Skipping {node} as parent '{parent}' is not sampled yet.")
+        return False
+
+
+def load_parents_with_range(df_sampled, i, parents, number_of_samples, EXPERIMENT_DIR, debug=False):
+    # Check index validity
+    if i < 0 or i >= len(df_sampled):
+        raise IndexError(f"Index {i} out of bounds for df_sampled with {len(df_sampled)} rows.")
+    
+    # Create repeated DataFrame
+    df_range = pd.DataFrame(
+        np.tile(df_sampled.iloc[i].values, (number_of_samples, 1)),
+        columns=df_sampled.columns
+    )
+
+    # For missing parent variables, load sampled ranges from files
+    for parent in parents:
+        if parent not in df_range.columns:
+            path = os.path.join(EXPERIMENT_DIR, parent, "sampling", f"range_samples_{i}_.csv")
+            
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Missing file: {path}")
+            
+            df_parent = pd.read_csv(path)
+            
+            if len(df_parent) != number_of_samples:
+                raise ValueError(
+                    f"File {path} has {len(df_parent)} samples, expected {number_of_samples}."
+                )
+            
+            if df_parent.shape[1] != 1:
+                raise ValueError(
+                    f"File {path} has {df_parent.shape[1]} columns, expected exactly 1."
+                )
+            
+            df_range[parent] = df_parent.iloc[:, 0].values
+    
+    if debug:
+        print(f"[DEBUG] Loaded row {i} -> {len(df_range)} samples")
+        print(f"[DEBUG] Columns: {list(df_range.columns)}")
+
+    return df_range
+    pass
+
+
+def standart_logistic_truncated(u_lower, u_upper, size):
+    # sample n in standard logistic and truncate to [u_lower, u_upper] resample if out of bounds:
+    samples = []
+    while len(samples) < size:
+        u = logistic.rvs(size=size - len(samples))
+        u_trunc = u[(u >= u_lower) & (u <= u_upper)]
+        samples.extend(u_trunc)
+    return np.array(samples[:size])
+
+def load_tram_model_weights(node,configuration_dict, NODE_DIR,debug=False,verbose=False, device='cpu',  use_initial_weights_for_sampling=False):
+
+            tram_model = get_fully_specified_tram_model(
+                node, configuration_dict, debug=debug, device=device, verbose=verbose
+            ).to(device)
+
+            BEST_MODEL_PATH = os.path.join(NODE_DIR, "best_model.pt")
+            INIT_MODEL_PATH = os.path.join(NODE_DIR, "initial_model.pt")
+
+            try:
+                if use_initial_weights_for_sampling:
+                    if verbose or debug:
+                        print(f"[INFO] Using initial weights for sampling for node '{node}'")
+                    if not os.path.exists(INIT_MODEL_PATH):
+                        raise FileNotFoundError(f"Initial model not found at {INIT_MODEL_PATH}")
+                    tram_model.load_state_dict(torch.load(INIT_MODEL_PATH, map_location=device))
+
+                else:
+                    if os.path.exists(BEST_MODEL_PATH):
+                        tram_model.load_state_dict(torch.load(BEST_MODEL_PATH, map_location=device))
+                        if verbose or debug:
+                            print(f"[INFO] Loaded best model weights for node '{node}' from {BEST_MODEL_PATH}")
+                    elif os.path.exists(INIT_MODEL_PATH):
+                        tram_model.load_state_dict(torch.load(INIT_MODEL_PATH, map_location=device))
+                        print(f"[WARNING] Best model not found for node '{node}'. Using initial weights instead.")
+                    else:
+                        raise FileNotFoundError(
+                            f"No model weights found for node '{node}'. "
+                            f"Expected one of: {BEST_MODEL_PATH} or {INIT_MODEL_PATH}"
+                        )
+
+            except Exception as e:
+                print(f"[ERROR] Failed to load model weights for node '{node}': {e}")
+                raise
+            return tram_model
