@@ -721,10 +721,21 @@ def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR,
         if os.path.exists(path):
             if debug:
                 print(f"[DEBUG] create_df_from_sampled: loading sampled data for parent '{parent}' from {path}")
-            sampling_dict[parent] = torch.load(path, map_location="cpu")
+            
+            sampled=torch.load(path, map_location="cpu")
+            if sampled.ndim > 1 and sampled.shape[1] > 1:
+                if debug:
+                    print(f"[DEBUG] create_df_from_sampled: skipping '{parent}' (shape {tuple(sampled.shape)}) - looks like probabilities")
+                continue
+            else:
+                sampling_dict[parent] = sampled
+                
         else:
             if debug:
                 print(f"[DEBUG] create_df_from_sampled: no sampled data found for parent '{parent}' at {path}")
+
+        # Skip if it’s a tuple of probabilities or multidimensional
+
 
     # Remove dummy if we have real variables
     if len(sampling_dict) > 1:
