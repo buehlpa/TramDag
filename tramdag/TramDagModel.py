@@ -1209,7 +1209,7 @@ class TramDagModel:
             print(f"[DEBUG] sample(): device: {self.device}")
 
         # ---- perform sampling ----
-        sampled_by_node, latents_by_node = sample_full_dag_v2(
+        sampled_by_node, latents_by_node = sample_full_dag(
             configuration_dict=self.cfg.conf_dict,
             EXPERIMENT_DIR=EXPERIMENT_DIR,
             device=self.device,
