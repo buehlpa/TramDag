@@ -31,7 +31,7 @@ from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
 from .utils.tram_model_helpers import train_val_loop,evaluate_tramdag_model, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
-from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag,sample_full_dag_v2, is_outcome_modelled_ordinal,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal
+from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag, is_outcome_modelled_ordinal,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal
 from .utils.continous_helpers import transform_intercepts_continous
 from .utils.ordinal_helpers import transform_intercepts_ordinal
 
@@ -83,9 +83,9 @@ class TramDagModel:
         "train_mode": "sequential",  # or "parallel"
         "return_history": False,
         "overwrite_inital_weights": True,
-        "num_workers" : 0,
+        "num_workers" : 4,
         "persistent_workers" : True,
-        "prefetch_factor" : 0,
+        "prefetch_factor" : 4,
         "batch_size":1000,
         
     }
@@ -1331,7 +1331,11 @@ class TramDagModel:
 
             # If logits/probabilities per sample, take argmax
             if sampled_vals.ndim == 2:
-                sampled_vals = np.argmax(sampled_vals, axis=1)
+                    print(f"[INFO] CAUTION! {node}: samples are probabilistic — each sample follows a probability "
+                    f"distribution based on the valid latent range. "
+                    f"Note that this frequency plot reflects only the distribution of the most probable "
+                    f"class per sample.")
+                    sampled_vals = np.argmax(sampled_vals, axis=1)
 
             sampled_vals = sampled_vals[np.isfinite(sampled_vals)]
 
