@@ -1,6 +1,6 @@
 [project]
 name = "tramdag"
-version = "0.1.0a4"
+version = "0.1.0a5"
 description = "Framework to fit Deep Neural Causal Models TramDag "
 readme = "README.md"
 requires-python = ">=3.8"

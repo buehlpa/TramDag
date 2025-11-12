@@ -1,0 +1,110 @@
+{
+    "date_of_creation": "2025-11-12 12:17:02",
+    "experiment_name": "Continous_3_vars_linear_DGP_LS",
+    "PATHS": {
+        "DATA_PATH": "/home/bule/TramDag/example_notebooks/Continous_3_vars_linear_DGP_LS",
+        "LOG_DIR": null,
+        "EXPERIMENT_DIR": "/home/bule/TramDag/example_notebooks/Continous_3_vars_linear_DGP_LS"
+    },
+    "data_type": {
+        "x1": "continous",
+        "x2": "continous",
+        "x3": "continous"
+    },
+    "adj_matrix": [
+        [
+            "0",
+            "ls",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "ls"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "model_names": [
+        [
+            "0",
+            "LinearShift",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "LinearShift"
+        ],
+        [
+            "0",
+            "0",
+            "0"
+        ]
+    ],
+    "seed": null,
+    "nodes": {
+        "x1": {
+            "Modelnr": 0,
+            "data_type": "continous",
+            "node_type": "source",
+            "parents": [],
+            "parents_datatype": {},
+            "transformation_terms_in_h()": {},
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {}
+        },
+        "x2": {
+            "Modelnr": 1,
+            "data_type": "continous",
+            "node_type": "internal",
+            "parents": [
+                "x1"
+            ],
+            "parents_datatype": {
+                "x1": "continous"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls"
+            },
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift"
+            }
+        },
+        "x3": {
+            "Modelnr": 2,
+            "data_type": "continous",
+            "node_type": "sink",
+            "parents": [
+                "x1",
+                "x2"
+            ],
+            "parents_datatype": {
+                "x1": "continous",
+                "x2": "continous"
+            },
+            "transformation_terms_in_h()": {
+                "x1": "ls",
+                "x2": "ls"
+            },
+            "batch_size": 512,
+            "epochs": 100,
+            "learning_rate": 0.01,
+            "use_scheduler": false,
+            "transformation_term_nn_models_in_h()": {
+                "x1": "LinearShift",
+                "x2": "LinearShift"
+            }
+        }
+    }
+}

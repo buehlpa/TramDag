@@ -48,6 +48,8 @@ from .TramDagDataset import TramDagDataset
 ## TODO documentation with docusaurus
 ## TODO psuh latest version to pypi
 
+
+#%pip install -i https://test.pypi.org/simple --extra-index-url https://pypi.org/simple tramdag
 # # Remove previous builds
 # rm -rf build dist *.egg-info
 
@@ -267,6 +269,10 @@ class TramDagModel:
                         print(f"[DEBUG] Skipped saving initial model for node '{node}' (already exists at {model_path})")
             except Exception as e:
                 print(f"[ERROR] Could not save initial model state for node '{node}': {e}")
+            
+            TEMP_DIR = "temp"
+            if os.path.isdir(TEMP_DIR) and not os.listdir(TEMP_DIR):
+                os.rmdir(TEMP_DIR)
                             
         return self
     

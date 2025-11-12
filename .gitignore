@@ -10,8 +10,9 @@
 *.npz
 *.pth
 *.pt
+*.toml
 
-
+*temp
 
 /GPU_testing/
 
