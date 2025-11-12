@@ -41,14 +41,6 @@ from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
 
 
-
-## TODO complex shifts fucniton display
-
-## TODO ordinal cutpoints trafo plot
-## TODO documentation with docusaurus
-## TODO psuh latest version to pypi
-
-
 #%pip install -i https://test.pypi.org/simple --extra-index-url https://pypi.org/simple tramdag
 # # Remove previous builds
 # rm -rf build dist *.egg-info
@@ -58,6 +50,11 @@ from .TramDagDataset import TramDagDataset
 
 # # Upload to TestPyPI
 # python -m twine upload --repository testpypi dist/*
+
+
+## TODO ordinal cutpoints trafo plot
+## TODO documentation with docusaurus
+## TODO psuh latest version to pypi
 
 ## TODO check the cutpoints >= <= for correct cutoffs
 

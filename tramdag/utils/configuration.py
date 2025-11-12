@@ -15,9 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
-
-
 import numpy as np
 import seaborn as sns
 import networkx as nx
@@ -235,9 +232,9 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
             "    → at x3: cs21\n"
             "    → at x4: cs22\n\n"
              "the sam e works for complex intercept but only one group is allowd:\n"
-            
             "Note: The first number denotes the interaction group, and the second the participant. "
-            "This numbering scheme is used internally to maintain consistent input ordering.")
+            "This numbering scheme is used internally to maintain consistent input ordering."
+            "THIS SHOULD SHOW AN INTERACTIVE WINDOW!: if NOT try reinstall : pip install ipywidgets\n")
         ui = widgets.VBox([
             widgets.Label(
             "Fill in the adjacency matrix (upper triangle only).: Use 'ls', 'cs', etc. to define connections (row: FROM → column: TO).\n\n"

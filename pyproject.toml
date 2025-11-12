@@ -1,6 +1,6 @@
 [project]
 name = "tramdag"
-version = "0.1.0a5"
+version = "0.1.0a6"
 description = "Framework to fit Deep Neural Causal Models TramDag "
 readme = "README.md"
 requires-python = ">=3.8"
@@ -15,13 +15,13 @@ dependencies = [
     "matplotlib",
     "pandas",
     "seaborn",
-    "ipywidgets",
     "jupyter",
     "tqdm",
     "statsmodels",
     "scipy",
     "Pillow",
-    "scikit-learn"
+    "scikit-learn",
+    "ipywidgets",
 ]
 
 classifiers = [
