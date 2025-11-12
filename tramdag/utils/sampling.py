@@ -14,7 +14,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-#TODO implement hdag_ordinal 
 
 import torch
 from torch.utils.data import  DataLoader
@@ -28,13 +27,18 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pandas as pd
 
-from .tram_model_helpers import   get_fully_specified_tram_model     
-from .continous_helpers import   transform_intercepts_continous,h_extrapolated, vectorized_object_function ,chandrupatla_root_finder,bisection_root_finder
-from .tram_data import  GenericDataset, get_dataloader
-from .ordinal_helpers import transform_intercepts_ordinal
-from .continous_helpers import contram_nll
+from .model_helpers import   get_fully_specified_tram_model     
+from .continous import   transform_intercepts_continous,h_extrapolated, vectorized_object_function ,chandrupatla_root_finder,bisection_root_finder
+from .data import  GenericDataset, get_dataloader
+from .ordinal import transform_intercepts_ordinal
+from .continous import contram_nll
 
-# helpers
+# This file contains helper functions for sampling full dag and to help with  tram data
+
+
+#
+
+
 def merge_outputs(dict_list, skip_nan=True):
     import warnings
 
@@ -73,6 +77,22 @@ def merge_outputs(dict_list, skip_nan=True):
 
     return merged
 
+def is_outcome_modelled_continous(node,target_nodes_dict):
+    if 'yc'in target_nodes_dict[node]['data_type'].lower() or 'continous' in target_nodes_dict[node]['data_type'].lower():
+        return True
+    else:
+        return False
+
+def is_outcome_modelled_ordinal(node,target_nodes_dict):
+    if 'yo'in target_nodes_dict[node]['data_type'].lower() and 'ordinal' in target_nodes_dict[node]['data_type'].lower():
+        return True
+    else:
+        return False  
+
+
+################################### Helpers for Sampling ###################################
+
+
 def delete_all_samplings(conf_dict,EXPERIMENT_DIR):
     for node in conf_dict:
         NODE_DIR = os.path.join(EXPERIMENT_DIR, f'{node}')
@@ -100,19 +120,8 @@ def check_sampled_and_latents(NODE_DIR, debug=True):
 
     return True
 
-def is_outcome_modelled_continous(node,target_nodes_dict):
-    if 'yc'in target_nodes_dict[node]['data_type'].lower() or 'continous' in target_nodes_dict[node]['data_type'].lower():
-        return True
-    else:
-        return False
 
-def is_outcome_modelled_ordinal(node,target_nodes_dict):
-    if 'yo'in target_nodes_dict[node]['data_type'].lower() and 'ordinal' in target_nodes_dict[node]['data_type'].lower():
-        return True
-    else:
-        return False  
-
-################################### LATENTS U and U_low / U_upper #####################################
+################################### LATENTS U and U_low / U_upper ###################################
 
 def provide_latents_for_continous(
     node,
@@ -305,7 +314,7 @@ def create_latent_df_for_full_dag(configuration_dict, EXPERIMENT_DIR, df, verbos
     print("[INFO] Final latent DataFrame shape:", all_latents_df.shape)
     return all_latents_df
     
-##################################### MAIN SAMPLING FUNCTIONS #####################################
+################################### MAIN SAMPLING FUNCTIONS ###################################
 def sample_full_dag(configuration_dict,
                     EXPERIMENT_DIR,
                     device,
@@ -731,7 +740,7 @@ def sample_ordinal_modelled_target(sample_loader, tram_model, latent_sample, dev
 
     return samples
 
-###################################### SAMPLE FULL DAG HELPERS
+################################### SAMPLE FULL DAG HELPERS ###################################
 def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR, debug=False):
     sampling_dict = {}
     if debug:

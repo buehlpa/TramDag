@@ -26,8 +26,7 @@ import os
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-import matplotlib.colors as mcolors
-import colorsys
+
 
 import ipywidgets as widgets
 from IPython.display import display, clear_output
@@ -36,6 +35,8 @@ import sys
 import json
 from datetime import datetime
 
+
+
 ## This file contains the helper functions to 
 #  - create a configration file for a TramDag experiment
 #  - create the adjacency matrix and the neural network names matrix 
@@ -43,13 +44,7 @@ from datetime import datetime
 #  - plot the DAG 
 
 
-
-# Utility: Generate N shades of green
-def generate_green_shades(n):
-    return [
-        mcolors.to_hex(colorsys.hsv_to_rgb(0.33, 0.4 + 0.5 * (i / max(n - 1, 1)), 0.7 + 0.3 * (i / max(n - 1, 1))))
-        for i in range(n)
-    ]
+##################################### Plotting / Visualization
 
 def plot_dag(adj_matrix, data_type, seed=42, causal_order=False):
     """
@@ -160,31 +155,7 @@ def plot_nn_names_matrix(nn_names_matrix,data_type):
 
     plt.show()
 
-def create_nx_graph(adj_matrix, node_labels=None):
-    
-    """
-    This function takes an adjacency matrix and returns a networkx DiGraph object and a dictionary of edge labels.
-    """
-    
-    # labels to the vars
-    if node_labels is None:
-        node_labels = {i: f'X{i}' for i in range(adj_matrix.shape[0])} # all with X_i
-    else:
-        node_labels = {i: node_labels[i] for i in range(len(node_labels))}
-        
-        if len(node_labels) != adj_matrix.shape[0]:
-            raise ValueError("Number of node labels should match the number of nodes in the adjacency matrix.")
-    
-    G = nx.DiGraph()
-    G.add_nodes_from(node_labels.values())
-    
-    edge_labels = {}
-    for i in range(adj_matrix.shape[0]):
-        for j in range(adj_matrix.shape[1]):
-            if adj_matrix[i, j] != "0":  # Ignore "0" (no edge)
-                G.add_edge(node_labels[i], node_labels[j])
-                edge_labels[(node_labels[i], node_labels[j])] = adj_matrix[i, j]
-    return G, edge_labels
+##################################### Interactive Editors (Jupyter widgets)
 
 def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
     
@@ -280,103 +251,6 @@ def interactive_adj_matrix(CONF_DICT_PATH ,seed=5):
         display(ui)
         return None
 
-# def interactive_nn_names_matrix(CONF_DICT_PATH):
-#     """
-#     If a saved NN-names matrix exists in configuration, load & display it.
-#     Otherwise, generate defaults from the adjacency matrix, show them
-#     in an editable grid (only for non-zero entries), and let the user overwrite before saving & plotting.
-#     """
-#     # Load config, types, matrices
-#     cfg = load_configuration_dict(CONF_DICT_PATH)
-#     data_type = cfg['data_type']
-#     adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
-#     nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
-#     var_names = list(data_type.keys())
-#     n = len(var_names)
-
-#     # If already saved, just plot and exit
-#     if nn_names_matrix is not None:
-#         plot_nn_names_matrix(nn_names_matrix, data_type)
-#         return
-
-#     # No saved NN-names → build defaults
-#     default_nn = create_nn_model_names(adj_matrix, data_type)
-
-#     output = widgets.Output()
-#     cells = {}
-
-#     def create_grid():
-#         # Build header row
-#         header_widgets = [widgets.Label(value="")] + [widgets.Label(value=v) for v in var_names]
-#         grid = header_widgets.copy()
-
-#         for i, vi in enumerate(var_names):
-#             grid.append(widgets.Label(value=vi))
-#             for j, vj in enumerate(var_names):
-#                 if i >= j:
-#                     # Diagonal & lower triangle: non-editable blank
-#                     cell = widgets.Label(value="")
-#                 else:
-#                     default = default_nn[i, j]
-#                     if default == "0":
-#                         # Do not display zeros
-#                         cell = widgets.Label(value="")
-#                     else:
-#                         # Editable for prefilled entries only
-#                         cell = widgets.Text(
-#                             value=default,
-#                             placeholder="",
-#                             layout=widgets.Layout(width="100px")
-#                         )
-#                         cells[(i, j)] = cell
-#                 grid.append(cell)
-
-#         return widgets.GridBox(
-#             children=grid,
-#             layout=widgets.Layout(
-#                 grid_template_columns=("100px " * (n + 1)).strip(),
-#                 overflow="auto"
-#             )
-#         )
-
-#     def on_generate_clicked(b):
-#         with output:
-#             clear_output()
-#             # Build final nn_names_matrix
-#             nm = np.empty((n, n), dtype=object)
-#             for i in range(n):
-#                 for j in range(n):
-#                     if i >= j:
-#                         nm[i, j] = "0"
-#                     else:
-#                         if (i, j) in cells:
-#                             val = cells[(i, j)].value.strip()
-#                             nm[i, j] = val if val else default_nn[i, j]
-#                         else:
-#                             nm[i, j] = "0"
-#             try:
-#                 write_nn_names_matrix_to_configuration(nm, CONF_DICT_PATH)
-#                 write_nodes_information_to_configuration(CONF_DICT_PATH)
-#                 plot_nn_names_matrix(nm, data_type)
-                
-#             except Exception as e:
-#                 print(f"Error saving or plotting NN-names matrix: {e}")
-
-#     # Button to save and plot
-#     btn = widgets.Button(description="Generate NN-Names + Plot", button_style="success")
-#     btn.on_click(on_generate_clicked)
-
-#     # Layout UI
-#     grid = create_grid()
-#     ui = widgets.VBox([
-#         widgets.Label("Edit only the existing model names (non-zero entries)."),
-#         grid,
-#         btn,
-#         output
-#     ])
-#     display(ui)
-
-
 def interactive_nn_names_matrix(CONF_DICT_PATH):
     """
     Launches interactive editor for NN names matrix and returns updated config dict when saved.
@@ -452,7 +326,36 @@ def interactive_nn_names_matrix(CONF_DICT_PATH):
     display(ui)
 
     return result_container["cfg"]
-# configuration dicitonary utils
+
+##################################### Graph Construction
+
+def create_nx_graph(adj_matrix, node_labels=None):
+    
+    """
+    This function takes an adjacency matrix and returns a networkx DiGraph object and a dictionary of edge labels.
+    """
+    
+    # labels to the vars
+    if node_labels is None:
+        node_labels = {i: f'X{i}' for i in range(adj_matrix.shape[0])} # all with X_i
+    else:
+        node_labels = {i: node_labels[i] for i in range(len(node_labels))}
+        
+        if len(node_labels) != adj_matrix.shape[0]:
+            raise ValueError("Number of node labels should match the number of nodes in the adjacency matrix.")
+    
+    G = nx.DiGraph()
+    G.add_nodes_from(node_labels.values())
+    
+    edge_labels = {}
+    for i in range(adj_matrix.shape[0]):
+        for j in range(adj_matrix.shape[1]):
+            if adj_matrix[i, j] != "0":  # Ignore "0" (no edge)
+                G.add_edge(node_labels[i], node_labels[j])
+                edge_labels[(node_labels[i], node_labels[j])] = adj_matrix[i, j]
+    return G, edge_labels
+
+##################################### Configuration I/O and Setup
 
 def new_conf_dict(experiment_name,EXPERIMENT_DIR,DATA_PATH,LOG_DIR):
     """
@@ -588,6 +491,7 @@ def setup_configuration(experiment_name,EXPERIMENT_DIR):
         _=create_and_write_new_configuration_dict(experiment_name,CONF_DICT_PATH,EXPERIMENT_DIR,DATA_PATH,None)
         print(f"Created new configuration file at {CONF_DICT_PATH}")
 
+##################################### Matrix Persistence (read/write)
 
 def read_adj_matrix_from_configuration(CONF_DICT_PATH):
     """
@@ -615,6 +519,35 @@ def write_adj_matrix_to_configuration(adj_matrix, CONF_DICT_PATH):
     configuration_dict = load_configuration_dict(CONF_DICT_PATH)
     configuration_dict['adj_matrix'] = adj_matrix.tolist()  # Convert to list for JSON serialization
     write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+
+def read_nn_names_matrix_from_configuration(CONF_DICT_PATH):
+    """
+    Read the neural network names matrix from the configuration dictionary.
+    
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    :return: The neural network names matrix as a numpy array.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    if configuration_dict['model_names'] is None:
+        return None
+    else:
+        nn_names_matrix = configuration_dict['model_names']
+        if isinstance(nn_names_matrix, list):
+            nn_names_matrix = np.array(configuration_dict['model_names'])
+        return nn_names_matrix
+    
+def write_nn_names_matrix_to_configuration(nn_names_matrix, CONF_DICT_PATH):
+    """
+    Write the neural network names matrix to the configuration dictionary.
+    
+    :param nn_names_matrix: The neural network names matrix to write.
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
+    configuration_dict['model_names'] = nn_names_matrix.tolist()  # Convert to list for JSON serialization
+    write_configuration_dict(configuration_dict, CONF_DICT_PATH)
+    
+##################################### Data-Type Definition and Validation
 
 def print_data_type_modeling_setting(data_type):
     # header
@@ -646,7 +579,6 @@ def validate_variable_names(keys):
         if var.endswith('_U') or var.endswith('_u'):
             raise ValueError(f"Variable name '{var}' is invalid: names ending with '_U' or '_u' are reserved for latent variables.")
         
-    
 def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> None:
     """
     Write the data type information to the configuration dictionary.
@@ -678,67 +610,237 @@ def write_data_type_to_configuration(data_type: dict, CONF_DICT_PATH: str) -> No
     else:
         print("Configuration updated successfully.")
 
-def read_nn_names_matrix_from_configuration(CONF_DICT_PATH):
+def validate_data_types(data_type):
     """
-    Read the neural network names matrix from the configuration dictionary.
+    Validates the data types dictionary against known types.
     
-    :param CONF_DICT_PATH: Path to the configuration dictionary.
-    :return: The neural network names matrix as a numpy array.
+    Parameters
+    ----------
+    data_type : dict
+        Dictionary with keys as column names and values as data types.
+    
+    Returns
+    -------
+    bool
+        True if all data types are valid and keys are unique, False otherwise.
     """
-    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
-    if configuration_dict['model_names'] is None:
-        return None
-    else:
-        nn_names_matrix = configuration_dict['model_names']
-        if isinstance(nn_names_matrix, list):
-            nn_names_matrix = np.array(configuration_dict['model_names'])
-        return nn_names_matrix
+    valid_types = {
+        'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo',
+        'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'
+    }
     
-def write_nn_names_matrix_to_configuration(nn_names_matrix, CONF_DICT_PATH):
-    """
-    Write the neural network names matrix to the configuration dictionary.
-    
-    :param nn_names_matrix: The neural network names matrix to write.
-    :param CONF_DICT_PATH: Path to the configuration dictionary.
-    """
-    configuration_dict = load_configuration_dict(CONF_DICT_PATH)
-    configuration_dict['model_names'] = nn_names_matrix.tolist()  # Convert to list for JSON serialization
-    write_configuration_dict(configuration_dict, CONF_DICT_PATH)
-    
+    # --- check valid types ---
+    for col, dtype in data_type.items():
+        if dtype not in valid_types:
+            print(f"Invalid data type for '{col}': {dtype}")
+            print(f"Valid data_types are: {valid_types}")
+            return False
 
-def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals=None, max_vals=None,levels_dict=None):  
+    return True
+
+##################################### Adjacency/Structure Validation
+
+def is_valid_column(col, col_idx):
+    ci_pattern = re.compile(r"^ci(\d+)$")
+    cs_pattern = re.compile(r"^cs(\d+)$")
+
+    has_ci = False
+    ci_numbered_ids = []
+
+    has_cs = False
+    cs_numbered_ids = []
+
+    for item in col:
+        if item == "0":
+            continue
+        elif item in ("si", "ls"):
+            continue
+        elif item == "ci":
+            if has_ci:
+                print(f"Column {col_idx} invalid: 'ci' can only be used once in a column.")
+                return False
+            else:
+                has_ci = True
+        elif m := ci_pattern.match(item):
+            ci_numbered_ids.append(m.group(1))
+        elif item == "cs":
+            has_cs = True
+        elif m := cs_pattern.match(item):
+            cs_numbered_ids.append(m.group(1))
+        else:
+            print(f"Column {col_idx} invalid: Unknown token '{item}' found.")
+            return False
+
+    if has_ci and ci_numbered_ids:
+        print(f"Column {col_idx} invalid: Cannot mix 'ci' and 'ciXX' in same column. ")
+        return False
+
+    if len(ci_numbered_ids) == 1:
+        print(f"Column {col_idx} invalid: Only one 'ciXX' present. Need at least two.")
+        return False
+
+    if len(ci_numbered_ids) != len(set(ci_numbered_ids)):
+        print(f"Column {col_idx} invalid: Duplicate 'ciXX' entries found.")
+        return False
+
+    if len(cs_numbered_ids) == 1:
+        print(f"Column {col_idx} invalid: Only one 'csXX' present. Need at least two. ")
+        return False
+
+    if len(cs_numbered_ids) != len(set(cs_numbered_ids)):
+        print(f"Column {col_idx} invalid: Duplicate 'csXX' entries found. ")
+        return False
+
+    return True
+
+def validate_matrix_columns(adj_matrix):
+    all_valid = True
+    for i in range(adj_matrix.shape[1]):
+        col = adj_matrix[:, i]
+        if not is_valid_column(col, i):
+            all_valid = False
+    return all_valid
+
+def validate_adj_matrix(adj_matrix):
     """
-    Write the nodes information to the configuration dictionary.
+    Validate if the adjacency matrix follows the given criteria:
+    1. Contains only allowed elements: "0", "ls", "cs", "ci"
+    2. Is upper triangular (no edges in the lower part)
+    3. Diagonal must be "0" (no self-loops)
     
-    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    Parameters:
+    - adj_matrix: 2D numpy array (object dtype)
+    
+    Returns:
+    - bool: True if the adjacency matrix satisfies all conditions, False otherwise
     """
-    try:
-        adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
-        nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
-        data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
-        
-        node_dict = create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals=min_vals, max_vals=max_vals,levels_dict=levels_dict)
-        print(node_dict)
-        conf = load_configuration_dict(CONF_DICT_PATH)
-        conf['nodes'] = node_dict
-    
-        write_configuration_dict(conf, CONF_DICT_PATH)
-        
-        
-    except Exception as e:
-        print("Failed to update configuration:", e)
-    else:
-        print("Configuration updated successfully.")
 
+    num_nodes = adj_matrix.shape[0]
 
-def get_hyperparameters_for_node(node,node_list):
-    batch_size=node_list[node].get('batch_size')
-    epochs=node_list[node].get('epochs')
-    learning_rate=node_list[node].get('learning_rate')
-    use_scheduler=node_list[node].get('use_scheduler')
-    
-    return batch_size, epochs, learning_rate, use_scheduler
+    #1.  Check allowed elements
+    if not validate_matrix_columns(adj_matrix):
+        return False
 
+    #2. Check upper triangular property
+    for i in range(num_nodes):
+        for j in range(i):  # Lower triangle check
+            if adj_matrix[i, j] != "0":
+                return False
+
+    # 3. Check diagonal is all "0"
+    if not np.all(np.diag(adj_matrix) == "0"):
+        return False
+
+    return True
+
+def get_binary_matrix_from_adjmatrix(adj_matrix):
+    """
+    Convert the adjacency matrix to a binary matrix.
+    params:
+    adj_matrix: 2D numpy array, adjacency matrix of the DAG trainglular upper
+    e.g. adj_matrix = np.array([
+                                ["0", "cs", "ls", "0"],  # A -> B (cs), A -> C (ls)
+                                ["0", "0", "0", "ls"],  # B -> D (ls)
+                                ["0", "0", "0", "cs"],  # C -> D (cs)
+                                ["0", "0", "0", "0"]    # No outgoing edges from D
+                            ], dtype=object)
+    return:
+    binary_matrix: 2D numpy array, binary matrix of the adjacency matrix
+    """
+    return (adj_matrix != "0").astype(int)
+
+##################################### Node/Model Specification
+
+def create_nn_model_names(adj_matrix, data_type):
+    """
+    Returns the model names for the NN models based on the adj_matrix and data_type.
+    Supports extended codes like ci11, cs21 etc.
+    """
+
+    # Warn if cs or ci appear anywhere
+    if np.any(np.char.startswith(adj_matrix.astype(str), 'cs')) or \
+       np.any(np.char.startswith(adj_matrix.astype(str), 'ci')):
+        print(
+            "*************\n"
+            "Model has Complex intercepts and/or Complex shifts.\n\n"
+            "For standard networks, hit the 'Generate' button.\n\n"
+            "If you want to add your own models for complex shifts and/or complex intercepts,\n"
+            "add them to models.py, reload, then enter the model name in the corresponding field\n"
+            "in this tool and hit 'Generate'.\n"
+            "*************"
+)
+    # Base model name mappings
+    full_model_mappings = {
+        'cont': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'continous': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'ord': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'ordinal_Xc_Yc': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'ordinal_Xc_Yo': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'ordinal_Xn_Yc': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'ordinal_Xn_Yo': {
+            'cs': 'ComplexShiftDefaultTabular',
+            'ci': 'ComplexInterceptDefaultTabular',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        },
+        'other': {
+            'cs': 'ComplexShiftDefaultImage',
+            'ci': 'ComplexInterceptDefaultImage',
+            'ls': 'LinearShift',
+            'si': 'SimpleIntercept'
+        }
+    }
+
+    # Create new matrix to store names
+    nn_names_matrix = np.empty_like(adj_matrix, dtype=object)
+    var_types = list(data_type.values())
+
+    for i in range(adj_matrix.shape[0]):
+        variable_type = var_types[i]
+        for j in range(adj_matrix.shape[1]):
+            code = str(adj_matrix[i, j])
+            if code == '0':
+                nn_names_matrix[i, j] = '0'
+                continue
+            match = re.fullmatch(r'(cs|ci|ls|si)(\d*)', code)
+            if match:
+                base_code, suffix = match.groups()
+                base_name = full_model_mappings[variable_type][base_code]
+                nn_names_matrix[i, j] = base_name + suffix
+            else:
+                nn_names_matrix[i, j] = code  # Leave unrecognized codes unchanged
+
+    return nn_names_matrix
 
 def create_levels_dict(df: pd.DataFrame, data_type: dict):
     """
@@ -778,7 +880,6 @@ def create_levels_dict(df: pd.DataFrame, data_type: dict):
             )
 
     return levels_dict
-
 
 def check_ordinal_variable_values(df, var):
     unique_vals = set(df[var].dropna().unique())
@@ -875,235 +976,32 @@ def create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals, max_vals,
         target_nodes[node]['transformation_term_nn_models_in_h()'] = transformation_term_nn_models
     return target_nodes
 
-def create_nn_model_names(adj_matrix, data_type):
+def write_nodes_information_to_configuration(CONF_DICT_PATH, min_vals=None, max_vals=None,levels_dict=None):  
     """
-    Returns the model names for the NN models based on the adj_matrix and data_type.
-    Supports extended codes like ci11, cs21 etc.
-    """
-
-    # Warn if cs or ci appear anywhere
-    if np.any(np.char.startswith(adj_matrix.astype(str), 'cs')) or \
-       np.any(np.char.startswith(adj_matrix.astype(str), 'ci')):
-        print(
-            "*************\n"
-            "Model has Complex intercepts and/or Complex shifts.\n\n"
-            "For standard networks, hit the 'Generate' button.\n\n"
-            "If you want to add your own models for complex shifts and/or complex intercepts,\n"
-            "add them to models.py, reload, then enter the model name in the corresponding field\n"
-            "in this tool and hit 'Generate'.\n"
-            "*************"
-)
-    # Base model name mappings
-    full_model_mappings = {
-        'cont': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'continous': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'ord': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'ordinal_Xc_Yc': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'ordinal_Xc_Yo': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'ordinal_Xn_Yc': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'ordinal_Xn_Yo': {
-            'cs': 'ComplexShiftDefaultTabular',
-            'ci': 'ComplexInterceptDefaultTabular',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        },
-        'other': {
-            'cs': 'ComplexShiftDefaultImage',
-            'ci': 'ComplexInterceptDefaultImage',
-            'ls': 'LinearShift',
-            'si': 'SimpleIntercept'
-        }
-    }
-
-    # Create new matrix to store names
-    nn_names_matrix = np.empty_like(adj_matrix, dtype=object)
-    var_types = list(data_type.values())
-
-    for i in range(adj_matrix.shape[0]):
-        variable_type = var_types[i]
-        for j in range(adj_matrix.shape[1]):
-            code = str(adj_matrix[i, j])
-            if code == '0':
-                nn_names_matrix[i, j] = '0'
-                continue
-            match = re.fullmatch(r'(cs|ci|ls|si)(\d*)', code)
-            if match:
-                base_code, suffix = match.groups()
-                base_name = full_model_mappings[variable_type][base_code]
-                nn_names_matrix[i, j] = base_name + suffix
-            else:
-                nn_names_matrix[i, j] = code  # Leave unrecognized codes unchanged
-
-    return nn_names_matrix
-
-
-def is_valid_column(col, col_idx):
-    ci_pattern = re.compile(r"^ci(\d+)$")
-    cs_pattern = re.compile(r"^cs(\d+)$")
-
-    has_ci = False
-    ci_numbered_ids = []
-
-    has_cs = False
-    cs_numbered_ids = []
-
-    for item in col:
-        if item == "0":
-            continue
-        elif item in ("si", "ls"):
-            continue
-        elif item == "ci":
-            if has_ci:
-                print(f"Column {col_idx} invalid: 'ci' can only be used once in a column.")
-                return False
-            else:
-                has_ci = True
-        elif m := ci_pattern.match(item):
-            ci_numbered_ids.append(m.group(1))
-        elif item == "cs":
-            has_cs = True
-        elif m := cs_pattern.match(item):
-            cs_numbered_ids.append(m.group(1))
-        else:
-            print(f"Column {col_idx} invalid: Unknown token '{item}' found.")
-            return False
-
-    if has_ci and ci_numbered_ids:
-        print(f"Column {col_idx} invalid: Cannot mix 'ci' and 'ciXX' in same column. ")
-        return False
-
-    if len(ci_numbered_ids) == 1:
-        print(f"Column {col_idx} invalid: Only one 'ciXX' present. Need at least two.")
-        return False
-
-    if len(ci_numbered_ids) != len(set(ci_numbered_ids)):
-        print(f"Column {col_idx} invalid: Duplicate 'ciXX' entries found.")
-        return False
-
-    if len(cs_numbered_ids) == 1:
-        print(f"Column {col_idx} invalid: Only one 'csXX' present. Need at least two. ")
-        return False
-
-    if len(cs_numbered_ids) != len(set(cs_numbered_ids)):
-        print(f"Column {col_idx} invalid: Duplicate 'csXX' entries found. ")
-        return False
-
-    return True
-
-def validate_matrix_columns(adj_matrix):
-    all_valid = True
-    for i in range(adj_matrix.shape[1]):
-        col = adj_matrix[:, i]
-        if not is_valid_column(col, i):
-            all_valid = False
-    return all_valid
-
-def validate_data_types(data_type):
-    """
-    Validates the data types dictionary against known types.
+    Write the nodes information to the configuration dictionary.
     
-    Parameters
-    ----------
-    data_type : dict
-        Dictionary with keys as column names and values as data types.
+    :param CONF_DICT_PATH: Path to the configuration dictionary.
+    """
+    try:
+        adj_matrix = read_adj_matrix_from_configuration(CONF_DICT_PATH)
+        nn_names_matrix = read_nn_names_matrix_from_configuration(CONF_DICT_PATH)
+        data_type = load_configuration_dict(CONF_DICT_PATH)['data_type']
+        
+        node_dict = create_node_dict(adj_matrix, nn_names_matrix, data_type, min_vals=min_vals, max_vals=max_vals,levels_dict=levels_dict)
+        print(node_dict)
+        conf = load_configuration_dict(CONF_DICT_PATH)
+        conf['nodes'] = node_dict
     
-    Returns
-    -------
-    bool
-        True if all data types are valid and keys are unique, False otherwise.
-    """
-    valid_types = {
-        'continous', 'ordinal_Xn_Yc', 'ordinal_Xn_Yo',
-        'ordinal_Xc_Yc', 'ordinal_Xc_Yo', 'other'
-    }
-    
-    # --- check valid types ---
-    for col, dtype in data_type.items():
-        if dtype not in valid_types:
-            print(f"Invalid data type for '{col}': {dtype}")
-            print(f"Valid data_types are: {valid_types}")
-            return False
-
-    return True
+        write_configuration_dict(conf, CONF_DICT_PATH)
+        
+        
+    except Exception as e:
+        print("Failed to update configuration:", e)
+    else:
+        print("Configuration updated successfully.")
 
 
-def validate_adj_matrix(adj_matrix):
-    """
-    Validate if the adjacency matrix follows the given criteria:
-    1. Contains only allowed elements: "0", "ls", "cs", "ci"
-    2. Is upper triangular (no edges in the lower part)
-    3. Diagonal must be "0" (no self-loops)
-    
-    Parameters:
-    - adj_matrix: 2D numpy array (object dtype)
-    
-    Returns:
-    - bool: True if the adjacency matrix satisfies all conditions, False otherwise
-    """
-
-    num_nodes = adj_matrix.shape[0]
-
-    #1.  Check allowed elements
-    if not validate_matrix_columns(adj_matrix):
-        return False
-
-    #2. Check upper triangular property
-    for i in range(num_nodes):
-        for j in range(i):  # Lower triangle check
-            if adj_matrix[i, j] != "0":
-                return False
-
-    # 3. Check diagonal is all "0"
-    if not np.all(np.diag(adj_matrix) == "0"):
-        return False
-
-    return True
-
-def get_binary_matrix_from_adjmatrix(adj_matrix):
-    """
-    Convert the adjacency matrix to a binary matrix.
-    params:
-    adj_matrix: 2D numpy array, adjacency matrix of the DAG trainglular upper
-    e.g. adj_matrix = np.array([
-                                ["0", "cs", "ls", "0"],  # A -> B (cs), A -> C (ls)
-                                ["0", "0", "0", "ls"],  # B -> D (ls)
-                                ["0", "0", "0", "cs"],  # C -> D (cs)
-                                ["0", "0", "0", "0"]    # No outgoing edges from D
-                            ], dtype=object)
-    return:
-    binary_matrix: 2D numpy array, binary matrix of the adjacency matrix
-    """
-    return (adj_matrix != "0").astype(int)
+##################################### Dict Utilities
 
 def merge_transformation_dicts(transformation_terms_in_h, transformation_term_nn_models_in_h):
     """
@@ -1151,4 +1049,5 @@ def sort_second_dict_by_first_dict_keys(sort_by, to_sort):
         dict: A sorted dictionary with keys appearing in the same order as in first_dict.
     """
     return {key: to_sort[key] for key in sort_by.keys() if key in to_sort}
+
 

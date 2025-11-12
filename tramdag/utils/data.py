@@ -16,8 +16,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
-
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
@@ -26,9 +24,8 @@ import torch.nn.functional as F
 from PIL import Image
 import pandas as pd
 import numpy as np
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 import re
-import tqdm
 
 
 class GenericDataset(Dataset):

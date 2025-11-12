@@ -16,6 +16,8 @@ limitations under the License.
 """
 
 
+# This file contains helper functions for the continous targets  / loss fct , bernstein polynomials, root finding 
+
 
 import torch
 import warnings
@@ -444,7 +446,6 @@ def chandrupatla_root_finder(f, low, high, max_iter=10_000, tol=1e-8):
 def vectorized_object_function( thetas: torch.Tensor,targets: torch.Tensor, shifts: torch.Tensor,
                                latent_sample: torch.Tensor, k_min: float, k_max: float) -> torch.Tensor:
     # h(xj)-latent_sample=0 , solve for xj
-    # return h_extrapolated(thetas, targets, k_min, k_max)- latent_sample
     return h_extrapolated_with_shift(thetas, targets, shifts, k_min, k_max) - latent_sample
 
 

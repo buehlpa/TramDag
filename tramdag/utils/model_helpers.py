@@ -27,25 +27,12 @@ from torch.utils.data import DataLoader
 
 
 from ..models.tram_models import *
-from .continous_helpers import contram_nll, inverse_transform_intercepts_continous,transform_intercepts_continous
-from .ordinal_helpers import   ontram_nll,  inverse_transform_intercepts_ordinal,transform_intercepts_ordinal
+from .continous import contram_nll, inverse_transform_intercepts_continous,transform_intercepts_continous
+from .ordinal import   ontram_nll,  inverse_transform_intercepts_ordinal,transform_intercepts_ordinal
 from .configuration import *
-from .r_helpers import fit_r_model_subprocess
+from .r_subprocess import fit_r_model_subprocess
 
 
-# Time decorator
-def timeit(name=None):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            label = f"{name or func.__name__}"
-            start = time.time()
-            result = func(*args, **kwargs)
-            duration = time.time() - start
-            print(f"[ {label}] completed in {duration:.4f} seconds")
-            return result
-        return wrapper
-    return decorator
 
 ################################################ Model Construction #####################################
 
@@ -142,7 +129,7 @@ def get_fully_specified_tram_model(
     if debug:
         print(f'[DEBUG] get_fully_specified_tram_model(): device: {device}')
     
-    from .tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
+    from .sampling import is_outcome_modelled_ordinal, is_outcome_modelled_continous
     
     target_nodes = configuration_dict['nodes']
     default_number_thetas = 20  # default for continuous outcomes
@@ -465,7 +452,7 @@ def init_last_layer_COLR_POLR(
     >>> print(last_layer.weight)
     tensor([...])  # initialized intercept weights
     """
-    from .tram_data_helpers import is_outcome_modelled_ordinal, is_outcome_modelled_continous
+    from .sampling import is_outcome_modelled_ordinal, is_outcome_modelled_continous
     
     target_nodes_dict=configuration_dict['nodes']
     
@@ -1122,7 +1109,10 @@ def evaluate_tramdag_model(
 
     return avg_nll
 
-# print training history
+
+######################################### History #####################################
+
+
 def load_history(node, experiment_dir):
     node_dir = os.path.join(experiment_dir, node)
     train_hist_path = os.path.join(node_dir, "train_loss_hist.json")

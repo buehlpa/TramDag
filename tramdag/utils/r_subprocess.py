@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
+# This file contains helper functions for R model fitting via subprocess calls.
 
 import subprocess
 import tempfile

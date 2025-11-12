@@ -21,7 +21,7 @@ import pandas as pd
 import os
 from torch.utils.data import Dataset, DataLoader
 
-from .utils.tram_data import GenericDataset, GenericDatasetPrecomputed
+from .utils.data import GenericDataset, GenericDatasetPrecomputed
 
 
 

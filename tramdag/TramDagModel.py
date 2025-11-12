@@ -30,10 +30,10 @@ from joblib import Parallel, delayed
 from statsmodels.graphics.gofplots import qqplot_2samples
 from scipy.stats import logistic, probplot
 
-from .utils.tram_model_helpers import train_val_loop,evaluate_tramdag_model, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
-from .utils.tram_data_helpers import create_latent_df_for_full_dag, sample_full_dag, is_outcome_modelled_ordinal,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal
-from .utils.continous_helpers import transform_intercepts_continous
-from .utils.ordinal_helpers import transform_intercepts_ordinal
+from .utils.model_helpers import train_val_loop,evaluate_tramdag_model, get_fully_specified_tram_model , model_train_val_paths ,ordered_parents
+from .utils.sampling import create_latent_df_for_full_dag, sample_full_dag, is_outcome_modelled_ordinal,is_outcome_modelled_continous, is_outcome_modelled_ordinal, show_hdag_continous,show_hdag_ordinal
+from .utils.continous import transform_intercepts_continous
+from .utils.ordinal import transform_intercepts_ordinal
 
 from .models.tram_models import SimpleIntercept
 
@@ -47,6 +47,15 @@ from .TramDagDataset import TramDagDataset
 ## TODO ordinal cutpoints trafo plot
 ## TODO documentation with docusaurus
 ## TODO psuh latest version to pypi
+
+# # Remove previous builds
+# rm -rf build dist *.egg-info
+
+# # Build new package
+# python -m build
+
+# # Upload to TestPyPI
+# python -m twine upload --repository testpypi dist/*
 
 ## TODO check the cutpoints >= <= for correct cutoffs
 
