@@ -21,6 +21,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+######################################################################################################
+#    TRAM MODEL COMBINING INTERCEPT AND SHIFT accepts simple intercaept and list of shift models
+######################################################################################################
+
+
 class TramModel(nn.Module):
     def __init__(self, nn_int, nn_shift=None,device='cpu'):
         super(TramModel, self).__init__()
@@ -64,7 +69,10 @@ class TramModel(nn.Module):
         return {'int_out': int_out, 'shift_out': shift_out}
 
 
-#### Default Neural Network Models  ####
+######################################################################################################
+#    SIMPLE INTERCEPT AND LINEAR SHIFT
+######################################################################################################
+
 
 class SimpleIntercept(nn.Module):
     """
@@ -124,7 +132,7 @@ class LinearShift(nn.Module):
 
 
 ######################################################################################################
-#Tabular
+# DEFAULT COMPLEX SHIFT AND COMPLEX INTERCEPT
 ######################################################################################################
 
 
@@ -198,7 +206,13 @@ class ComplexInterceptDefaultTabular(nn.Module):
         x = self.fc3(x)
         return x
     
-############################################### Deeper networks
+    
+    
+######################################################################################################
+# CUSTOM COMPLEX MODELS
+######################################################################################################
+
+
 class ComplexShiftCustomTabular(nn.Module):
     """
     Deeper shift network for tabular data, without any manual flattening.
