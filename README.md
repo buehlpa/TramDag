@@ -50,7 +50,10 @@ under /example_notebooks some examples are displayed
 
 Reproducing simulation experiments from [TRAMDAG paper](https://arxiv.org/abs/2503.16206)
 
-- 
+- [6.1 Continous_complex DGP complex Shift](example_notebooks/Continous_3_vars_complex_DGP_CS.ipynb)
+- [6.1 Continous_linear DGP complex Shift](example_notebooks/Continous_3_vars_linear_DGP_CS.ipynb)
+- [6.1 Continous_linear DGP linear Shift](example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)
+- [6.2 Mixed_linear DGP complex Shift](example_notebooks/Mixed_3_vars_linear_DGP_LS.ipynb)
 
 
 
