@@ -1,5 +1,4 @@
 #   **TRA**nsformation **M**odels in **D**irected **A**cyclic **G**raphs (**TRAMDAG**)
-<span style="font-family:Georgia; font-weight:bold;">TRAMDAG</span>
 A pytorch implemetation of Interpretable Neural Causal Models with TRAM-DAGs (https://arxiv.org/abs/2503.16206)
 
 This framework uses ordinal and continous transformation models to learn the functions on the edges on a directed acyclic graph.
