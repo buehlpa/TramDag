@@ -13,6 +13,8 @@
 *.toml
 .vscode/
 
+.pyproject.toml
+
 *temp
 
 /GPU_testing/
