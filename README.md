@@ -9,10 +9,7 @@ The according implentations for the ordinal tram and the continous tram are in t
 
 
 
-
-
-
-![Graph with 3 nodes](https://via.placeholder.com/468x300?text=App+Screenshot+Here)
+![tramdag](https://github.com/buehlpa/TramDag/blob/main/doc/images/tramdag.png)
 
 
 
