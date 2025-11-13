@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-11-12 18:07:15",
+    "date_of_creation": "2025-11-13 09:33:17",
     "experiment_name": "Continous_3_vars_linear_DGP_CS",
     "PATHS": {
         "DATA_PATH": "/home/bule/TramDag/example_notebooks/Continous_3_vars_linear_DGP_CS",
@@ -15,7 +15,7 @@
         [
             "0",
             "ls",
-            "ls"
+            "cs"
         ],
         [
             "0",
@@ -32,7 +32,7 @@
         [
             "0",
             "LinearShift",
-            "LinearShift"
+            "ComplexShiftDefaultTabular"
         ],
         [
             "0",
@@ -94,7 +94,7 @@
                 "x2": "continous"
             },
             "transformation_terms_in_h()": {
-                "x1": "ls",
+                "x1": "cs",
                 "x2": "ls"
             },
             "batch_size": 512,
@@ -102,7 +102,7 @@
             "learning_rate": 0.01,
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
-                "x1": "LinearShift",
+                "x1": "ComplexShiftDefaultTabular",
                 "x2": "LinearShift"
             }
         }
