@@ -98,7 +98,8 @@
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift"
-            }
+            },
+            "levels": 2
         },
         "x2": {
             "Modelnr": 2,

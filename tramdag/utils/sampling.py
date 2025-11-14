@@ -460,7 +460,7 @@ def sample_full_dag(configuration_dict,
                 continue 
 
         ##### NO INTERVENTION, based on the sampled data from the parents the latents for each node the observational distribution is generated    
-        else:#TODO write down all cases for sampling here
+        else:
 
             #################################### load model and weigths 
             tram_model=load_tram_model_weights(node,configuration_dict, NODE_DIR,debug=False,verbose=False, device='cpu',  use_initial_weights_for_sampling=False)
@@ -497,10 +497,10 @@ def sample_full_dag(configuration_dict,
             
             ###################################################### Counterfactual logic #########################################
             
-            # NO Probablistic parents samplings
-            if not has_proba_parents(target_nodes_dict,node,debug=debug,EXPERIMENT_DIR=EXPERIMENT_DIR):
+            # Node has NO! parents with samples which are just distributions
+            if not has_parents_with_distribution_samples(target_nodes_dict,node,debug=debug,EXPERIMENT_DIR=EXPERIMENT_DIR):
                 if not has_interval_latents:
-                    sampled=det_parents_det_node_sampling(node=node,
+                    sampled=sample_node_detParents_detLatent(node=node,
                                                           device=device,
                                                           target_nodes_dict=target_nodes_dict,
                                                           number_of_samples=number_of_counterfactual_samples,
@@ -511,7 +511,7 @@ def sample_full_dag(configuration_dict,
                                                           minmax_dict=minmax_dict,
                                                           EXPERIMENT_DIR=EXPERIMENT_DIR)
                 if has_interval_latents:
-                    sampled=det_parents_proba_node_sampling(node=node,
+                    sampled=sample_node_detParents_intervalLatent(node=node,
                                                             device=device,
                                                             target_nodes_dict=target_nodes_dict,
                                                             number_of_samples=number_of_counterfactual_samples,
@@ -521,10 +521,10 @@ def sample_full_dag(configuration_dict,
                                                             debug=debug,
                                                             EXPERIMENT_DIR=EXPERIMENT_DIR)
             
-            # Probabalistic paretns sampling 
-            if has_proba_parents(target_nodes_dict,node,debug=debug,EXPERIMENT_DIR=EXPERIMENT_DIR):
+            # Node has parents with samples which are just distributions
+            if has_parents_with_distribution_samples(target_nodes_dict,node,debug=debug,EXPERIMENT_DIR=EXPERIMENT_DIR):
                 if has_interval_latents:
-                    sampled=proba_parents_proba_node_sampling(node=node,
+                    sampled=sample_node_distParents_intervalLatent(node=node,
                                                               device=device,
                                                               target_nodes_dict=target_nodes_dict,
                                                               number_of_samples=number_of_counterfactual_samples,
@@ -534,7 +534,7 @@ def sample_full_dag(configuration_dict,
                                                               debug=debug,
                                                               EXPERIMENT_DIR=EXPERIMENT_DIR)  
                 if not has_interval_latents:
-                    sampled=proba_parents_det_node_sampling(node=node,
+                    sampled=sample_node_distParents_detLatent(node=node,
                                                             device=device,
                                                             target_nodes_dict=target_nodes_dict,
                                                             number_of_samples=number_of_counterfactual_samples,
@@ -794,7 +794,7 @@ def create_df_from_sampled(node, target_nodes_dict, num_samples, EXPERIMENT_DIR,
     
     return sampling_df
 
-def det_parents_det_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,latent_sample,debug,minmax_dict,EXPERIMENT_DIR,device):
+def sample_node_detParents_detLatent(node,target_nodes_dict,number_of_samples,batch_size,tram_model,latent_sample,debug,minmax_dict,EXPERIMENT_DIR,device):
     
         # create dataframe from sampled parents + dummy if no parents 
         sampled_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
@@ -821,9 +821,9 @@ def det_parents_det_node_sampling(node,target_nodes_dict,number_of_samples,batch
             raise ValueError(f"Unsupported data_type '{target_nodes_dict[node]['data_type']}' for node '{node}' in sampling.")
         return sampled
 
-def det_parents_proba_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
+def sample_node_detParents_intervalLatent(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
     if debug:
-            print(f"[DEBUG] -------det_parents_proba_node_sampling: start sampling for {node}---------")    
+            print(f"[DEBUG] -------sample_node_detParents_intervalLatent: start sampling for {node}---------")    
     sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
     counterfactual_frequency=[]
     for i ,_ in tqdm(enumerate(predefined_latent_samples_df[f"{node}"]),total=len(predefined_latent_samples_df[f"{node}"]),desc=f"Sampling {node}"):
@@ -868,11 +868,11 @@ def det_parents_proba_node_sampling(node,target_nodes_dict,number_of_samples,bat
         print(f"[DEBUG] saved counterfactual range latents to e.g. {RANGED_LATENT_PATH}")
         print(f"[DEBUG] saved counterfactual sampling to e.g. {RANGED_SAMPLED_PATH}")
         print(f"[DEBUG]  Counterfactual frequencies: {counterfactual_frequency}")
-        print(f"[DEBUG] -------det_parents_proba_node_sampling: sampling completed for {node}-------")    
+        print(f"[DEBUG] -------sample_node_detParents_intervalLatent: sampling completed for {node}-------")    
     
     return torch.Tensor(np.array(counterfactual_frequency))
 # TODO validiate sampling
-def proba_parents_proba_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
+def sample_node_distParents_intervalLatent(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
     sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
     counterfactual_frequency=[]
     parents=target_nodes_dict[node]['parents']
@@ -915,19 +915,19 @@ def proba_parents_proba_node_sampling(node,target_nodes_dict,number_of_samples,b
     if debug:
         print(f"[DEBUG] saved counterfactual range latents to e.g. {RANGED_LATENT_PATH}")
         print(f"[DEBUG] saved counterfactual sampling to e.g. {RANGED_SAMPLED_PATH}")
-        print(f"[DEBUG] proba_parents_proba_node_sampling: Counterfactual frequencies: {counterfactual_frequency}")
-        print(f"[DEBUG]------- proba_parents_proba_node_sampling: sampling completed for {node}-------")    
+        print(f"[DEBUG] sample_node_distParents_intervalLatent: Counterfactual frequencies: {counterfactual_frequency}")
+        print(f"[DEBUG]------- sample_node_distParents_intervalLatent: sampling completed for {node}-------")    
                 
     return torch.Tensor(np.array(counterfactual_frequency))
 # TODO solve sampling here
-def proba_parents_det_node_sampling(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,latent_sample,debug,minmax_dict,EXPERIMENT_DIR):
+def sample_node_distParents_detLatent(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,latent_sample,debug,minmax_dict,EXPERIMENT_DIR):
     
     sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
     counterfactual_frequency=[]
     parents=target_nodes_dict[node]['parents']
     counterfactual_frequency=[]
     if debug:
-        print(f"[DEBUG] starting proba_parents_det_node_sampling for node {node} with {number_of_samples} samples")
+        print(f"[DEBUG] starting sample_node_distParents_detLatent for node {node} with {number_of_samples} samples")
         
     for i ,_ in tqdm(enumerate(predefined_latent_samples_df[f"{node}"]),total=len(predefined_latent_samples_df[f"{node}"]),desc=f"Sampling {node}"):
 
@@ -962,12 +962,12 @@ def proba_parents_det_node_sampling(node,target_nodes_dict,number_of_samples,bat
     if debug:
         print(f"[DEBUG] saved counterfactual sampling to e.g. {RANGED_SAMPLED_PATH}")
         print(f"[DEBUG] Counterfactual frequencies: {counterfactual_frequency}")
-        print(f"[DEBUG] -------proba_parents_det_node_sampling: sampling completed for {node}-------")    
+        print(f"[DEBUG] -------sample_node_distParents_detLatent: sampling completed for {node}-------")    
 
                 # TODO what happens if node is continous and has porba parents
     return torch.Tensor(np.array(counterfactual_frequency))
 
-def has_proba_parents(target_nodes_dict,node,debug=False,EXPERIMENT_DIR=None):
+def has_parents_with_distribution_samples(target_nodes_dict,node,debug=False,EXPERIMENT_DIR=None):
         for parent in target_nodes_dict[node]['parents']:
             path = os.path.join(EXPERIMENT_DIR, parent, "sampling", "sampled.pt")
             if os.path.exists(path):
@@ -975,13 +975,13 @@ def has_proba_parents(target_nodes_dict,node,debug=False,EXPERIMENT_DIR=None):
                     sampled=torch.load(path, map_location="cpu")
                     if sampled.ndim > 1 and sampled.shape[1] > 1:
                         if debug:
-                            print(f"[DEBUG] has_proba_parents:  '{parent}' (shape {tuple(sampled.shape)}) - looks like probabilities")
+                            print(f"[DEBUG] has_parents_with_distribution_samples:  '{parent}' (shape {tuple(sampled.shape)}) - looks like probabilities")
                         return True
                     else:
                         continue
                 except FileNotFoundError:
                     if debug:
-                        print(f"[DEBUG] has_proba_parents: Skipping {node} as parent '{parent}' is not sampled yet.")
+                        print(f"[DEBUG] has_parents_with_distribution_samples: Skipping {node} as parent '{parent}' is not sampled yet.")
         return False
 
 def load_parents_with_range(df_sampled, i, parents, number_of_samples, EXPERIMENT_DIR, debug=False):
