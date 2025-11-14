@@ -118,41 +118,74 @@ class TramDagDataset(Dataset):
     }
 
     def __init__(self):
-        """Empty init. Use classmethods like .from_dataframe()."""
+        """
+        Initialize an empty TramDagDataset shell.
+
+        Notes
+        -----
+        This constructor does not attach data or configuration. Use
+        `TramDagDataset.from_dataframe` to obtain a ready-to-use instance.
+        """
         pass
 
     @classmethod
     def from_dataframe(cls, df, cfg, **kwargs):
-        """Create a TramDagDataset instance directly from a pandas DataFrame.
+        """
+        Create a TramDagDataset instance directly from a pandas DataFrame.
 
-        This class method constructs and initializes a dataset using the provided
-        DataFrame and configuration object. It validates keyword arguments against
-        class defaults, merges them into a resolved settings dictionary, and builds
-        the internal dataloaders.
+        This classmethod:
 
-        Args:
-            df: Input pandas DataFrame containing the dataset.
-            cfg: TramDagConfig instance defining variable structure and metadata.
-            **kwargs: Optional keyword overrides for dataset defaults. All keys
-                must be defined in `cls.DEFAULTS`; otherwise, a ValueError is raised.
+        1. Validates keyword arguments against `DEFAULTS`.
+        2. Merges user overrides with defaults into a resolved settings dict.
+        3. Stores the configuration and verifies its completeness.
+        4. Applies settings to the instance.
+        5. Builds per-node datasets and DataLoaders.
 
-        Returns:
-            TramDagDataset: An initialized dataset instance.
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Input DataFrame containing the dataset.
+        cfg : TramDagConfig
+            Configuration object defining nodes and variable metadata.
+        **kwargs
+            Optional overrides for `DEFAULTS`. All keys must exist in
+            `TramDagDataset.DEFAULTS`. Common keys include:
 
-        Raises:
-            TypeError: If `df` is not a pandas DataFrame.
-            ValueError: If any keyword arguments are not present in `DEFAULTS`.
+            batch_size : int
+                Batch size for DataLoaders.
+            shuffle : bool
+                Whether to shuffle samples per epoch.
+            num_workers : int
+                Number of DataLoader workers.
+            pin_memory : bool
+                Whether to pin memory for faster host-to-device transfers.
+            return_intercept_shift : bool
+                Whether datasets should return intercept/shift information.
+            debug : bool
+                Enable debug printing.
+            transform : callable or dict or None
+                Optional transform(s) applied to samples.
+            use_dataloader : bool
+                If True, construct DataLoaders; else store raw Dataset objects.
+            use_precomputed : bool
+                If True, precompute dataset representation to disk and reload it.
 
-        Notes:
-            - Validates `kwargs` via `_validate_kwargs()` to ensure strict adherence
-            to supported parameters.
-            - Prints full resolved settings if `debug=True`.
-            - Automatically infers the variable name of the provided DataFrame
-            for clearer warning messages.
-            - Issues a warning if the inferred DataFrame name suggests validation/test
-            data while `shuffle=True` is set.
-            - Applies resolved settings and constructs internal dataloaders via
-            `_apply_settings()` and `_build_dataloaders()`.
+        Returns
+        -------
+        TramDagDataset
+            Initialized dataset instance.
+
+        Raises
+        ------
+        TypeError
+            If `df` is not a pandas DataFrame.
+        ValueError
+            If unknown keyword arguments are provided (when validation is enabled).
+
+        Notes
+        -----
+        If `shuffle=True` and the inferred variable name of `df` suggests
+        validation/test data (e.g. "val", "test"), a warning is printed.
         """
         self = cls()
         if not isinstance(df, pd.DataFrame):
@@ -196,26 +229,31 @@ class TramDagDataset(Dataset):
         return self
 
     def compute_scaling(self, df: pd.DataFrame = None, write: bool = True):
-        """Compute variable-wise scaling parameters from data.
+        """
+        Compute variable-wise scaling parameters from data.
 
-        Derives approximate minimum and maximum values for each variable based on
-        the 5th and 95th percentiles of the provided DataFrame. Intended for use
-        with training data to establish normalization or clipping ranges.
+        Per variable, this method computes approximate minimum and maximum
+        values using the 5th and 95th percentiles. This is typically used
+        to derive robust normalization/clipping ranges from training data.
 
-        Args:
-            df: Optional pandas DataFrame containing the data used to compute scaling.
-                If not provided, uses the dataset's internal `self.df`.
-            write: Unused placeholder argument for interface consistency. Reserved
-                for potential future functionality (e.g., auto-saving scaling info).
+        Parameters
+        ----------
+        df : pandas.DataFrame or None, optional
+            DataFrame used to compute scaling. If None, `self.df` is used.
+        write : bool, optional
+            Unused placeholder for interface compatibility with other components.
+            Kept for potential future extensions. Default is True.
 
-        Returns:
-            dict: Mapping of variable names to [min, max] values derived from quantiles.
+        Returns
+        -------
+        dict
+            Mapping `{column_name: [min_value, max_value]}`, where values
+            are derived from the 0.05 and 0.95 quantiles.
 
-        Notes:
-            - Prints debug information when `self.debug=True`.
-            - The returned min/max correspond to the 0.05 and 0.95 quantiles,
-            not the absolute extrema, to reduce outlier influence.
-            - Intended for normalization or scaling within the training pipeline.
+        Notes
+        -----
+        If `self.debug` is True, the method emits debug messages about the
+        data source. Only training data should be used to avoid leakage.
         """
         if self.debug:
             print("[DEBUG] Make sure to provide only training data to compute_scaling!")     
@@ -230,22 +268,47 @@ class TramDagDataset(Dataset):
         return minmax_dict
 
     def summary(self):
-        """Print a structured overview of the dataset and configuration.
+        """
+        Print a structured overview of the dataset and configuration.
 
-        Displays key properties of the internal DataFrame, including shape,
-        data types, and descriptive statistics, as well as node-level settings
-        and DataLoader configurations.
+        The summary includes:
 
-        Sections printed:
-            1. **DataFrame** — Shape, column names, preview (head), dtypes, and summary statistics.
-            2. **Configuration** — Number of nodes, DataLoader usage mode, and precomputation status.
-            3. **Node Settings** — Per-node DataLoader and dataset parameters (batch_size, shuffle, etc.).
-            4. **DataLoaders** — Types and lengths of instantiated loaders per node.
+        1. DataFrame information:
+        - Shape
+        - Columns
+        - Head (first rows)
+        - Dtypes
+        - Descriptive statistics
 
-        Notes:
-            - Intended for quick inspection and debugging of dataset setup.
-            - Automatically adapts to dict- or scalar-style configuration attributes.
-            - Prints additional debug information when `self.debug=True`.
+        2. Configuration overview:
+        - Number of nodes
+        - Loader mode (DataLoader vs. raw Dataset)
+        - Precomputation status
+
+        3. Node settings:
+        - Batch size
+        - Shuffle flag
+        - num_workers
+        - pin_memory
+        - return_intercept_shift
+        - debug
+        - transform
+
+        4. DataLoader overview:
+        - Type and length of each loader.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Intended for quick inspection and debugging. Uses `print` statements
+        and does not return structured metadata.
         """
         
         print("\n[TramDagDataset Summary]")
@@ -301,15 +364,25 @@ class TramDagDataset(Dataset):
         print("=" * 60 + "\n")
 
     def _validate_kwargs(self, kwargs: dict, defaults_attr: str = "DEFAULTS", context: str = None):
-        """Validate keyword arguments against a defaults attribute of the class.
+        """
+        Validate keyword arguments against a defaults dictionary.
 
-        Args:
-            kwargs: Dictionary of keyword arguments to validate.
-            defaults_attr: Name of the attribute containing allowed defaults (default: "DEFAULTS").
-            context: Optional string identifying the caller for clearer error messages.
+        Parameters
+        ----------
+        kwargs : dict
+            Keyword arguments to validate.
+        defaults_attr : str, optional
+            Name of the attribute on this class containing the default keys
+            (e.g. "DEFAULTS"). Default is "DEFAULTS".
+        context : str or None, optional
+            Optional context label (e.g. caller name) included in error messages.
 
-        Raises:
-            ValueError: If any keys in kwargs are not listed in the defaults attribute.
+        Raises
+        ------
+        AttributeError
+            If the attribute named by `defaults_attr` does not exist.
+        ValueError
+            If any keys in `kwargs` are not present in the defaults dictionary.
         """
         defaults = getattr(self, defaults_attr, None)
         if defaults is None:
@@ -321,7 +394,32 @@ class TramDagDataset(Dataset):
             raise ValueError(f"{prefix}Unknown parameter(s): {', '.join(sorted(unknown))}")
 
     def _apply_settings(self, settings: dict):
-        # store everything into self (makes it easy to pass into DataLoader later)
+        """
+        Apply resolved settings to the dataset instance.
+
+        This method:
+
+        1. Stores all key–value pairs from `settings` as attributes on `self`.
+        2. Extracts `nodes_dict` from the configuration.
+        3. Validates that dict-valued core attributes (batch_size, shuffle, etc.)
+        have keys matching the node set.
+
+        Parameters
+        ----------
+        settings : dict
+            Resolved settings dictionary, usually built from `DEFAULTS` plus
+            user overrides.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If any dict-valued core attribute has keys that do not match
+            `cfg.conf_dict["nodes"].keys()`.
+        """
         for k, v in settings.items():
             setattr(self, k, v)
 
@@ -390,7 +488,31 @@ class TramDagDataset(Dataset):
                     print(f"[WARNING] Could not remove {pth}: {e}")
 
     def _check_keys(self, attr_name, attr_value):
-        """Check if dict keys match cfg.conf_dict['nodes'].keys()."""
+        """
+        Check that dict-valued attributes use node names as keys.
+
+        Parameters
+        ----------
+        attr_name : str
+            Name of the attribute being checked (for error messages).
+        attr_value : Any
+            Attribute value. If it is a dict, its keys are validated.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If `attr_value` is a dict and its keys do not exactly match
+            `cfg.conf_dict["nodes"].keys()`.
+
+        Notes
+        -----
+        This check prevents partial or mismatched per-node settings such as
+        batch sizes or shuffle flags.
+        """
         if isinstance(attr_value, dict):
             expected_keys = set(self.nodes_dict.keys())
             given_keys = set(attr_value.keys())

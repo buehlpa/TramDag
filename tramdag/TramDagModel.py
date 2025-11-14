@@ -63,6 +63,17 @@ from .TramDagDataset import TramDagDataset
 ## TODO solve visualizatin for probabalistic samples
 
 class TramDagModel:
+    """
+    Probabilistic DAG model built from node-wise TRAMs (transformation models).
+
+    This class manages:
+    - Configuration and per-node model construction.
+    - Data scaling (min–max).
+    - Training (sequential or per-node parallel on CPU).
+    - Diagnostics (loss history, intercepts, linear shifts, latents).
+    - Sampling from the joint DAG and loading stored samples.
+    - High-level summaries and plotting utilities.
+    """
     
     # ---- defaults used at construction time ----
     DEFAULTS_CONFIG = {
@@ -99,7 +110,16 @@ class TramDagModel:
     }
 
     def __init__(self):
-        """Empty init. Use classmethods like .from_config()."""
+        """
+        Initialize an empty TramDagModel shell.
+
+        Notes
+        -----
+        This constructor does not build any node models and does not attach a
+        configuration. Use `TramDagModel.from_config` or `TramDagModel.from_directory`
+        to obtain a fully configured and ready-to-use instance.
+        """
+        
         self.debug = False
         self.verbose = False
         self.device = 'auto'
@@ -107,6 +127,24 @@ class TramDagModel:
 
     @staticmethod
     def get_device(settings):
+        """
+        Resolve the target device string from a settings dictionary.
+
+        Parameters
+        ----------
+        settings : dict
+            Dictionary containing at least a key ``"device"`` with one of
+            {"auto", "cpu", "cuda"}. If missing, "auto" is assumed.
+
+        Returns
+        -------
+        str
+            Device string, either "cpu" or "cuda".
+
+        Notes
+        -----
+        If ``device == "auto"``, CUDA is selected if available, otherwise CPU.
+        """
         device_arg = settings.get("device", "auto")
         if device_arg == "auto":
             device_str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -115,15 +153,25 @@ class TramDagModel:
         return device_str
 
     def _validate_kwargs(self, kwargs: dict, defaults_attr: str = "DEFAULTS_FIT", context: str = None):
-        """Validate keyword arguments against a defaults attribute of the class.
+        """
+        Validate a kwargs dictionary against a class-level defaults dictionary.
 
-        Args:
-            kwargs: Dictionary of keyword arguments to validate.
-            defaults_attr: Name of the attribute containing allowed defaults (default: "DEFAULTS").
-            context: Optional string identifying the caller for clearer error messages.
+        Parameters
+        ----------
+        kwargs : dict
+            Keyword arguments to validate.
+        defaults_attr : str, optional
+            Name of the attribute on this class that contains the allowed keys,
+            e.g. ``"DEFAULTS_CONFIG"`` or ``"DEFAULTS_FIT"``. Default is "DEFAULTS_FIT".
+        context : str or None, optional
+            Optional label (e.g. caller name) to prepend in error messages.
 
-        Raises:
-            ValueError: If any keys in kwargs are not listed in the defaults attribute.
+        Raises
+        ------
+        AttributeError
+            If the attribute named by ``defaults_attr`` does not exist.
+        ValueError
+            If any key in ``kwargs`` is not present in the corresponding defaults dict.
         """
         defaults = getattr(self, defaults_attr, None)
         if defaults is None:
@@ -138,53 +186,52 @@ class TramDagModel:
     @classmethod
     def from_config(cls, cfg, **kwargs):
         """
-        Construct a `TramDagModel` instance by building one TramModel per node 
-        defined in the configuration file.
+        Construct a TramDagModel from a TramDagConfig object.
 
-        Each node model is initialized with its own set of settings, which can 
-        either be shared across all nodes (scalar arguments) or individually 
-        specified for each node (dictionary arguments keyed by node name).
+        This builds one TRAM model per node in the DAG and optionally writes
+        the initial model parameters to disk.
 
         Parameters
         ----------
-        cfg : object
-            Configuration object containing at least:
-                - `conf_dict["nodes"]`: mapping of node names to configurations.
-                - `conf_dict["PATHS"]["EXPERIMENT_DIR"]`: directory for saving model states.
+        cfg : TramDagConfig
+            Configuration wrapper holding the underlying configuration dictionary,
+            including at least:
+            - ``conf_dict["nodes"]``: mapping of node names to node configs.
+            - ``conf_dict["PATHS"]["EXPERIMENT_DIR"]``: experiment directory.
+        **kwargs
+            Node-level construction options. Each key must be present in
+            ``DEFAULTS_CONFIG``. Values can be:
+            - scalar: applied to all nodes.
+            - dict: mapping ``{node_name: value}`` for per-node overrides.
 
-        **kwargs : dict
-            Optional keyword arguments for customizing model instantiation.
-            Each argument can be either:
-                - scalar: applied to all nodes.
-                - dict: mapping `{node_name: value}` to apply per node.
-
-            Recognized keys include:
-                - `device`: "auto", "cpu", or "cuda" (default: "auto").
-                - `debug`: bool, print diagnostic information (default: False).
-                - `verbose`: bool, toggle verbose output (default: False).
-                - `overwrite_initial_weights`: bool, whether to overwrite saved model weights (default: True).
-                - Other model-specific parameters defined in `DEFAULTS_CONFIG`.
+            Common keys include:
+            device : {"auto", "cpu", "cuda"}, default "auto"
+                Device selection (CUDA if available when "auto").
+            debug : bool, default False
+                If True, print debug messages.
+            verbose : bool, default False
+                If True, print informational messages.
+            set_initial_weights : bool
+                Passed to underlying TRAM model constructors.
+            overwrite_initial_weights : bool, default True
+                If True, overwrite any existing ``initial_model.pt`` files per node.
+            initial_data : Any
+                Optional object passed down to node constructors.
 
         Returns
         -------
-        self : TramDagModel
-            An initialized TramDagModel instance with one TramModel per node.
+        TramDagModel
+            Fully initialized instance with:
+            - ``cfg``
+            - ``nodes_dict``
+            - ``models`` (per-node TRAMs)
+            - ``settings`` (resolved per-node config)
 
         Raises
         ------
         ValueError
-            If a dict-typed argument does not include all nodes from 
-            `cfg.conf_dict["nodes"].keys()`.
-
-        Notes
-        -----
-        - For each node, the method:
-            1. Resolves scalar and dict arguments into per-node settings.
-            2. Builds a TramModel via `get_fully_specified_tram_model()`.
-            3. Saves the initialized model state to 
-               `<EXPERIMENT_DIR>/<node>/initial_model.pt`.
-        - If `overwrite_initial_weights` is False, existing model states will not be overwritten.
-        - Device is automatically set to "cuda" if available unless explicitly specified.
+            If any dict-valued kwarg does not provide values for exactly the set
+            of nodes in ``cfg.conf_dict["nodes"]``.
         """
         
         self = cls()
@@ -279,28 +326,38 @@ class TramDagModel:
     @classmethod
     def from_directory(cls, EXPERIMENT_DIR: str, device: str = "auto", debug: bool = False, verbose: bool = False):
         """
-        Reconstruct a TramDagModel from an experiment directory.
+        Reconstruct a TramDagModel from an experiment directory on disk.
 
-        This loads:
-        - The configuration file (config.json).
-        - The minmax scaling file (min_max_scaling.json).
-        - Initializes all per-node models (like from_config).
+        This method:
+        1. Loads the configuration JSON.
+        2. Wraps it in a TramDagConfig.
+        3. Builds all node models via `from_config`.
+        4. Loads the min–max scaling dictionary.
 
         Parameters
         ----------
-        experiment_dir : str
-            Path to the experiment directory containing `config.json` and `min_max_scaling.json`.
-        device : str, optional
-            Device string ("cpu", "cuda", or "auto"). Default is "auto".
+        EXPERIMENT_DIR : str
+            Path to an experiment directory containing:
+            - ``configuration.json``
+            - ``min_max_scaling.json``.
+        device : {"auto", "cpu", "cuda"}, optional
+            Device selection. Default is "auto".
         debug : bool, optional
-            Enable debug printing. Default = False.
+            If True, enable debug messages. Default is False.
         verbose : bool, optional
-            Enable info printing. Default = True.
+            If True, enable informational messages. Default is False.
 
         Returns
         -------
         TramDagModel
-            A fully initialized TramDagModel with config and minmax loaded.
+            A TramDagModel instance with models, config, and scaling loaded.
+
+        Raises
+        ------
+        FileNotFoundError
+            If configuration or min–max files cannot be found.
+        RuntimeError
+            If the min–max file cannot be read or parsed.
         """
 
         # --- load config file ---
@@ -334,20 +391,31 @@ class TramDagModel:
 
     def _ensure_dataset(self, data, is_val=False,**kwargs):
         """
-        Ensure the input is converted to a TramDagDataset if needed.
+        Ensure that the input data is represented as a TramDagDataset.
 
         Parameters
         ----------
-        data : pd.DataFrame, TramDagDataset, or None
+        data : pandas.DataFrame, TramDagDataset, or None
             Input data to be converted or passed through.
-        is_val : bool, default=False
-            Whether the dataset is validation data (affects shuffle flag).
+        is_val : bool, optional
+            If True, the resulting dataset is treated as validation data
+            (e.g. no shuffling). Default is False.
+        **kwargs
+            Additional keyword arguments passed through to
+            ``TramDagDataset.from_dataframe``.
 
         Returns
         -------
         TramDagDataset or None
+            A TramDagDataset if ``data`` is a DataFrame or TramDagDataset,
+            otherwise None if ``data`` is None.
+
+        Raises
+        ------
+        TypeError
+            If ``data`` is not a DataFrame, TramDagDataset, or None.
         """
-        
+                
         if isinstance(data, pd.DataFrame):
             return TramDagDataset.from_dataframe(data, self.cfg, shuffle=not is_val,**kwargs)
         elif isinstance(data, TramDagDataset):
@@ -408,7 +476,7 @@ class TramDagModel:
         The computed min–max dictionary is expected to contain scaling statistics 
         per feature, typically in the form:
             {
-                "feature_name": {"min": float, "max": float},
+                "node": {"min": float, "max": float},
                 ...
             }
         """
@@ -447,8 +515,35 @@ class TramDagModel:
     @staticmethod
     def _fit_single_node(node, self_ref, settings, td_train_data, td_val_data, device_str):
         """
-        Train a single node model (used by Joblib workers).
-        Runs in a separate process, so all arguments must be picklable.
+        Train a single node model (helper for per-node training).
+
+        This method is designed to be called either from the main process
+        (sequential training) or from a joblib worker (parallel CPU training).
+
+        Parameters
+        ----------
+        node : str
+            Name of the target node to train.
+        self_ref : TramDagModel
+            Reference to the TramDagModel instance containing models and config.
+        settings : dict
+            Training settings dictionary, typically derived from ``DEFAULTS_FIT``
+            plus any user overrides.
+        td_train_data : TramDagDataset
+            Training dataset with node-specific DataLoaders in ``.loaders``.
+        td_val_data : TramDagDataset or None
+            Validation dataset or None.
+        device_str : str
+            Device string, e.g. "cpu" or "cuda".
+
+        Returns
+        -------
+        tuple
+            A tuple ``(node, history)`` where:
+            node : str
+                Node name.
+            history : dict or Any
+                Training history as returned by ``train_val_loop``.
         """
         torch.set_num_threads(1)  # prevent thread oversubscription
 
@@ -517,75 +612,67 @@ class TramDagModel:
 
     def fit(self, train_data, val_data=None, **kwargs):
         """
-        Train TRAM models for all nodes defined in the DAG configuration.
+        Train TRAM models for all nodes in the DAG.
 
-        This method coordinates training across all node models, either sequentially
-        or in parallel (CPU-only), handling dataset preparation, scaling, and 
-        process-safe execution of node-level training loops.
+        Coordinates dataset preparation, min–max scaling, and per-node training,
+        optionally in parallel on CPU.
 
         Parameters
         ----------
-        train_data : pd.DataFrame or TramDagDataset
-            Training dataset. Can be a pre-processed TramDagDataset or a raw DataFrame
-            that will be internally converted using `_ensure_dataset()`.
+        train_data : pandas.DataFrame or TramDagDataset
+            Training data. If a DataFrame is given, it is converted into a
+            TramDagDataset using `_ensure_dataset`.
+        val_data : pandas.DataFrame or TramDagDataset or None, optional
+            Validation data. If a DataFrame is given, it is converted into a
+            TramDagDataset. If None, no validation loss is computed.
+        **kwargs
+            Overrides for ``DEFAULTS_FIT``. All keys must exist in
+            ``DEFAULTS_FIT``. Common options:
 
-        val_data : pd.DataFrame or TramDagDataset, optional
-            Validation dataset, structured similarly to `train_data`.
-
-        **kwargs : dict, optional
-            Overrides or extends default training settings (`DEFAULTS_FIT`).
-            Common keys include:
-                - train_mode : {"sequential", "parallel"}, default="sequential"
-                    "parallel" uses joblib-based multiprocessing (CPU only).
-                - device : {"auto", "cpu", "cuda"}, default="auto"
-                - num_workers : int, DataLoader workers (ignored in parallel mode)
-                - prefetch_factor : int, DataLoader prefetch (ignored in parallel mode)
-                - persistent_workers : bool, DataLoader persistence flag (ignored in parallel mode)
-                - epochs : int, training epochs per node
-                - learning_rate : float, optimizer learning rate
-                - debug : bool, print diagnostic information
-                - verbose : bool, print training progress
-                - return_history : bool, if True returns training history
-                - train_list : list[str], subset of nodes to train (default: all nodes)
+            epochs : int, default 100
+                Number of training epochs per node.
+            learning_rate : float, default 0.01
+                Learning rate for the default Adam optimizer.
+            train_list : list of str or None, optional
+                List of node names to train. If None, all nodes are trained.
+            train_mode : {"sequential", "parallel"}, default "sequential"
+                Training mode. "parallel" uses joblib-based CPU multiprocessing.
+                GPU forces sequential mode.
+            device : {"auto", "cpu", "cuda"}, default "auto"
+                Device selection.
+            optimizers : dict or None
+                Optional mapping ``{node_name: optimizer}``. If provided for a
+                node, that optimizer is used instead of creating a new Adam.
+            schedulers : dict or None
+                Optional mapping ``{node_name: scheduler}``.
+            use_scheduler : bool
+                If True, enable scheduler usage in the training loop.
+            num_workers : int
+                DataLoader workers in sequential mode (ignored in parallel).
+            persistent_workers : bool
+                DataLoader persistence in sequential mode (ignored in parallel).
+            prefetch_factor : int
+                DataLoader prefetch factor (ignored in parallel).
+            batch_size : int
+                Batch size for all node DataLoaders.
+            debug : bool
+                Enable debug output.
+            verbose : bool
+                Enable informational logging.
+            return_history : bool
+                If True, return a history dict.
 
         Returns
         -------
-        results : dict, optional
-            If `return_history=True`, returns a dictionary mapping each node name
-            to its training history (as returned by `_fit_single_node()`).
-
-        Behavior
-        --------
-        - Validates and merges keyword arguments with `DEFAULTS_FIT`.
-        - Determines execution device via `get_device()`.
-        - Prepares `TramDagDataset` objects for training and validation.
-        - Computes or loads min–max normalization parameters.
-        - Executes training:
-            * **Sequential mode** — runs node models one after another (default and required for CUDA).
-            * **Parallel mode** — spawns CPU workers using joblib for independent node training.
-        - Each node’s results are aggregated into a dictionary if requested.
-
-        Safety Logic
-        -------------
-        - In parallel mode, DataLoader multiprocessing parameters
-          (`num_workers`, `prefetch_factor`, `persistent_workers`) are disabled
-          to prevent nested multiprocessing errors.
-        - GPU devices automatically force sequential mode.
+        dict or None
+            If ``return_history=True``, a dictionary mapping each node name
+            to its training history. Otherwise, returns None.
 
         Raises
         ------
         ValueError
-            If `train_mode` is not "sequential" or "parallel".
-
-        Notes
-        -----
-        - Each node model’s training artifacts and checkpoints are stored in:
-              `<EXPERIMENT_DIR>/<node>/`
-        - For parallel mode, the number of workers is automatically limited to 
-          half of available CPU cores.
-        - Verbose and debug flags control console logging granularity.
+            If ``train_mode`` is not "sequential" or "parallel".
         """
-
         self._validate_kwargs(kwargs, defaults_attr='DEFAULTS_FIT', context="fit")
         
         # --- merge defaults ---
@@ -673,16 +760,31 @@ class TramDagModel:
     ## FIT-DIAGNOSTICS
     def loss_history(self):
         """
-        Load training and validation loss histories for all nodes.
+        Load training and validation loss history for all nodes.
 
-        Looks for JSON files in:
-            EXPERIMENT_DIR/{node}/train_loss_hist.json
-            EXPERIMENT_DIR/{node}/val_loss_hist.json
+        Looks for per-node JSON files:
+
+        - ``EXPERIMENT_DIR/{node}/train_loss_hist.json``
+        - ``EXPERIMENT_DIR/{node}/val_loss_hist.json``
 
         Returns
         -------
         dict
-            {node: {"train": train_hist, "validation": val_hist}}
+            A dictionary mapping node names to:
+
+            .. code-block:: python
+
+                {
+                    "train": list or None,
+                    "validation": list or None
+                }
+
+            where each list contains NLL values per epoch, or None if not found.
+
+        Raises
+        ------
+        ValueError
+            If the experiment directory cannot be resolved from the configuration.
         """
         try:
             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -731,12 +833,26 @@ class TramDagModel:
 
     def linear_shift_history(self):
         """
-        Load linear shift histories for all nodes.
+        Load linear shift term histories for all nodes.
+
+        Each node history is expected in a JSON file named
+        ``linear_shifts_all_epochs.json`` under the node directory.
 
         Returns
         -------
         dict
-            Mapping of node names to their linear shift history DataFrames.
+            A mapping ``{node_name: pandas.DataFrame}``, where each DataFrame
+            contains linear shift weights across epochs.
+
+        Raises
+        ------
+        ValueError
+            If the experiment directory cannot be resolved from the configuration.
+
+        Notes
+        -----
+        If a history file is missing for a node, a warning is printed and the
+        node is omitted from the returned dictionary.
         """
         histories = {}
         try:
@@ -758,12 +874,26 @@ class TramDagModel:
 
     def simple_intercept_history(self):
         """
-        Load simple_intercept_history histories for all nodes.
+        Load simple intercept histories for all nodes.
+
+        Each node history is expected in a JSON file named
+        ``simple_intercepts_all_epochs.json`` under the node directory.
 
         Returns
         -------
         dict
-            Mapping of node names to their simple_intercept_history history DataFrames.
+            A mapping ``{node_name: pandas.DataFrame}``, where each DataFrame
+            contains intercept weights across epochs.
+
+        Raises
+        ------
+        ValueError
+            If the experiment directory cannot be resolved from the configuration.
+
+        Notes
+        -----
+        If a history file is missing for a node, a warning is printed and the
+        node is omitted from the returned dictionary.
         """
         histories = {}
         try:
@@ -785,20 +915,27 @@ class TramDagModel:
 
     def get_latent(self, df, verbose=False):
         """
-        Compute latent representations for the full DAG.
+        Compute latent representations for all nodes in the DAG.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Input dataframe with columns for each node.
+        df : pandas.DataFrame
+            Input data frame with columns corresponding to nodes in the DAG.
         verbose : bool, optional
-            If True, prints [INFO] statements during processing.
+            If True, print informational messages during latent computation.
+            Default is False.
 
         Returns
         -------
-        pd.DataFrame
-            DataFrame with latent variables for each node. Columns are
-            [node, f"{node}_U"] for each continuous target.
+        pandas.DataFrame
+            DataFrame containing the original columns plus latent variables
+            for each node (e.g. columns named ``f"{node}_U"``).
+
+        Raises
+        ------
+        ValueError
+            If the experiment directory is missing from the configuration or
+            if ``self.minmax_dict`` has not been set.
         """
         try:
             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -830,13 +967,23 @@ class TramDagModel:
     
     def plot_loss_history(self, variable: str = None):
         """
-        Plot training and validation loss histories.
+        Plot training and validation loss evolution per node.
 
         Parameters
         ----------
-        variable : str, optional
-            If given, plot only this node's loss_history.
-            If None, plot all nodes together.
+        variable : str or None, optional
+            If provided, plot loss history for this node only. If None, plot
+            histories for all nodes that have both train and validation logs.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Two subplots are produced:
+        - Full epoch history.
+        - Last 10% of epochs (or only the last epoch if fewer than 5 epochs).
         """
 
         histories = self.loss_history()
@@ -905,15 +1052,29 @@ class TramDagModel:
 
     def plot_linear_shift_history(self, data_dict=None, node=None, ref_lines=None):
         """
-        Plot evolution of shift terms for one or all nodes.
+        Plot the evolution of linear shift terms over epochs.
 
-        Args:
-            data_dict (dict, optional): {node_name: DataFrame} with shift weights.
-                                        If None, uses self.linear_shift_history().
-            node (str, optional): If given, plot only that node; otherwise plot all.
-            ref_lines (dict, optional): {node_name: [y_values]} for reference lines.
+        Parameters
+        ----------
+        data_dict : dict or None, optional
+            Pre-loaded mapping ``{node_name: pandas.DataFrame}`` containing shift
+            weights across epochs. If None, `linear_shift_history()` is called.
+        node : str or None, optional
+            If provided, plot only this node. Otherwise, plot all nodes
+            present in ``data_dict``.
+        ref_lines : dict or None, optional
+            Optional mapping ``{node_name: list of float}``. For each specified
+            node, horizontal reference lines are drawn at the given values.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The function flattens nested list-like entries in the DataFrames to scalars,
+        converts epoch labels to numeric, and then draws one line per shift term.
         """
-
 
         if data_dict is None:
             data_dict = self.linear_shift_history()
@@ -969,12 +1130,28 @@ class TramDagModel:
 
     def plot_simple_intercepts_history(self, data_dict=None, node=None,ref_lines=None):
         """
-        Plot evolution of simple intercept weights for one or all nodes.
+        Plot the evolution of simple intercept weights over epochs.
 
-        Args:
-            data_dict (dict, optional): {node_name: DataFrame} with intercept weights.
-                                        If None, uses self.simple_intercept_history().
-            node (str, optional): If given, plot only that node; otherwise plot all.
+        Parameters
+        ----------
+        data_dict : dict or None, optional
+            Pre-loaded mapping ``{node_name: pandas.DataFrame}`` containing intercept
+            weights across epochs. If None, `simple_intercept_history()` is called.
+        node : str or None, optional
+            If provided, plot only this node. Otherwise, plot all nodes present
+            in ``data_dict``.
+        ref_lines : dict or None, optional
+            Optional mapping ``{node_name: list of float}``. For each specified
+            node, horizontal reference lines are drawn at the given values.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Nested list-like entries in the DataFrames are reduced to scalars before
+        plotting. One line is drawn per intercept parameter.
         """
         if data_dict is None:
             data_dict = self.simple_intercept_history()
@@ -1019,20 +1196,31 @@ class TramDagModel:
 
     def plot_latents(self, df, variable: str = None, confidence: float = 0.95, simulations: int = 1000):
         """
-        Plot latent U distributions for one node or all nodes.
+        Visualize latent U distributions for one or all nodes.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Input dataframe with the raw data.
-        variable : str, optional
-            If given, only plot for this node. If None, plot all nodes.
+        df : pandas.DataFrame
+            Input data frame with raw node values.
+        variable : str or None, optional
+            If provided, only this node's latents are plotted. If None, all
+            nodes with latent columns are processed.
         confidence : float, optional
-            Confidence level for QQ plot bands. Default = 0.95.
+            Confidence level for QQ-plot bands (0 < confidence < 1).
+            Default is 0.95.
         simulations : int, optional
-            Number of simulations for QQ bands. Default = 1000.
-        """
+            Number of Monte Carlo simulations for QQ-plot bands. Default is 1000.
 
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        For each node, two plots are produced:
+        - Histogram of the latent U values.
+        - QQ-plot with simulation-based confidence bands under a logistic reference.
+        """
         # Compute latent representations
         latents_df = self.get_latent(df)
 
@@ -1067,46 +1255,32 @@ class TramDagModel:
     def plot_hdag(self,df,variables=None, plot_n_rows=1,**kwargs):
         
         """
-        Visualize the transformation function h() for specified nodes or all nodes
+        Visualize the transformation function h() for selected DAG nodes.
 
         Parameters
         ----------
         df : pandas.DataFrame
-            Input data containing node values or model predictions. 
-            Can include multiple rows (samples). Only the first `plot_n_rows` 
-            will be visualized.
+            Input data containing node values or model predictions.
+        variables : list of str or None, optional
+            Names of nodes to visualize. If None, all nodes in ``self.models``
+            are considered.
+        plot_n_rows : int, optional
+            Maximum number of rows from ``df`` to visualize. Default is 1.
+        **kwargs
+            Additional keyword arguments forwarded to the underlying plotting
+            helpers (`show_hdag_continous` / `show_hdag_ordinal`).
 
-        variables : list of str, optional
-            List of variable names (nodes) to visualize. 
-            If None, all nodes present in `self.models.keys()` will be plotted.
-
-        plot_n_rows : int, default=5
-            Maximum number of rows from `df` to visualize. 
-            If `len(df) > plot_n_rows`, a warning is printed and the plot is truncated.
-
-        Behavior
-        --------
-        For each specified node:
-        - If the node represents a continuous outcome (as determined by 
-          `is_outcome_modelled_continous(node, self.nodes_dict)`), 
-          the function calls `show_hdag_continous()` to plot the model results 
-          using configuration parameters from `self.cfg.conf_dict` and 
-          scaling information from `self.minmax_dict`.
-        - If the node is not continuous, a warning message is printed.
+        Returns
+        -------
+        None
 
         Notes
         -----
-        - This method currently supports only continuous nodes.
-        - Visualization is device-aware (uses `self.device`).
-        - Intended for inspecting model behavior across multiple samples.
-
-        Warnings
-        --------
-        Prints a warning if:
-        - `df` contains more rows than `plot_n_rows`.
-        - A node is not continuous and therefore not plotted.
+        - For continuous outcomes, `show_hdag_continous` is called.
+        - For ordinal outcomes, `show_hdag_ordinal` is called.
+        - Nodes that are neither continuous nor ordinal are skipped with a warning.
         """
-        
+                
 
         if len(df)> 1:
             print("[WARNING] len(df)>1, set: plot_n_rows accordingly")
@@ -1126,7 +1300,31 @@ class TramDagModel:
     @staticmethod
     def _add_r_style_confidence_bands(ax, sample, dist, confidence=0.95, simulations=1000):
         """
-        Adds confidence bands to a QQ plot using simulation under the null hypothesis.
+        Add simulation-based confidence bands to a QQ-plot.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes object on which to draw the QQ-plot and bands.
+        sample : array-like
+            Empirical sample used in the QQ-plot.
+        dist : scipy.stats distribution
+            Distribution object providing ``ppf`` and ``rvs`` methods (e.g. logistic).
+        confidence : float, optional
+            Confidence level (0 < confidence < 1) for the bands. Default is 0.95.
+        simulations : int, optional
+            Number of Monte Carlo simulations used to estimate the bands. Default is 1000.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The axes are cleared, and a new QQ-plot is drawn with:
+        - Empirical vs. theoretical quantiles.
+        - 45-degree reference line.
+        - Shaded confidence band region.
         """
         
         n = len(sample)
@@ -1163,25 +1361,59 @@ class TramDagModel:
         **kwargs,
     ):
         """
-        Sample from the DAG using trained TRAM models.
+        Sample from the joint DAG using the trained TRAM models.
 
+        Allows for:
+        
+        Oberservational sampling
+        Interventional sampling via ``do()`` operations
+        Counterfactial sampling using predefined latent draws and do()
+        
         Parameters
         ----------
-        do_interventions : dict, optional
-            Mapping of node names to fixed values. Example: {'x1': 1.0}.
-        predefined_latent_samples_df : pd.DataFrame, optional
-            DataFrame with predefined latent U's. Must contain columns "{node}_U".
-        kwargs : dict
-            Overrides for default settings (number_of_samples, batch_size, device, etc.).
+        do_interventions : dict or None, optional
+            Mapping of node names to intervened (fixed) values. For example:
+            ``{"x1": 1.0}`` represents ``do(x1 = 1.0)``. Default is None.
+        predefined_latent_samples_df : pandas.DataFrame or None, optional
+            DataFrame containing columns ``"{node}_U"`` with predefined latent
+            draws to be used instead of sampling from the prior. Default is None.
+        **kwargs
+            Sampling options overriding internal defaults:
+
+            number_of_samples : int, default 10000
+                Total number of samples to draw.
+            batch_size : int, default 32
+                Batch size for internal sampling loops.
+            delete_all_previously_sampled : bool, default True
+                If True, delete old sampling files in node-specific sampling
+                directories before writing new ones.
+            verbose : bool
+                If True, print informational messages.
+            debug : bool
+                If True, print debug output.
+            device : {"auto", "cpu", "cuda"}
+                Device selection for sampling.
+            use_initial_weights_for_sampling : bool, default False
+                If True, sample from initial (untrained) model parameters.
 
         Returns
         -------
-        sampled_by_node : dict
-            Mapping {node: tensor of sampled values}.
-        latents_by_node : dict
-            Mapping {node: tensor of latent U's used}.
-        """
+        tuple
+            A tuple ``(sampled_by_node, latents_by_node)``:
 
+            sampled_by_node : dict
+                Mapping ``{node_name: torch.Tensor}`` of sampled node values.
+            latents_by_node : dict
+                Mapping ``{node_name: torch.Tensor}`` of latent U values used.
+
+        Raises
+        ------
+        ValueError
+            If the experiment directory cannot be resolved or if scaling
+            information (``self.minmax_dict``) is missing.
+        RuntimeError
+            If min–max scaling has not been computed before calling `sample`.
+        """
         try:
             EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         except KeyError:
@@ -1242,22 +1474,37 @@ class TramDagModel:
 
     def load_sampled_and_latents(self, EXPERIMENT_DIR: str = None, nodes: list = None):
         """
-        Load 'sampled.pt' and 'latents.pt' tensors for each node.
+        Load previously stored sampled values and latents for each node.
 
         Parameters
         ----------
-        EXPERIMENT_DIR : str, optional
-            Path to the experiment directory. If not provided, uses
-            self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"].
-        nodes : list, optional
-            List of node names to load. If not provided, loads all nodes in self.nodes_dict.
+        EXPERIMENT_DIR : str or None, optional
+            Experiment directory path. If None, it is taken from
+            ``self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]``.
+        nodes : list of str or None, optional
+            Nodes for which to load samples. If None, use all nodes from
+            ``self.nodes_dict``.
 
         Returns
         -------
-        sampled_by_node : dict
-            {node: sampled tensor (on CPU)}
-        latents_by_node : dict
-            {node: latent tensor (on CPU)}
+        tuple
+            A tuple ``(sampled_by_node, latents_by_node)``:
+
+            sampled_by_node : dict
+                Mapping ``{node_name: torch.Tensor}`` of sampled values (on CPU).
+            latents_by_node : dict
+                Mapping ``{node_name: torch.Tensor}`` of latent values (on CPU).
+
+        Raises
+        ------
+        ValueError
+            If the experiment directory cannot be resolved or if no node list
+            is available and ``nodes`` is None.
+
+        Notes
+        -----
+        Nodes without both ``sampled.pt`` and ``latents.pt`` files are skipped
+        with a warning.
         """
         # --- resolve paths and node list ---
         if EXPERIMENT_DIR is None:
@@ -1317,6 +1564,43 @@ class TramDagModel:
         hist_est_color: str = "orange",
         figsize: tuple = (14, 5),
     ):
+        
+        
+        """
+        Compare sampled vs. observed distributions for selected nodes.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Data frame containing the observed node values.
+        sampled : dict or None, optional
+            Optional mapping ``{node_name: array-like or torch.Tensor}`` of sampled
+            values. If None or if a node is missing, samples are loaded from
+            ``EXPERIMENT_DIR/{node}/sampling/sampled.pt``.
+        variable : list of str or None, optional
+            Subset of nodes to plot. If None, all nodes in the configuration
+            are considered.
+        bins : int, optional
+            Number of histogram bins for continuous variables. Default is 100.
+        hist_true_color : str, optional
+            Color name for the histogram of true values. Default is "blue".
+        hist_est_color : str, optional
+            Color name for the histogram of sampled values. Default is "orange".
+        figsize : tuple, optional
+            Figure size for the matplotlib plots. Default is (14, 5).
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        - Continuous outcomes: histogram overlay + QQ-plot.
+        - Ordinal outcomes: side-by-side bar plot of relative frequencies.
+        - Other categorical outcomes: side-by-side bar plot with category labels.
+        - If samples are probabilistic (2D tensor), the argmax across classes is used.
+        """
+        
         target_nodes = self.cfg.conf_dict["nodes"]
         experiment_dir = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1479,11 +1763,32 @@ class TramDagModel:
     
     def get_train_val_nll(self, node: str, mode: str) -> tuple[float, float]:
         """
-        Return the training and validation NLL for the given node and mode.
-        mode ∈ {'best', 'last', 'init'}:
-            - 'best' → NLL at the epoch with the lowest val NLL
-            - 'last' → NLL from the last epoch
-            - 'init' → NLL from the first epoch (index 0)
+        Retrieve training and validation NLL for a node and a given model state.
+
+        Parameters
+        ----------
+        node : str
+            Node name.
+        mode : {"best", "last", "init"}
+            State of interest:
+            - "best": epoch with lowest validation NLL.
+            - "last": final epoch.
+            - "init": first epoch (index 0).
+
+        Returns
+        -------
+        tuple of (float or None, float or None)
+            A tuple ``(train_nll, val_nll)`` for the requested mode.
+            Returns ``(None, None)`` if loss files are missing or cannot be read.
+
+        Notes
+        -----
+        This method expects per-node JSON files:
+
+        - ``train_loss_hist.json``
+        - ``val_loss_hist.json``
+
+        in the node directory.
         """
         NODE_DIR = os.path.join(self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"], node)
         train_path = os.path.join(NODE_DIR, "train_loss_hist.json")
@@ -1522,23 +1827,31 @@ class TramDagModel:
 
     def get_thetas(self, node: str, state: str = "best"):
         """
-        Return the learned theta (intercept) parameters for a given node and model state.
-
-        If the intercept dictionary for the given state does not exist,
-        compute it using get_simple_intercepts_dict(). Otherwise, directly return
-        the entry from the cached dictionary.
+        Return transformed intercept (theta) parameters for a node and state.
 
         Parameters
         ----------
         node : str
-            Node name for which to retrieve theta (intercept) parameters.
-        state : str, optional
-            Model state ("best", "last", or "init"). Defaults to "best".
+            Node name.
+        state : {"best", "last", "init"}, optional
+            Model state for which to return parameters. Default is "best".
 
         Returns
         -------
-        float, list, or None
-            Theta (intercept) parameters for the specified node and state.
+        Any or None
+            Transformed theta parameters for the requested node and state.
+            The exact structure (scalar, list, or other) depends on the model.
+
+        Raises
+        ------
+        ValueError
+            If an invalid state is given (not in {"best", "last", "init"}).
+
+        Notes
+        -----
+        Intercept dictionaries are cached on the instance under the attribute
+        ``intercept_dicts``. If missing or incomplete, they are recomputed using
+        `get_simple_intercepts_dict`.
         """
 
         state = state.lower()
@@ -1577,25 +1890,32 @@ class TramDagModel:
         
     def get_linear_shifts(self, node: str, state: str = "best"):
         """
-        Return the learned linear shift terms for a given node and model state.
-
-        If the linear shift dictionary for the given state does not exist,
-        compute it using get_linear_shifts_dict(). Otherwise, directly return
-        the entry from the cached dictionary.
+        Return learned linear shift terms for a node and a given state.
 
         Parameters
         ----------
         node : str
-            Node name for which to retrieve linear shift terms.
-        state : str, optional
-            Model state ("best", "last", or "init"). Defaults to "best".
+            Node name.
+        state : {"best", "last", "init"}, optional
+            Model state for which to return linear shift terms. Default is "best".
 
         Returns
         -------
-        dict or None
-            Linear shift terms for the specified node and state.
-        """
+        dict or Any or None
+            Linear shift terms for the given node and state. Usually a dict
+            mapping term names to weights.
 
+        Raises
+        ------
+        ValueError
+            If an invalid state is given (not in {"best", "last", "init"}).
+
+        Notes
+        -----
+        Linear shift dictionaries are cached on the instance under the attribute
+        ``linear_shift_dicts``. If missing or incomplete, they are recomputed using
+        `get_linear_shifts_dict`.
+        """
         state = state.lower()
         if state not in ["best", "last", "init"]:
             raise ValueError(f"[ERROR] Invalid state '{state}'. Must be one of ['best', 'last', 'init'].")
@@ -1633,14 +1953,33 @@ class TramDagModel:
 
     def get_linear_shifts_dict(self):
         """
-        Return a nested dictionary of linear shift terms for all nodes.
-        Output structure:
-            {
-                'best': {node: {...}},
-                'last': {node: {...}},
-                'init': {node: {...}}
-            }
-        If no best or last model exists, only 'init' is returned for that node.
+        Compute linear shift term dictionaries for all nodes and states.
+
+        For each node and each available state ("best", "last", "init"), this
+        method loads the corresponding model checkpoint, extracts linear shift
+        weights from the TRAM model, and stores them in a nested dictionary.
+
+        Returns
+        -------
+        dict
+            Nested dictionary of the form:
+
+            .. code-block:: python
+
+                {
+                    "best": {node: {...}},
+                    "last": {node: {...}},
+                    "init": {node: {...}},
+                }
+
+            where the innermost dict maps term labels (e.g. ``"ls(parent_name)"``)
+            to their weights.
+
+        Notes
+        -----
+        - If "best" or "last" checkpoints are unavailable for a node, only
+        the "init" entry is populated.
+        - Empty outer states (without any nodes) are removed from the result.
         """
 
         EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -1706,15 +2045,32 @@ class TramDagModel:
 
     def get_simple_intercepts_dict(self):
         """
-        Return a nested dictionary of transformed simple intercept (SI) weights 
-        for all nodes and model states ('best', 'last', 'init').
-        Output structure:
-            {
-                'best': {node: [...]},
-                'last': {node: [...]},
-                'init': {node: [...]}
-            }
-        If no best or last model exists, only 'init' is returned for that node.
+        Compute transformed simple intercept dictionaries for all nodes and states.
+
+        For each node and each available state ("best", "last", "init"), this
+        method loads the corresponding model checkpoint, extracts simple intercept
+        weights, transforms them into interpretable theta parameters, and stores
+        them in a nested dictionary.
+
+        Returns
+        -------
+        dict
+            Nested dictionary of the form:
+
+            .. code-block:: python
+
+                {
+                    "best": {node: [[theta_1], [theta_2], ...]},
+                    "last": {node: [[theta_1], [theta_2], ...]},
+                    "init": {node: [[theta_1], [theta_2], ...]},
+                }
+
+        Notes
+        -----
+        - For ordinal models (``self.is_ontram == True``), `transform_intercepts_ordinal`
+        is used.
+        - For continuous models, `transform_intercepts_continous` is used.
+        - Empty outer states (without any nodes) are removed from the result.
         """
 
         EXPERIMENT_DIR = self.cfg.conf_dict["PATHS"]["EXPERIMENT_DIR"]
@@ -1787,7 +2143,29 @@ class TramDagModel:
        
     def summary(self, verbose=False):
         """
-        Summarize TramDagModel training status, parameters, and checkpoints.
+        Print a multi-part textual summary of the TramDagModel.
+
+        The summary includes:
+        1. Training metrics overview per node (best/last NLL, epochs).
+        2. Node-specific details (thetas, linear shifts, optional architecture).
+        3. Basic information about the attached training DataFrame, if present.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If True, include extended per-node details such as the model
+            architecture, parameter count, and availability of checkpoints
+            and sampling results. Default is False.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This method prints to stdout and does not return structured data.
+        It is intended for quick, human-readable inspection of the current
+        training and model state.
         """
 
         # ---------- SETUP ----------
