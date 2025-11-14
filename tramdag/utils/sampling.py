@@ -955,7 +955,7 @@ def sample_node_distParents_detLatent(node,target_nodes_dict,number_of_samples,b
             np.savetxt(RANGED_SAMPLED_PATH, range_sampled, delimiter=",")
 
         # frequency count of how many times each category was sampled as proba distributin e.g. 3 classes: [0.1,0.3,0.6]     
-        levels = target_nodes_dict[node]['levels']
+        levels = target_nodes_dict[node]['levels'] # in TODO continous case there will be no levels
         counts = np.bincount(range_sampled, minlength=levels)
         frequencies = counts / counts.sum()
         counterfactual_frequency.append(frequencies)
