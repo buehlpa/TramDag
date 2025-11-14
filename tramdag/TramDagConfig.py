@@ -27,13 +27,51 @@ from .utils.configuration import *
 
 # renamme set _meta_adj amtrix
 class TramDagConfig:
+    """
+    Configuration manager for TRAM-DAG experiments.
+
+    This class encapsulates:
+
+    - The experiment configuration dictionary (`conf_dict`).
+    - Its backing file path (`CONF_DICT_PATH`).
+    - Utilities to load, validate, modify, and persist configuration.
+    - DAG visualization and interactive editing helpers.
+
+    Typical usage
+    -------------
+    - Load existing configuration from disk via `TramDagConfig.load_json`.
+    - Or create/reuse experiment setup via `TramDagConfig().setup_configuration`.
+    - Update sections such as `data_type`, adjacency matrix, and neural network
+    model names using the provided methods.
+    """
+        
     def __init__(self, conf_dict: dict = None, CONF_DICT_PATH: str = None,  _verify: bool = False,**kwargs):
         """
-        Initialize TramDagConfig.
+        Initialize a TramDagConfig instance.
 
-        Args:
-            conf_dict: optional dict with configuration. If None, starts empty.
-            CONF_DICT_PATH: optional path to config file.
+        Parameters
+        ----------
+        conf_dict : dict or None, optional
+            Configuration dictionary. If None, an empty dict is used and can
+            be populated later. Default is None.
+        CONF_DICT_PATH : str or None, optional
+            Path to the configuration file on disk. Default is None.
+        _verify : bool, optional
+            If True, run `_verify_completeness()` after initialization.
+            Default is False.
+        **kwargs
+            Additional attributes to be set on the instance. Keys "conf_dict"
+            and "CONF_DICT_PATH" are forbidden and raise a ValueError.
+
+        Raises
+        ------
+        ValueError
+            If any key in `kwargs` is "conf_dict" or "CONF_DICT_PATH".
+
+        Notes
+        -----
+        By default, `debug` and `verbose` are set to False. They can be
+        overridden via `kwargs`.
         """
 
         self.debug = False
@@ -53,25 +91,55 @@ class TramDagConfig:
 
     @classmethod
     def load_json(cls, CONF_DICT_PATH: str,debug: bool = False):
-        """Load a configuration from file and initialize a new instance.
-
-        Reads a configuration dictionary from the specified path and returns
-        a class instance initialized with that configuration.
-
-        Args:
-            CONF_DICT_PATH: Path to the configuration file to load.
-            debug: Whether to enable debug mode during initialization.
-
-        Returns:
-            An instance of the class initialized with the loaded configuration.
         """
+        Load a configuration from a JSON file and construct a TramDagConfig.
+
+        Parameters
+        ----------
+        CONF_DICT_PATH : str
+            Path to the configuration JSON file.
+        debug : bool, optional
+            If True, initialize the instance with `debug=True`. Default is False.
+
+        Returns
+        -------
+        TramDagConfig
+            Newly created configuration instance with `conf_dict` loaded from
+            `CONF_DICT_PATH` and `_verify_completeness()` executed.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the configuration file cannot be found (propagated by
+            `load_configuration_dict`).
+        """
+
         conf = load_configuration_dict(CONF_DICT_PATH)
         return cls(conf, CONF_DICT_PATH=CONF_DICT_PATH, debug=debug, _verify=True)
 
     def update(self):
         """
-        Reload the latest configuration from disk into the current instance.
+        Reload the latest configuration from disk into this instance.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If `CONF_DICT_PATH` is not set on the instance.
+
+        Notes
+        -----
+        The current in-memory `conf_dict` is overwritten by the contents
+        loaded from `CONF_DICT_PATH`.
         """
+
         if not hasattr(self, "CONF_DICT_PATH") or self.CONF_DICT_PATH is None:
             raise ValueError("CONF_DICT_PATH not set — cannot update configuration.")
         
@@ -80,16 +148,28 @@ class TramDagConfig:
 
 
     def save(self, CONF_DICT_PATH: str = None):
-        """Save the current configuration to a file.
+        """
+        Persist the current configuration dictionary to disk.
 
-        If no path is provided, the method uses the stored `self.CONF_DICT_PATH`. 
-        Raises an error if neither is available.
+        Parameters
+        ----------
+        CONF_DICT_PATH : str or None, optional
+            Target path for the configuration file. If None, uses
+            `self.CONF_DICT_PATH`. Default is None.
 
-        Args:
-            CONF_DICT_PATH: Optional. Path to the configuration file to write.
+        Returns
+        -------
+        None
 
-        Raises:
-            ValueError: If no valid path is provided.
+        Raises
+        ------
+        ValueError
+            If neither the function argument nor `self.CONF_DICT_PATH`
+            provides a valid path.
+
+        Notes
+        -----
+        The resulting file is written via `write_configuration_dict`.
         """
         path = CONF_DICT_PATH or self.CONF_DICT_PATH
         if path is None:
@@ -98,10 +178,48 @@ class TramDagConfig:
 
     def _verify_completeness(self):
         """
-        Verify that the configuration is complete and consistent:
-        - All mandatory keys exist
-        - Mandatory keys have valid values
-        - Optional keys (if present) are valid
+        Check that the configuration is structurally complete and consistent.
+
+        The following checks are performed:
+
+        1. Top-level mandatory keys:
+        - "experiment_name"
+        - "PATHS"
+        - "nodes"
+        - "data_type"
+        - "adj_matrix"
+        - "model_names"
+
+        2. Per-node mandatory keys:
+        - "data_type"
+        - "node_type"
+        - "parents"
+        - "parents_datatype"
+        - "transformation_terms_in_h()"
+        - "transformation_term_nn_models_in_h()"
+
+        3. Ordinal / categorical levels:
+        - All ordinal variables must have a corresponding "levels" entry
+            under `conf_dict["nodes"][var]`.
+
+        4. Experiment name:
+        - Must be non-empty.
+
+        5. Adjacency matrix:
+        - Must be valid under `validate_adj_matrix`.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        - Missing or invalid components are reported via printed warnings.
+        - Detailed debug messages are printed when `self.debug=True`.
         """
         mandatory_keys = ["experiment_name","PATHS", "nodes", "data_type", "adj_matrix","nodes","model_names"]
         optional_keys = ["date_of_creation", "seed"]
@@ -144,7 +262,23 @@ class TramDagConfig:
 
     def _verify_levels_dict(self):
         """
-        Verify that levels_dict is present for all categorical variables.
+        Verify that all ordinal variables have levels specified in the config.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bool
+            True if all variables declared as ordinal in ``conf_dict["data_type"]``
+            have a "levels" entry in ``conf_dict["nodes"][var]``.
+            False otherwise.
+
+        Notes
+        -----
+        This method does not modify the configuration; it only checks presence
+        of level information.
         """
         data_type = self.conf_dict.get('data_type', {})
         nodes = self.conf_dict.get('nodes', {})
@@ -155,12 +289,42 @@ class TramDagConfig:
         return True
 
     def _verify_experiment_name(self):
+        """
+        Check whether the experiment name in the configuration is valid.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bool
+            True if ``conf_dict["experiment_name"]`` exists and is non-empty
+            after stripping whitespace. False otherwise.
+        """
         experiment_name = self.conf_dict.get("experiment_name")
         if experiment_name is None or str(experiment_name).strip() == "":
             return False
         return True
         
     def _verify_adj_matrix(self):
+        """
+        Validate the adjacency matrix stored in the configuration.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bool
+            True if the adjacency matrix passes `validate_adj_matrix`, False otherwise.
+
+        Notes
+        -----
+        If the adjacency matrix is stored as a list, it is converted to a
+        NumPy array before validation.
+        """
         adj_matrix = self.conf_dict['adj_matrix']
         if isinstance(adj_matrix, list):
             adj_matrix = np.array(self.conf_dict['adj_matrix'])
@@ -170,22 +334,36 @@ class TramDagConfig:
             return False
         
     def compute_levels(self, df: pd.DataFrame, write: bool = True):
-        """Compute and update variable levels in the configuration.
+        """
+        Infer and update ordinal/categorical levels from data.
 
-        Derives level information for each variable from the provided DataFrame
-        and updates the `nodes` section of the configuration dictionary accordingly.
-        Optionally writes the updated configuration back to disk.
+        For each variable in the configuration's `data_type` section, this
+        method uses the provided DataFrame to construct a levels dictionary
+        and injects the corresponding "levels" entry into `conf_dict["nodes"]`.
 
-        Args:
-            df: Input DataFrame containing data used to infer levels.
-            write: Whether to save the updated configuration to file. Defaults to True.
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            DataFrame used to infer levels for configured variables.
+        write : bool, optional
+            If True and `CONF_DICT_PATH` is set, the updated configuration is
+            written back to disk. Default is True.
 
-        Raises:
-            Exception: If saving the configuration fails when `write=True`.
+        Returns
+        -------
+        None
 
-        Notes:
-            - Variables not found in the configuration's `nodes` dictionary trigger a warning.
-            - Updates are persisted if `write=True` and a valid `CONF_DICT_PATH` is set.
+        Raises
+        ------
+        Exception
+            If saving the configuration fails when `write=True`.
+
+        Notes
+        -----
+        - Variables present in `levels_dict` but not in `conf_dict["nodes"]`
+        trigger a warning and are skipped.
+        - If `self.verbose` or `self.debug` is True, a success message is printed
+        when the configuration is saved.
         """
         self.update()
         levels_dict = create_levels_dict(df, self.conf_dict['data_type'])
@@ -207,15 +385,41 @@ class TramDagConfig:
 
     def plot_dag(self, seed: int = 42, causal_order: bool = False):
         """
-        Plot the DAG with Source, Sink, and Intermediate nodes.
+        Visualize the DAG defined by the configuration.
+
+        Nodes are categorized and colored as:
+        - Source nodes (no incoming edges): green.
+        - Sink nodes (no outgoing edges): red.
+        - Intermediate nodes: light blue.
 
         Parameters
         ----------
-        seed : int, default=42
-            Random seed for layout stability.
-        causal_order : bool, default=True
-            If True, use Graphviz 'dot' layout to preserve causal order.
-            If False, use networkx.spring_layout for a force-directed layout.
+        seed : int, optional
+            Random seed for layout stability in the spring layout fallback.
+            Default is 42.
+        causal_order : bool, optional
+            If True, attempt to use Graphviz 'dot' layout via
+            `networkx.nx_agraph.graphviz_layout` to preserve causal ordering.
+            If False or if Graphviz is unavailable, use `spring_layout`.
+            Default is False.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If `adj_matrix` or `data_type` is missing or inconsistent with each other,
+            or if the adjacency matrix fails validation.
+
+        Notes
+        -----
+        Edge labels are colored by prefix:
+        - "ci": blue
+        - "ls": red
+        - "cs": green
+        - other: black
         """
         adj_matrix = self.conf_dict.get("adj_matrix")
         data_type  = self.conf_dict.get("data_type")
@@ -294,34 +498,41 @@ class TramDagConfig:
         """
         Create or reuse a configuration for an experiment.
 
-        This method is dual-mode:
-            1. If called on the class (`TramDagConfig.setup_configuration(...)`):
-               - Creates or loads a configuration from disk.
-               - Returns a new `TramDagConfig` instance initialized with that configuration.
-            2. If called on an existing instance (`config.setup_configuration(...)`):
-               - Updates the current instance's `conf_dict` and `CONF_DICT_PATH` in place.
-               - Does not return a new object.
+        This method behaves differently depending on how it is called:
 
-        Defaults:
-            - `experiment_name`: defaults to "experiment_1" if None.
-            - `EXPERIMENT_DIR`: defaults to `<cwd>/<experiment_name>` if None.
-            - A directory is created if it does not exist.
-            - If a configuration file already exists, it is reused; otherwise, a new one is created.
+        1. Class call (e.g. `TramDagConfig.setup_configuration(...)`):
+        - Creates or loads a configuration at the resolved path.
+        - Returns a new `TramDagConfig` instance.
 
-        Args:
-            experiment_name (str, optional): Name of the experiment.
-            EXPERIMENT_DIR (str, optional): Directory path for the experiment.
-            debug (bool, optional): Enables debug mode during initialization. Default is False.
-            _verify (bool, optional): Whether to verify configuration completeness. Default is False.
+        2. Instance call (e.g. `cfg.setup_configuration(...)`):
+        - Updates `self.conf_dict` and `self.CONF_DICT_PATH` in place.
+        - Optionally verifies completeness.
+        - Returns None.
 
-        Returns:
-            TramDagConfig or None:
-                - Returns a new instance if called on the class.
-                - Returns None if called on an instance (in-place update).
+        Parameters
+        ----------
+        experiment_name : str or None, optional
+            Name of the experiment. If None, defaults to "experiment_1".
+        EXPERIMENT_DIR : str or None, optional
+            Directory for the experiment. If None, defaults to
+            `<cwd>/<experiment_name>`.
+        debug : bool, optional
+            If True, initialize / update with `debug=True`. Default is False.
+        _verify : bool, optional
+            If True, call `_verify_completeness()` after loading. Default is False.
 
-        Side Effects:
-            - Creates directories and configuration files as needed.
-            - Prints the configuration status.
+        Returns
+        -------
+        TramDagConfig or None
+            - A new instance when called on the class.
+            - None when called on an existing instance.
+
+        Notes
+        -----
+        - A configuration file named "configuration.json" is created if it does
+        not exist yet.
+        - Underlying creation uses `create_and_write_new_configuration_dict`
+        and `load_configuration_dict`.
         """
         is_class_call = isinstance(self, type)
         cls = self if is_class_call else self.__class__
@@ -356,8 +567,45 @@ class TramDagConfig:
                 
     def set_data_type(self, data_type: dict, CONF_DICT_PATH: str = None) -> None:
         """
-        Update or write the data type section of a configuration file.
-        Works for both class-level and instance-level calls.
+        Update or write the `data_type` section of a configuration file.
+
+        Supports both class-level and instance-level usage:
+
+        - Class call:
+        - Requires `CONF_DICT_PATH` argument.
+        - Reads the file if it exists, or starts from an empty dict.
+        - Writes updated configuration to `CONF_DICT_PATH`.
+
+        - Instance call:
+        - Uses `self.CONF_DICT_PATH` if available, otherwise defaults to
+            `<cwd>/configuration.json` if no path is provided.
+        - Updates `self.conf_dict` and `self.CONF_DICT_PATH` after writing.
+
+        Parameters
+        ----------
+        data_type : dict
+            Mapping `{variable_name: type_spec}`, where `type_spec` encodes
+            modeling types (e.g. continuous, ordinal, etc.).
+        CONF_DICT_PATH : str or None, optional
+            Path to the configuration file. Must be provided for class calls.
+            For instance calls, defaults as described above.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If `CONF_DICT_PATH` is missing when called on the class, or if
+            validation of data types fails.
+
+        Notes
+        -----
+        - Variable names are validated via `validate_variable_names`.
+        - Data type values are validated via `validate_data_types`.
+        - A textual summary of modeling settings is printed via
+        `print_data_type_modeling_setting`, if possible.
         """
         is_class_call = isinstance(self, type)
         cls = self if is_class_call else self.__class__
@@ -404,17 +652,38 @@ class TramDagConfig:
             
     def set_meta_adj_matrix(self, CONF_DICT_PATH: str = None, seed: int = 5):
         """
-        Launch the interactive TRAMDAG term editor.
+        Launch the interactive editor to set or modify the adjacency matrix.
 
-        Dual-mode:
-            1. Class call (`TramDagConfig.interactive_tramdag_terms(CONF_DICT_PATH=...)`)
-               - Requires `CONF_DICT_PATH`.
-            2. Instance call (`cfg.interactive_tramdag_terms()`)
-               - Uses `self.CONF_DICT_PATH` if available.
+        This method:
 
-        Args:
-            CONF_DICT_PATH (str, optional): Path to the configuration file.
-            seed (int, optional): Random seed for reproducibility.
+        1. Resolves the configuration path either from the argument or, for
+        instances, from `self.CONF_DICT_PATH`.
+        2. Invokes `interactive_adj_matrix` to edit the adjacency matrix.
+        3. For instances, reloads the updated configuration into `self.conf_dict`.
+
+        Parameters
+        ----------
+        CONF_DICT_PATH : str or None, optional
+            Path to the configuration file. Must be provided when called
+            on the class. For instance calls, defaults to `self.CONF_DICT_PATH`.
+        seed : int, optional
+            Random seed for any layout or stochastic behavior in the interactive
+            editor. Default is 5.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If `CONF_DICT_PATH` is not provided and cannot be inferred
+            (e.g. in a class call without path).
+
+        Notes
+        -----
+        `self.update()` is called at the start to ensure the in-memory config
+        is in sync with the file before launching the editor.
         """
         self.update()
         is_class_call = isinstance(self, type)
@@ -436,6 +705,41 @@ class TramDagConfig:
 
 
     def set_tramdag_nn_models(self, CONF_DICT_PATH: str = None):
+        """
+        Launch the interactive editor to set TRAM-DAG neural network model names.
+
+        Depending on call context:
+
+        - Class call:
+        - Requires `CONF_DICT_PATH` argument.
+        - Returns nothing and does not modify a specific instance.
+
+        - Instance call:
+        - Resolves `CONF_DICT_PATH` from the argument or `self.CONF_DICT_PATH`.
+        - Updates `self.conf_dict` and `self.CONF_DICT_PATH` if the editor
+            returns an updated configuration.
+
+        Parameters
+        ----------
+        CONF_DICT_PATH : str or None, optional
+            Path to the configuration file. Must be provided when called on
+            the class. For instance calls, defaults to `self.CONF_DICT_PATH`.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If `CONF_DICT_PATH` is not provided and cannot be inferred
+            (e.g. in a class call without path).
+
+        Notes
+        -----
+        The interactive editor is invoked via `interactive_nn_names_matrix`.
+        If it returns `None`, the instance configuration is left unchanged.
+        """
         is_class_call = isinstance(self, type)
         if CONF_DICT_PATH is None:
             if not is_class_call and getattr(self, "CONF_DICT_PATH", None):
