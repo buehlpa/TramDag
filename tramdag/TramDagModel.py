@@ -51,6 +51,8 @@ from .TramDagDataset import TramDagDataset
 # # Upload to TestPyPI
 # python -m twine upload --repository testpypi dist/*
 
+# documentaiton
+# pdoc tramdag -o docs
 
 ## TODO ordinal cutpoints trafo plot
 ## TODO documentation with docusaurus
