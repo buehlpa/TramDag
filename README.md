@@ -39,6 +39,10 @@ the **tramdag** package is currently on a testserver, install with:
 install.packages(c("tram", "ordinal", "readr", "MASS"))
 ```
 ## Documentation
+
+- [Code Documentation](https://buehlpa.github.io/TramDag/tramdag.html)
+- [datatypes](how_to_use/Ordinal_Continous_vars.md)
+
 under /doc
 ## Example Notebooks
 
