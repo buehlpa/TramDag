@@ -58,7 +58,7 @@ from .TramDagDataset import TramDagDataset
 
 ## TODO check the cutpoints >= <= for correct cutoffs
 
-## TODO what happens if parents are proba but node is continous?
+## TODO what happens if parents are proba but node is continous? # has also jsut k observations like in ordinal case
 
 ## TODO solve visualizatin for probabalistic samples
 
@@ -190,6 +190,9 @@ class TramDagModel:
         self = cls()
         self.cfg = cfg
         self.cfg.update()  # ensure latest version from disk
+        self.cfg._verify_completeness()
+        
+        
         try:
             self.cfg.save()  # persist back to disk
             if getattr(self, "debug", False):
@@ -272,7 +275,7 @@ class TramDagModel:
                 os.rmdir(TEMP_DIR)
                             
         return self
-    
+
     @classmethod
     def from_directory(cls, EXPERIMENT_DIR: str, device: str = "auto", debug: bool = False, verbose: bool = False):
         """
@@ -1114,7 +1117,6 @@ class TramDagModel:
                 show_hdag_continous(df,node=node,configuration_dict=self.cfg.conf_dict,minmax_dict=self.minmax_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
             
             elif is_outcome_modelled_ordinal(node, self.nodes_dict):
-                print(f"[WARNING] Node {node} is categorical, in development...")
                 show_hdag_ordinal(df,node=node,configuration_dict=self.cfg.conf_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
                 # plot_cutpoints_with_logistic(df,node=node,configuration_dict=self.cfg.conf_dict,device=self.device,plot_n_rows=plot_n_rows,**kwargs)
                 # save_cutpoints_with_logistic(df,node=node,configuration_dict=self.cfg.conf_dict,device=self.device,**kwargs)
