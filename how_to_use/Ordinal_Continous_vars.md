@@ -75,7 +75,7 @@ the example only shows the models for X4 and X5 , the others are omitted
 
 ---
 
-<img width="1637" height="997" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/doc/images/example _Xn_Yo.png" />
+<img width="1637" height="997" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/example _Xn_Yo.png" />
 
 
 
