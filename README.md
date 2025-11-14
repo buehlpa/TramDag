@@ -1,9 +1,9 @@
-#   **TRA**nsformation **M**odels in **D**irected **A**cyclic **G**raphs (**TRAMDAG**)
+#   ***TRA***nsformation ***M***odels in ***D***irected ***A***cyclic ***G***raphs (***TRAMDAG***)
 A pytorch implemetation of Interpretable Neural Causal Models with TRAM-DAGs (https://arxiv.org/abs/2503.16206)
 
 The framework uses ordinal and continuous transformation models to learn the intercepts and linear or nonlinear shift terms that define the conditional transformation functions on each node, thereby modeling how each parent variable causally shifts the distribution of its child in the DAG.
 
-The according implentations for the *ordinal tram* and the *continous tram* are in the the github repos:
+The according implementations for the *ordinal tram* and the *continous tram* are in the the github repos:
 
 [ontram](github.com/liherz/ontram_pytorch) and [contram](github.com/buehlpa/contram_pytorch)
 
@@ -18,7 +18,7 @@ The according implentations for the *ordinal tram* and the *continous tram* are 
 
 
 It is recommended to use a virtual environment such as anaconda env like: 
-on https://www.anaconda.com/docs/getting-started/anaconda/install
+https://www.anaconda.com/docs/getting-started/anaconda/install
 
 ```bash
   conda create -n tramdag python=3.9
