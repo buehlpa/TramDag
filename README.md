@@ -9,7 +9,7 @@ The according implementations for the *ordinal tram* and the *continous tram* ar
 
 
 
-![tramdag](https://github.com/buehlpa/TramDag/blob/main/doc/images/tramdag.png)
+![tramdag](https://github.com/buehlpa/TramDag/blob/main/docs/images/tramdag.png)
 
 
 
