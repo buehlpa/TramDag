@@ -3,7 +3,7 @@ A pytorch implemetation of Interpretable Neural Causal Models with TRAM-DAGs (ht
 
 The framework uses ordinal and continuous transformation models to learn the intercepts and linear or nonlinear shift terms that define the conditional transformation functions on each node, thereby modeling how each parent variable causally shifts the distribution of its child in the DAG.
 
-The according implentations for the ordinal tram and the continous tram are in the the github repos:
+The according implentations for the *ordinal tram* and the *continous tram* are in the the github repos:
 
 [ontram](github.com/liherz/ontram_pytorch) and [contram](github.com/buehlpa/contram_pytorch)
 
