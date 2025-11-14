@@ -5,7 +5,7 @@ The framework uses ordinal and continuous transformation models to learn the int
 
 The according implementations for the *ordinal tram* and the *continous tram* are in the the github repos:
 
-[ontram](github.com/liherz/ontram_pytorch) and [contram](github.com/buehlpa/contram_pytorch)
+[ontram](https://github.com/liherz/ontram_pytorch) and [contram](https://github.com/buehlpa/contram_pytorch)
 
 
 
