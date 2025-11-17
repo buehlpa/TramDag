@@ -40,8 +40,10 @@ from .models.tram_models import SimpleIntercept
 from .TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
 
-
+# testserver
 #%pip install -i https://test.pypi.org/simple --extra-index-url https://pypi.org/simple tramdag
+
+
 # # Remove previous builds
 # rm -rf build dist *.egg-info
 
@@ -52,7 +54,11 @@ from .TramDagDataset import TramDagDataset
 # python -m twine upload --repository testpypi dist/*
 
 # documentaiton
+# 1. download new version of tramdag in env
+# pip install pdoc
+# 2. generate docs
 # pdoc tramdag -o docs
+
 
 ## TODO ordinal cutpoints trafo plot
 ## TODO documentation with docusaurus

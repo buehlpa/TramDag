@@ -332,7 +332,7 @@ class TramDagConfig:
             return True
         else:
             return False
-        
+
     def compute_levels(self, df: pd.DataFrame, write: bool = True):
         """
         Infer and update ordinal/categorical levels from data.
@@ -687,7 +687,6 @@ class TramDagConfig:
         """
         self.update()
         is_class_call = isinstance(self, type)
-
         # resolve path
         if CONF_DICT_PATH is None:
             if not is_class_call and getattr(self, "CONF_DICT_PATH", None):
@@ -696,6 +695,7 @@ class TramDagConfig:
                 raise ValueError("CONF_DICT_PATH must be provided when called on the class.")
 
         # launch interactive editor
+        
         interactive_adj_matrix(CONF_DICT_PATH, seed=seed)
 
         # reload config if instance
