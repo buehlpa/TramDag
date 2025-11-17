@@ -585,6 +585,7 @@ def sample_full_dag(configuration_dict,
             if isinstance(vals_padded, torch.Tensor) and isinstance(counts_padded, torch.Tensor):
                 if vals_padded.numel() > 0 and counts_padded.numel() > 0:
                     torch.save({"vals": vals_padded, "counts": counts_padded}, SAMPLED_HIST_PATH)
+                    sampled_by_node[node] = {"vals": vals_padded.detach().cpu(), "counts": counts_padded.detach().cpu()}
 
             # save sampled tensor if it exists
             if isinstance(sampled, torch.Tensor) and sampled.numel() > 0:
