@@ -8,5 +8,5 @@ ipywidgets
 tqdm
 statsmodels
 scipy
-PIL
+pillow
 scikit-learn
