@@ -41,7 +41,7 @@ install.packages(c("tram", "ordinal", "readr", "MASS"))
 ## Documentation
 
 - [Code Documentation](https://buehlpa.github.io/TramDag/tramdag.html)
-- [datatypes](how_to_use/Ordinal_Continous_vars.md)
+- [HOW TO USE](how_to_use/typical_workflow.md)
 
 under /doc
 ## Example Notebooks
