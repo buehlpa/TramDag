@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-11-17 12:51:03",
+    "date_of_creation": "2025-11-19 09:52:11",
     "experiment_name": "experiment_1",
     "PATHS": {
         "DATA_PATH": "counterf",
@@ -58,8 +58,8 @@
             "0",
             "0",
             "0",
-            "0",
-            "ls"
+            "ls",
+            "0"
         ],
         [
             "0",
@@ -68,7 +68,7 @@
             "0",
             "0",
             "0",
-            "0"
+            "ls"
         ],
         [
             "0",
@@ -123,8 +123,8 @@
             "0",
             "0",
             "0",
-            "0",
-            "LinearShift"
+            "LinearShift",
+            "0"
         ],
         [
             "0",
@@ -133,7 +133,7 @@
             "0",
             "0",
             "0",
-            "0"
+            "LinearShift"
         ],
         [
             "0",
@@ -242,22 +242,26 @@
         "x6": {
             "Modelnr": 5,
             "data_type": "continous",
-            "node_type": "sink",
+            "node_type": "internal",
             "parents": [
-                "x4"
+                "x4",
+                "x5"
             ],
             "parents_datatype": {
-                "x4": "continous"
+                "x4": "continous",
+                "x5": "ordinal_Xn_Yo"
             },
             "transformation_terms_in_h()": {
-                "x4": "ls"
+                "x4": "ls",
+                "x5": "ls"
             },
             "batch_size": 512,
             "epochs": 100,
             "learning_rate": 0.01,
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
-                "x4": "LinearShift"
+                "x4": "LinearShift",
+                "x5": "LinearShift"
             }
         },
         "x7": {
@@ -266,15 +270,15 @@
             "node_type": "sink",
             "parents": [
                 "x1",
-                "x5"
+                "x6"
             ],
             "parents_datatype": {
                 "x1": "continous",
-                "x5": "ordinal_Xn_Yo"
+                "x6": "continous"
             },
             "transformation_terms_in_h()": {
                 "x1": "ls",
-                "x5": "ls"
+                "x6": "ls"
             },
             "batch_size": 512,
             "epochs": 100,
@@ -282,7 +286,7 @@
             "use_scheduler": false,
             "transformation_term_nn_models_in_h()": {
                 "x1": "LinearShift",
-                "x5": "LinearShift"
+                "x6": "LinearShift"
             },
             "levels": 5
         }

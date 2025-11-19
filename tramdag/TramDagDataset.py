@@ -192,7 +192,6 @@ class TramDagDataset(Dataset):
             raise TypeError(f"[ERROR] df must be a pandas DataFrame, but got {type(df)}")
 
         # validate kwargs
-        # TODO adjust validation such thath it works when called from tramdagmodel
         #self._validate_kwargs(kwargs, context="from_dataframe")
         
         # merge defaults with overrides

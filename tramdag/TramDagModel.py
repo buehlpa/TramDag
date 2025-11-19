@@ -60,16 +60,6 @@ from .TramDagDataset import TramDagDataset
 # pdoc tramdag -o docs
 
 
-## TODO ordinal cutpoints trafo plot
-## TODO documentation with docusaurus
-## TODO psuh latest version to pypi
-
-## TODO check the cutpoints >= <= for correct cutoffs
-
-## TODO what happens if parents are proba but node is continous? # has also jsut k observations like in ordinal case
-
-## TODO solve visualizatin for probabalistic samples
-
 class TramDagModel:
     """
     Probabilistic DAG model built from node-wise TRAMs (transformation models).
@@ -1442,7 +1432,6 @@ class TramDagModel:
             
         }
         
-        # TODO adjust validation
         # self._validate_kwargs( kwargs, defaults_attr= "settings", context="sample")
         
         settings.update(kwargs)
