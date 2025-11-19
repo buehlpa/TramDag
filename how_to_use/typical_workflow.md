@@ -5,6 +5,12 @@ This can be used in a .ipynb notebook following the steps below
 
 If you already have a setup experiments and / or a trained model. you can proceed also just with the steps 4. and 5. 
 
+The notebooks:
+- example_notebooks/1_create_configuration_file.ipynb
+- example_notebooks/2_fit_tramdag_model.ipynb
+show how a configuration can be created and in another file trained based on the saved configuration
+
+
 ### 1. Data
 - simulate data or use observational data in a pandas dataframe e.g.
 
@@ -71,6 +77,8 @@ cfg.compute_levels(train_df)
 
 
 
+
+
 ### 3. Modelfit
 
 There are 3 options to load the model from the configuration file 
@@ -100,7 +108,10 @@ device='cpu'
 td_model =TramDagModel.from_directory(EXPERIMENT_DIR)
 ```
 
+Additionaly:
 
+to fit a model in the background adjust a python script and run it in  a screen in the backgroudn e.g.
+- example_notebooks/2_fit_tramdag_in_background.py
 
 ### 4. Fit diagnostics
 
