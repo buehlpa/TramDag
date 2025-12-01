@@ -39,9 +39,9 @@ the **tramdag** package is currently on a testserver, install with:
 install.packages(c("tram", "ordinal", "readr", "MASS"))
 ```
 ## Documentation
+Read the guide below for usage instructions
+- [HOW-TO](how_to_use/typical_workflow.md)
 
-- [HOW TO USE](how_to_use/typical_workflow.md)
-- [Sampling](how_to_use/typical_workflow.md)
 
 Full API CODE documentation
 - [Code Documentation](https://buehlpa.github.io/TramDag/tramdag.html)
