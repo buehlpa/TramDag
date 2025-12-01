@@ -491,24 +491,23 @@ def sample_full_dag(configuration_dict,
             if (
                 predefined_latent_samples_df is not None
                 and f"{node}_U" in predefined_latent_samples_df.columns
-                and not node_has_interval_latents
-            ):
-                predefinded_sample_name = f"{node}_U"
-                predefinded_sample = predefined_latent_samples_df[predefinded_sample_name].values
-                if verbose or debug:
-                    print(f"[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}")
-                latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
+                and not node_has_interval_latents):
+                    predefinded_sample_name = f"{node}_U"
+                    predefinded_sample = predefined_latent_samples_df[predefinded_sample_name].values
+                    if verbose or debug:
+                        print(f"[INFO] Using predefined latents samples for node {node} from dataframe column: {predefinded_sample_name}")
+                    latent_sample = torch.tensor(predefinded_sample, dtype=torch.float32).to(device)
 
             else:
-                if verbose or debug:
-                    if node_has_interval_latents:
+                if node_has_interval_latents:
+                    if verbose or debug:
                         print(f"[INFO] Detected '{node}_U_lower' and '{node}_U_upper' — switching to counterfactual logistic sampling mode.")
-                        ### dummy latents jsut for the check , not needed
-                        latent_sample = torch.full((number_of_samples,), float('nan'))  
-                    else:
+                    ### dummy latents jsut for the check , not needed
+                    latent_sample = torch.full((number_of_samples,), float('nan'))  
+                else:
+                    if verbose or debug:
                         print(f"[INFO] Sampling new latents for node {node} from standard logistic distribution")
-                        
-                        latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
+                    latent_sample = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
             
             
             ###################################################### Counterfactual logic #########################################
@@ -557,6 +556,7 @@ def sample_full_dag(configuration_dict,
                                                                 number_of_samples=number_of_counterfactual_samples,
                                                                 batch_size=batch_size,
                                                                 tram_model=tram_model,
+                                                                latent_sample=latent_sample,
                                                                 predefined_latent_samples_df=predefined_latent_samples_df,
                                                                 debug=debug,
                                                                 minmax_dict=minmax_dict,
@@ -568,6 +568,7 @@ def sample_full_dag(configuration_dict,
                                                                 target_nodes_dict=target_nodes_dict,
                                                                 number_of_samples=number_of_counterfactual_samples,
                                                                 batch_size=batch_size,
+                                                                latent_sample=latent_sample,
                                                                 tram_model=tram_model,
                                                                 predefined_latent_samples_df=predefined_latent_samples_df,
                                                                 debug=debug,
@@ -585,6 +586,7 @@ def sample_full_dag(configuration_dict,
             if isinstance(vals_padded, torch.Tensor) and isinstance(counts_padded, torch.Tensor):
                 if vals_padded.numel() > 0 and counts_padded.numel() > 0:
                     torch.save({"vals": vals_padded, "counts": counts_padded}, SAMPLED_HIST_PATH)
+                    sampled_by_node[node] = {"vals": vals_padded.detach().cpu(), "counts": counts_padded.detach().cpu()}
 
             # save sampled tensor if it exists
             if isinstance(sampled, torch.Tensor) and sampled.numel() > 0:
@@ -968,9 +970,8 @@ def sample_node_distParents_intervalLatent(node,target_nodes_dict,number_of_samp
 
 
 
-                # TODO what happens if node is continous and has porba parents
     
-def sample_node_distParents_detLatent_ordinal(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,EXPERIMENT_DIR,device):
+def sample_node_distParents_detLatent_ordinal(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,latent_sample,debug,EXPERIMENT_DIR,device):
     
     sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
     counterfactual_frequency=[]
@@ -981,8 +982,11 @@ def sample_node_distParents_detLatent_ordinal(node,target_nodes_dict,number_of_s
         
     for i ,_ in tqdm(enumerate(predefined_latent_samples_df[f"{node}"]),total=len(predefined_latent_samples_df[f"{node}"]),desc=f"Sampling {node}"):
         
-        ## U_i 
-        latent_sample_i = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
+        # scalar U_i
+        u_i = latent_sample[i]
+        # vector of length number_of_samples, all equal to U_i
+        latent_sample_i = u_i.repeat(number_of_samples)
+        
         LATENT_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_obs_{i}.csv')
         os.makedirs(os.path.dirname(LATENT_PATH), exist_ok=True)
         np.savetxt(LATENT_PATH, latent_sample_i, delimiter=",")
@@ -1020,12 +1024,10 @@ def sample_node_distParents_detLatent_ordinal(node,target_nodes_dict,number_of_s
         
     return torch.Tensor(np.array(counterfactual_frequency))
 
-def sample_node_distParents_detLatent_continous(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,debug,minmax_dict,EXPERIMENT_DIR,device):
+def sample_node_distParents_detLatent_continous(node,target_nodes_dict,number_of_samples,batch_size,tram_model,predefined_latent_samples_df,latent_sample,debug,minmax_dict,EXPERIMENT_DIR,device):
     
     sample_df=create_df_from_sampled(node, target_nodes_dict, number_of_samples, EXPERIMENT_DIR)
     
-    # if ordinal
-    counterfactual_frequency=[]
     # if continous
     vals_list = []
     counts_list = []
@@ -1036,10 +1038,11 @@ def sample_node_distParents_detLatent_continous(node,target_nodes_dict,number_of
         print(f"[DEBUG] starting sample_node_distParents_detLatent for node {node} with {number_of_samples} samples")
         
     for i ,_ in tqdm(enumerate(predefined_latent_samples_df[f"{node}"]),total=len(predefined_latent_samples_df[f"{node}"]),desc=f"Sampling {node}"):
+        # scalar U_i
+        u_i = latent_sample[i]
+        # vector of length number_of_samples, all equal to U_i
+        latent_sample_i = u_i.repeat(number_of_samples)
         
-        
-        ## U_i 
-        latent_sample_i = torch.tensor(logistic.rvs(size=number_of_samples), dtype=torch.float32).to(device)
         LATENT_PATH=os.path.join(EXPERIMENT_DIR,node ,"sampling","counterfactual",f'latents_obs_{i}.csv')
         os.makedirs(os.path.dirname(LATENT_PATH), exist_ok=True)
         np.savetxt(LATENT_PATH, latent_sample_i, delimiter=",")
