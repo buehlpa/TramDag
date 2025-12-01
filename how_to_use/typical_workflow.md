@@ -44,7 +44,7 @@ cfg.setup_configuration(EXPERIMENT_DIR='experiment_1') # works also without argu
 
 - datatypes
 
-see [how to set datatypes](how_to_use/Ordinal_Continous_vars.md)
+see [how to set datatypes](/how_to_use/Ordinal_Continous_vars.md)
 ```
 data_type= {'x1':'continous',
             'x2':'continous', 
@@ -166,6 +166,9 @@ td_model.summary()
 
 
 ### 5. Sampling
+
+see [how to sample](/how_to_use/sampling.md)
+
 - Observational
 
 ```
