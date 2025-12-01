@@ -40,8 +40,13 @@ install.packages(c("tram", "ordinal", "readr", "MASS"))
 ```
 ## Documentation
 
-- [Code Documentation](https://buehlpa.github.io/TramDag/tramdag.html)
 - [HOW TO USE](how_to_use/typical_workflow.md)
+- [Sampling](how_to_use/typical_workflow.md)
+
+Full API CODE documentation
+- [Code Documentation](https://buehlpa.github.io/TramDag/tramdag.html)
+
+
 
 under /doc
 ## Example Notebooks
