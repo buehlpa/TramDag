@@ -101,11 +101,11 @@ $u_{z} = h_{z}(z=-0.3|x=0.2,y=1)$
 
 ok now were set to ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
 
-Again we can follow the causal order by starting with the parents: leaves $x_{cf}$ ($_{cf}$ = counter factual) to 0.5.
+Again we can follow the causal order by starting with the parents: leaves $x_{cf}$ ( $_{cf}$ = counter factual) to 0.5.
 
  to find out what $y_{cf}$ would have been, we need to go backwards through the transformation function and first sample us $n$ latents from the range: 
 
-$  h_{y}(0|x=0.2)$  < $u_{y}$ < $ h_{y}(1|x=0.2)$ 
+$h_{y}(0|x=0.2)$  < $u_{y}$ < $h_{y}(1|x=0.2)$ 
 
 so for each $u_{y_{j}}$ $j\in {1..n}$ we calculate the according 
 
