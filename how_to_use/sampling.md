@@ -85,7 +85,7 @@ index,x,x_U,y,y_U_lower,y_U_upper,z,z_U
 ```
 
 
- we get the according $u_{x}$ ,$u_{y}$,$u_{z}$ via:
+ we get the according $u_{x}$ , $u_{y}$ , $u_{z}$ via:
 
 $u_{x} = h_{x}(x=0.2)$
 
