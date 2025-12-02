@@ -67,8 +67,8 @@ for ordinal modelled variables the according $u$ is not defined strictly anymore
 resulting in $u$ ~ $std log(0,1)$ truncated.
 
 therefore the get_latent function returns the according $u$ for continuous variables but for ordinal variables it returns `u_lower` and `u_upper` mapping to 
- $  h(k-1|pa(x))$ and
-  $ h(k|pa(x))$ .
+ $h(k-1|pa(x))$ and
+  $h(k|pa(x))$ .
 
 e.g. for the observation
 
@@ -90,7 +90,7 @@ index,x,x_U,y,y_U_lower,y_U_upper,z,z_U
 $u_{x} = h_{x}(x=0.2)$
 
 
-$  h_{y}(0|x=0.2)$  < $u_{y}$ < $  h_{y}(1|x=0.2)$ 
+$h_{y}(0|x=0.2)$  < $u_{y}$ < $h_{y}(1|x=0.2)$ 
 
 
 
