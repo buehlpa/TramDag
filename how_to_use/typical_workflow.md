@@ -68,7 +68,7 @@ cfg.set_tramdag_nn_models()
 
 
 if you have ordinal nodes in the your dataset the configuration needs also to get the levels of these nodes.
-You can either provide them by manually write htem to the configuration.json file or calucaled it from data with:
+You can either provide them by manually write them to the configuration.json file or calculated it from data with:
 
 ```
 cfg.compute_levels(train_df)
@@ -85,14 +85,14 @@ There are 3 options to load the model from the configuration file
 
 1. use the cfg object either directly if created in the same notebook:
 
-or load it from the exisitng json with:
+or load it from the existing json with:
 
 ```
 cfg=TramDagModel.load_json(CONF_DICT_PATH="experiment_1/configuration.json")
 ```
 
-Then load the model directy from the config file use the flag `set_initial_weights = True` and provide `initial_data = train_df` if you 
-want to start an R subprocess for the weight initialzation 
+Then load the model directly from the config file use the flag `set_initial_weights = True` and provide `initial_data = train_df` if you 
+want to start an R subprocess for the weight initialization 
 
 ```
 from tramdag import TramDagModel
@@ -110,14 +110,16 @@ td_model =TramDagModel.from_directory(EXPERIMENT_DIR)
 
 Additionaly:
 
-to fit a model in the background adjust a python script and run it in  a screen in the backgroudn e.g.
-- example_notebooks/2_fit_tramdag_in_background.py
+to fit a model in the background adjust a python script and run it in  a screen in the background e.g.
+
+[2_fit_tramdag_in_background.py](/example_notebooks/2_fit_tramdag_in_background.py)
+- 
 
 ### 4. Fit diagnostics
 
 - loss
 
-with the argument `variable` you can choose a singel varibale or just leave it empty to plot all in the same graph
+with the argument `variable` you can choose a single variable or just leave it empty to plot all in the same graph
 
 ```
 td_model.plot_loss_history()

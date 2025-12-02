@@ -46,7 +46,6 @@ Full API CODE documentation
 
 
 
-under /doc
 ## Example Notebooks
 
 under /example_notebooks some examples are displayed
