@@ -15,8 +15,6 @@ The according implementations for the *ordinal tram* and the *continous tram* ar
 
 ## Installation
 
-
-
 It is recommended to use a virtual environment such as anaconda env like: 
 https://www.anaconda.com/docs/getting-started/anaconda/install
 
@@ -55,10 +53,10 @@ under /example_notebooks some examples are displayed
 
 Reproducing simulation experiments from [TRAMDAG paper](https://arxiv.org/abs/2503.16206)
 
-- [6.1 Continous_complex DGP complex Shift](example_notebooks/Continous_3_vars_complex_DGP_CS.ipynb)
-- [6.1 Continous_linear DGP complex Shift](example_notebooks/Continous_3_vars_linear_DGP_CS.ipynb)
-- [6.1 Continous_linear DGP linear Shift](example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)
-- [6.2 Mixed_linear DGP complex Shift](example_notebooks/Mixed_3_vars_linear_DGP_LS.ipynb)
+- [6.1 Continous_complex DGP complex Shift (L1 L2)](example_notebooks/Continous_3_vars_complex_DGP_CS.ipynb)
+- [6.1 Continous_linear DGP complex Shift  (L1 L2)](example_notebooks/Continous_3_vars_linear_DGP_CS.ipynb)
+- [6.1 Continous_linear DGP linear Shift   (L1 L2)](example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)
+- [6.2 Mixed_linear DGP complex Shift      (L1 L2 L3)](example_notebooks/Mixed_3_vars_linear_DGP_LS.ipynb)
 
 
 
