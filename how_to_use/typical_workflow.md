@@ -58,14 +58,16 @@ cfg.set_data_type(data_type)
 ```
 cfg.set_meta_adj_matrix(seed=123) #Create the (Meta) Adjacency Matrix
 ```
+<img width="1637" height="997" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/nn_models.png" />
 
 
 - Neural Networks 
 
+
 ```
 cfg.set_tramdag_nn_models() 
 ```
-
+<img width="1637" height="997" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/adj_matrix.png" />
 
 if you have ordinal nodes in the your dataset the configuration needs also to get the levels of these nodes.
 You can either provide them by manually write them to the configuration.json file or calculated it from data with:
