@@ -55,10 +55,11 @@ cfg.set_data_type(data_type)
 
 - Adjacency matrix 
 
+set the according terms in the DAG according to the displayed instructions:
 ```
 cfg.set_meta_adj_matrix(seed=123) #Create the (Meta) Adjacency Matrix
 ```
-<img width="1637" height="997" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/adj_matrix.png" />
+<img width="2000" height="1000" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/adj_matrix.png" />
 
 
 
@@ -68,7 +69,7 @@ cfg.set_meta_adj_matrix(seed=123) #Create the (Meta) Adjacency Matrix
 ```
 cfg.set_tramdag_nn_models() 
 ```
-<img width="200" height="100" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/nn_models.png" />
+<img width="300" height="200" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/nn_models.png" />
 
 
 
