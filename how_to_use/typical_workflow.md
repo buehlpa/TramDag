@@ -65,7 +65,10 @@ cfg.set_meta_adj_matrix(seed=123) #Create the (Meta) Adjacency Matrix
 
 - Neural Networks 
 
+Here you can set the neural networks which should be used for the terms: 
+It prompts default models, if they should be used just hit generate.
 
+If you want to use Custom models they have to be put in the  \tram_models.py file in the src code 
 ```
 cfg.set_tramdag_nn_models() 
 ```
