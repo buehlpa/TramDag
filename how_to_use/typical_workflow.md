@@ -72,7 +72,7 @@ If you want to use Custom models they have to be put in the  \tram_models.py fil
 ```
 cfg.set_tramdag_nn_models() 
 ```
-<img width="300" height="200" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/nn_models.png" />
+<img width="400" height="300" alt="example _Xn_Yo" src="https://github.com/buehlpa/TramDag/blob/main/docs/images/nn_models.png" />
 
 
 
