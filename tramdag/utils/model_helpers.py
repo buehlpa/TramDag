@@ -170,7 +170,19 @@ def get_fully_specified_tram_model(
         if not any(pref in v['h_term'] for pref in ("ci", "si"))
     }
 
-    # Build intercept network
+
+
+    only_ls_shifts = bool(shifts_dict) and all(
+        "ls" in v["h_term"] and "cs" not in v["h_term"]
+        for v in shifts_dict.values()
+    )
+
+    if only_ls_shifts:
+        ls_shift_covariates=list(terms_dict.keys())
+    else:
+        ls_shift_covariates=None
+        
+    ######### INTERCEPT NETWORKS #################################################################################
     intercept_groups = group_by_base(intercepts_dict, prefixes=("ci", "si"))
     
     # Use specified thetas or default for continuous
@@ -188,7 +200,7 @@ def get_fully_specified_tram_model(
     else:
         nn_int = SimpleIntercept(n_thetas=n_thetas) 
         
-    # set initial weights to be increasing for Intercept Model
+    
     if set_initial_weights and nn_int is not None:
 
         if initial_data is None:
@@ -196,12 +208,8 @@ def get_fully_specified_tram_model(
                 "initial_data (path to .csv OR pandas Dataframe) must be provided when set_initial_weights=True"
             )
             
-
         if initial_data is not None:
             # case 1: DataFrame -> write to temporary CSV
-
-            
-            
             if hasattr(initial_data, "to_csv"):
                 
                 TEMP_DIR = "temp"
@@ -213,24 +221,26 @@ def get_fully_specified_tram_model(
                 if debug:
                     print(f"[DEBUG] Wrote DataFrame to temporary CSV: {TEMP_CSV_PATH}")
                     
-                    
             # case 2: assume it's already a path -> check existence
             elif isinstance(initial_data, str):
                 if not os.path.exists(initial_data):
                     raise FileNotFoundError(f"[ERROR] CSV path not found: {initial_data}")
             else:
                 raise TypeError("[ERROR] initial_data must be either a str path, a DataFrame, or None.")
-    
+
+        
+        #### initialzing the intercept model with COLR/POLR from R
         # init_last_layer_increasing(nn_int, start=-3.0, end=3.0)
         # init_last_layer_hardcoded(nn_int)
-        init_last_layer_COLR_POLR(
+        _, shift_coefs_R=init_last_layer_COLR_POLR(
             nn_int,
             node,
             configuration_dict,
             n_thetas,
             TRAIN_DATA_PATH=TEMP_CSV_PATH,
-            debug=debug
-        )
+            debug=debug,
+            ls_shift_covariates=ls_shift_covariates)
+        
         if debug or verbose:
             print(f"[INFO] Initialized intercept model with preinitialized weights: {nn_int}")
         
@@ -242,14 +252,70 @@ def get_fully_specified_tram_model(
             except Exception as e:
                 print(f"[WARNING] Could not delete temporary file: {e}")
 
-    # Build shift networks
+    
+    ######### SHIFT NETWORKS #################################################################################
+    # ONLY WORKS FOR CONITNOUSLY MODELLED 
+    #TODO shift_coefs_R as init weights for the shift models if if set_initial_weights and only_ls_shifts
     shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
+    
     nn_shifts = []
     for feats in shift_groups.values():
         cls_name = feats[0][1]['class_name']
         base_cls = get_base_model_class(cls_name)
         n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
         nn_shifts.append(globals()[base_cls](n_features=n_features))
+    
+    
+    ## # TODO FIRST ATTEMPT ; THIS WOULD WORK IF THERE WER MULTIPLE WEIGHTS BUT THERE IS ONLY THE COEFFIECNTS 
+    # SO THIS WORKS ONLY FOR MODELS WHICH ARE CONTINOUSLY MODELLED
+    ######### SHIFT NETWORKS #################################################################################
+
+    # shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
+    
+    # nn_shifts = []
+    # shift_group_feature_counts = []  # track how many input features per shift-group
+
+    # for feats in shift_groups.values():
+    #     cls_name = feats[0][1]['class_name']
+    #     base_cls = get_base_model_class(cls_name)
+    #     n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
+    #     shift_group_feature_counts.append(n_features)
+
+    #     model = globals()[base_cls](n_features=n_features)
+    #     nn_shifts.append(model)
+
+    # if debug:
+    #     print("[DEBUG] nn_shifts:", nn_shifts)
+    #     print("[DEBUG] shift_group_feature_counts:", shift_group_feature_counts)
+
+    # # Initialise shift nets from R if:
+    # # - requested initialisation
+    # # - we are in the only-ls case
+    # # - we actually got shift coefficients from R
+    # if set_initial_weights and only_ls_shifts and shift_coefs_R:
+    #     total_features = sum(shift_group_feature_counts)
+    #     if len(shift_coefs_R) != total_features:
+    #         if debug:
+    #             print(
+    #                 "[WARNING] len(shift_coefs_R) "
+    #                 f"({len(shift_coefs_R)}) != total shift features ({total_features}); "
+    #                 "skipping shift initialisation from R."
+    #             )
+    #     else:
+    #         if debug:
+    #             print("[DEBUG] Initialising shift networks with R shift coefficients")
+    #             print("[DEBUG] shift_coefs_R:", shift_coefs_R)
+
+    #         pos = 0
+    #         for model, n_feat in zip(nn_shifts, shift_group_feature_counts):
+    #             coefs_slice = shift_coefs_R[pos:pos + n_feat]
+    #             pos += n_feat
+    #             init_shift_last_layer_from_r(model, coefs_slice, debug=debug)
+    
+    
+    
+    # # #############################################################################################################
+
 
     # Combine into final TramModel
     tram_model = TramModel(nn_int, nn_shifts,device=device)
@@ -370,6 +436,64 @@ def group_by_base(term_dict, prefixes):
 
     return groups
 
+
+# TODO CREATE FUNCIOTN FOR ININTALIZATION OF LS NETWORKS
+# @torch.no_grad()
+# def init_shift_last_layer_from_r(
+#     module: nn.Module,
+#     shift_coefs: list[float],
+#     debug: bool = False,
+# ):
+#     """
+#     Initialise the last Linear layer of a shift network using R-derived slopes.
+
+#     Logic:
+#     - Find the last nn.Linear in `module`.
+#     - Build a weight matrix of zeros.
+#     - For each row (output channel), set the first `len(shift_coefs)` columns
+#       to the R slopes (broadcast across rows).
+#     - Bias is set to zero.
+#     """
+#     last_linear = None
+#     for m in reversed(list(module.modules())):
+#         if isinstance(m, nn.Linear):
+#             last_linear = m
+#             break
+#     if last_linear is None:
+#         raise ValueError("No nn.Linear layer found in shift module.")
+
+#     coefs = torch.tensor(
+#         shift_coefs,
+#         dtype=last_linear.weight.dtype,
+#         device=last_linear.weight.device,
+#     )
+
+#     if coefs.numel() > last_linear.in_features:
+#         raise ValueError(
+#             f"More R shift coefficients ({coefs.numel()}) than last layer in_features "
+#             f"({last_linear.in_features})."
+#         )
+
+#     # start from zeros
+#     w = torch.zeros_like(last_linear.weight)
+
+#     # broadcast beta across all output units; use first coefs.numel() input channels
+#     w[:, :coefs.numel()] = coefs.unsqueeze(0).expand(last_linear.out_features, -1)
+
+#     last_linear.weight.copy_(w)
+#     if last_linear.bias is not None:
+#         last_linear.bias.zero_()
+
+#     if debug:
+#         print("[DEBUG] init_shift_last_layer_from_r():")
+#         print("        coefs:", coefs.detach().cpu().numpy())
+#         print("        last_linear.weight.shape:", last_linear.weight.shape)
+
+#     return last_linear
+
+
+
+
 @torch.no_grad()
 def init_last_layer_COLR_POLR(
     module: nn.Module,
@@ -378,6 +502,7 @@ def init_last_layer_COLR_POLR(
     theta_count: int,
     TRAIN_DATA_PATH: str,
     debug: bool = False,
+    ls_shift_covariates=None
 ):
     """
     Initialize the last linear layer of a PyTorch module with intercept weights
@@ -477,7 +602,7 @@ def init_last_layer_COLR_POLR(
             f"Expected type: {'*.csv'}"
         )
     
-    thetas_R=fit_r_model_subprocess(node, dtype, theta_count, TRAIN_DATA_PATH, debug=debug)
+    thetas_R, shift_coefs_R=fit_r_model_subprocess(node, dtype, theta_count, TRAIN_DATA_PATH,ls_shift_covariates=ls_shift_covariates, debug=debug)
     thetas_R=torch.tensor(thetas_R)
 
 
@@ -538,8 +663,7 @@ def init_last_layer_COLR_POLR(
     last_linear.weight.copy_(w)
     if last_linear.bias is not None:
         last_linear.bias.zero_()
-
-    return last_linear
+    return last_linear, shift_coefs_R
 
 def ordered_parents(node, conf_dict) -> dict:
     
