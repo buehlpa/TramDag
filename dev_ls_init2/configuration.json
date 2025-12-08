@@ -1,5 +1,5 @@
 {
-    "date_of_creation": "2025-12-06 10:14:28",
+    "date_of_creation": "2025-12-08 14:20:57",
     "experiment_name": "experiment_1",
     "PATHS": {
         "DATA_PATH": "dev_ls_init2",
@@ -8,8 +8,8 @@
     },
     "data_type": {
         "x1": "continous",
-        "x4": "ordinal_Xn_Yo",
-        "x5": "ordinal_Xn_Yo"
+        "x4": "ordinal_Xc_Yo",
+        "x5": "ordinal_Xc_Yo"
     },
     "adj_matrix": [
         [
@@ -62,7 +62,7 @@
         },
         "x4": {
             "Modelnr": 1,
-            "data_type": "ordinal_Xn_Yo",
+            "data_type": "ordinal_Xc_Yo",
             "node_type": "internal",
             "parents": [
                 "x1"
@@ -84,7 +84,7 @@
         },
         "x5": {
             "Modelnr": 2,
-            "data_type": "ordinal_Xn_Yo",
+            "data_type": "ordinal_Xc_Yo",
             "node_type": "sink",
             "parents": [
                 "x1",
@@ -92,7 +92,7 @@
             ],
             "parents_datatype": {
                 "x1": "continous",
-                "x4": "ordinal_Xn_Yo"
+                "x4": "ordinal_Xc_Yo"
             },
             "transformation_terms_in_h()": {
                 "x1": "ls",

@@ -254,65 +254,32 @@ def get_fully_specified_tram_model(
 
     
     ######### SHIFT NETWORKS #################################################################################
-    # ONLY WORKS FOR CONITNOUSLY MODELLED 
-    #TODO shift_coefs_R as init weights for the shift models if if set_initial_weights and only_ls_shifts
     shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
     
     nn_shifts = []
+    n_features_list = []  # track input features per shift model
+
     for feats in shift_groups.values():
         cls_name = feats[0][1]['class_name']
         base_cls = get_base_model_class(cls_name)
         n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
+        n_features_list.append(n_features)
         nn_shifts.append(globals()[base_cls](n_features=n_features))
-    
-    
-    ## # TODO FIRST ATTEMPT ; THIS WOULD WORK IF THERE WER MULTIPLE WEIGHTS BUT THERE IS ONLY THE COEFFIECNTS 
-    # SO THIS WORKS ONLY FOR MODELS WHICH ARE CONTINOUSLY MODELLED
-    ######### SHIFT NETWORKS #################################################################################
 
-    # shift_groups = group_by_base(shifts_dict, prefixes=("cs", "ls"))
-    
-    # nn_shifts = []
-    # shift_group_feature_counts = []  # track how many input features per shift-group
-
-    # for feats in shift_groups.values():
-    #     cls_name = feats[0][1]['class_name']
-    #     base_cls = get_base_model_class(cls_name)
-    #     n_features = compute_n_features(feats, target_nodes[node]['parents_datatype'])
-    #     shift_group_feature_counts.append(n_features)
-
-    #     model = globals()[base_cls](n_features=n_features)
-    #     nn_shifts.append(model)
-
-    # if debug:
-    #     print("[DEBUG] nn_shifts:", nn_shifts)
-    #     print("[DEBUG] shift_group_feature_counts:", shift_group_feature_counts)
-
-    # # Initialise shift nets from R if:
-    # # - requested initialisation
-    # # - we are in the only-ls case
-    # # - we actually got shift coefficients from R
-    # if set_initial_weights and only_ls_shifts and shift_coefs_R:
-    #     total_features = sum(shift_group_feature_counts)
-    #     if len(shift_coefs_R) != total_features:
-    #         if debug:
-    #             print(
-    #                 "[WARNING] len(shift_coefs_R) "
-    #                 f"({len(shift_coefs_R)}) != total shift features ({total_features}); "
-    #                 "skipping shift initialisation from R."
-    #             )
-    #     else:
-    #         if debug:
-    #             print("[DEBUG] Initialising shift networks with R shift coefficients")
-    #             print("[DEBUG] shift_coefs_R:", shift_coefs_R)
-
-    #         pos = 0
-    #         for model, n_feat in zip(nn_shifts, shift_group_feature_counts):
-    #             coefs_slice = shift_coefs_R[pos:pos + n_feat]
-    #             pos += n_feat
-    #             init_shift_last_layer_from_r(model, coefs_slice, debug=debug)
-    
-    
+    if (
+        set_initial_weights
+        and only_ls_shifts
+        and shift_coefs_R is not None
+        and all(nf == 1 for nf in n_features_list)
+    ):
+        init_ls_shift_weights_simple(
+            nn_shifts,
+            shift_coefs_R,
+            debug=debug
+        )
+    else:
+        if debug:
+            print("[DEBUG] Not initializing ls-shifts (reason: multi-input or missing R coefs).")
     
     # # #############################################################################################################
 
@@ -436,63 +403,36 @@ def group_by_base(term_dict, prefixes):
 
     return groups
 
+@torch.no_grad()
+def init_ls_shift_weights_simple(nn_shifts, shift_coefs_R, debug=False):
+    """
+    Minimal version:
+    - Assumes each shift model has exactly 1 input feature.
+    - Writes R coefficients into the *first weight column* of the last Linear layer.
+    """
+    for i, (shift_net, coef) in enumerate(zip(nn_shifts, shift_coefs_R)):
+        # find last Linear
+        last_linear = None
+        for m in reversed(list(shift_net.modules())):
+            if isinstance(m, nn.Linear):
+                last_linear = m
+                break
 
-# TODO CREATE FUNCIOTN FOR ININTALIZATION OF LS NETWORKS
-# @torch.no_grad()
-# def init_shift_last_layer_from_r(
-#     module: nn.Module,
-#     shift_coefs: list[float],
-#     debug: bool = False,
-# ):
-#     """
-#     Initialise the last Linear layer of a shift network using R-derived slopes.
+        if last_linear is None:
+            if debug:
+                print(f"[DEBUG] Shift model {i}: no Linear layer. Skipping.")
+            continue
 
-#     Logic:
-#     - Find the last nn.Linear in `module`.
-#     - Build a weight matrix of zeros.
-#     - For each row (output channel), set the first `len(shift_coefs)` columns
-#       to the R slopes (broadcast across rows).
-#     - Bias is set to zero.
-#     """
-#     last_linear = None
-#     for m in reversed(list(module.modules())):
-#         if isinstance(m, nn.Linear):
-#             last_linear = m
-#             break
-#     if last_linear is None:
-#         raise ValueError("No nn.Linear layer found in shift module.")
+        # zero init whole weight matrix
+        last_linear.weight.zero_()
+        # put coef in first input channel
+        last_linear.weight[:, 0] = coef
 
-#     coefs = torch.tensor(
-#         shift_coefs,
-#         dtype=last_linear.weight.dtype,
-#         device=last_linear.weight.device,
-#     )
+        if last_linear.bias is not None:
+            last_linear.bias.zero_()
 
-#     if coefs.numel() > last_linear.in_features:
-#         raise ValueError(
-#             f"More R shift coefficients ({coefs.numel()}) than last layer in_features "
-#             f"({last_linear.in_features})."
-#         )
-
-#     # start from zeros
-#     w = torch.zeros_like(last_linear.weight)
-
-#     # broadcast beta across all output units; use first coefs.numel() input channels
-#     w[:, :coefs.numel()] = coefs.unsqueeze(0).expand(last_linear.out_features, -1)
-
-#     last_linear.weight.copy_(w)
-#     if last_linear.bias is not None:
-#         last_linear.bias.zero_()
-
-#     if debug:
-#         print("[DEBUG] init_shift_last_layer_from_r():")
-#         print("        coefs:", coefs.detach().cpu().numpy())
-#         print("        last_linear.weight.shape:", last_linear.weight.shape)
-
-#     return last_linear
-
-
-
+        if debug:
+            print(f"[DEBUG] Shift model {i}: initialized with coef={coef}")
 
 @torch.no_grad()
 def init_last_layer_COLR_POLR(
