@@ -53,11 +53,6 @@ under /example_notebooks some examples are displayed
 Reproducing simulation experiments from [TRAMDAG paper](https://arxiv.org/abs/2503.16206)
 
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/buehlpa/tramdag/blob/main/example_notebooks/Continous_3_vars_complex_DGP_CS.ipynb)
-
-
-
-
 - [6.1 Continous_complex DGP complex Shift (L1 L2)](example_notebooks/Continous_3_vars_complex_DGP_CS.ipynb)[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/buehlpa/tramdag/blob/main/example_notebooks/Continous_3_vars_complex_DGP_CS.ipynb)
 - [6.1 Continous_linear DGP complex Shift  (L1 L2)](example_notebooks/Continous_3_vars_linear_DGP_CS.ipynb)[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/buehlpa/tramdag/blob/main/example_notebooks/Continous_3_vars_linear_DGP_CS.ipynb)
 - [6.1 Continous_linear DGP linear Shift   (L1 L2)](example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/buehlpa/tramdag/blob/main/example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)
