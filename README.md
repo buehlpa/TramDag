@@ -58,7 +58,11 @@ Reproducing simulation experiments from [TRAMDAG paper](https://arxiv.org/abs/25
 - [6.1 Continous_linear DGP linear Shift   (L1 L2)](example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/buehlpa/tramdag/blob/main/example_notebooks/Continous_3_vars_linear_DGP_LS.ipynb)
 - [6.2 Mixed_linear DGP complex Shift      (L1 L2 L3)](example_notebooks/Mixed_3_vars_linear_DGP_LS.ipynb)[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/buehlpa/tramdag/blob/main/example_notebooks/Mixed_3_vars_linear_DGP_LS.ipynb)
 
+if you are using the notebook in colab install the r packages with:
 
+```bash
+!R -e "install.packages(c('tram','ordinal'),repos = c(ETH = 'https://stat.ethz.ch/CRAN',CRAN = 'https://cloud.r-project.org'))"
+```
 
 ## Limitations
 
