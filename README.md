@@ -61,6 +61,7 @@ Reproducing simulation experiments from [TRAMDAG paper](https://arxiv.org/abs/25
 if you are using the notebook in colab install the r packages with:
 
 ```bash
+pip install -i https://test.pypi.org/simple --extra-index-url https://pypi.org/simple tramdag
 !R -e "install.packages(c('tram','ordinal'),repos = c(ETH = 'https://stat.ethz.ch/CRAN',CRAN = 'https://cloud.r-project.org'))"
 ```
 
