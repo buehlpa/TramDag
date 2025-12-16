@@ -163,12 +163,12 @@ td_model.nll(train_df)
 
 - transformation functions
 
-plot for a dataframe the transformation functions `plot_n_rows`
+plot for a dataframe the transformation functions for the first n observations: `plot_n_rows`
 ```
 td_model.plot_hdag(train_df,variables=['x1','x2','x3'],plot_n_rows=1)
 ```
 
-- model summary
+- model summary (NLL, and fitted coefficients for the untrained(INIT) Best and Last Model)
 
 ```
 td_model.summary()
