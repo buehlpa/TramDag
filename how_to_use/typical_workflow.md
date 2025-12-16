@@ -90,7 +90,7 @@ cfg.compute_levels(train_df)
 
 ### 3. Modelfit
 
-There are 3 options to load the model from the configuration file 
+There are 3 options to create the model from the configuration file 
 
 1. use the cfg object either directly if created in the same notebook:
 
