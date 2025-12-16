@@ -118,14 +118,11 @@ We use the modified model with $x$=0.5 to determine the counterfactual as follow
 Again we follow the causal order by starting with the source node:  $x_{cf}$ = 0.5.
 
 Since $y$ is ordinal the corresponding counterfactual $y_{cf}$ can in general not be determined unambigously. Instead we show how to determine the probability distribution of the possible counterfactual values.
-To do so we first update the transformatino function $h(y|x_{cf}$ and then sample  $u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ ) from a truncated standard logistic distribution with these cutpoints $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$  from step 1 to determine the corresponding counterfactuals along with their probability.
-
-so for each $u_{y_{j}}$ $j\in {1..n}$ we calculate the according 
-
-$y_{cf_{j}}=h_{y}^{-1}(u_{y_{j}}|x=0.5)$. Now we can just count the frequencies of 0 and 1 and divide them by $n$  which leaves us with a probability distribution for $y_{cf}$
+To do so we first update the transformatino function $h(y|x_{cf}$ and then sample $n$  $u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ ) from a truncated standard logistic distribution with these cutpoints $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$  from step 1 and determine the corresponding $n$ counterfactual values.
+Now we can just count the frequencies of the determined counterfactuals and divide them by $n$  which leaves us with a probability distribution for $y_{cf}$
 
 
-to propagate that further down to $z$ we have the same issue:
+To propagate that further down to $z$ we have the same issue:
 since in $z = h_{z}^{-1}(u_{z}|x ,y)$, $y$ is different for each $y_{cf_{j}}$ but $x$ is set to 0.5 and $u_{z}$ we already got, we now also get $n$ according $z_{cf_{j}}$ which we can again count how many times certain values occured, leaving us with a distribution for $z_{cf}$ aswell.
 
 finally for the counterfactual question asked in this example tramdag returns :  (just some madeup numbers here, say $n$=1000 can be controlled via the argument `num_cf_latents` ):
