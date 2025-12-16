@@ -76,8 +76,8 @@ cfg.set_tramdag_nn_models()
 
 
 
-if you have ordinal nodes in the your dataset the configuration needs also to get the levels of these nodes.
-You can either provide them by manually write them to the configuration.json file or calculated it from data with:
+If you have ordinal nodes in your dataset the configuration needs also to get the levels of these nodes.
+You can either provide them by manually write them to the configuration.json file or determine it from data with:
 
 ```
 cfg.compute_levels(train_df)
