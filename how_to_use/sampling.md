@@ -56,6 +56,12 @@ This process involves 3 steps:
 2. Action: Adapting the SCM
 3. Prediciton: Getting the Counterfactual 
 
+
+Lets make an example for the three steps with the observation:
+$x=0.2,y=1,z=-0.3$  ($y$ is ordinal and  $x,z$ continous). 
+
+We ask the couterfactual question what would have happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
+
 ### 1. Abduction
 In this case we have to know for each observation their according latent state $u$ correspondig to the observed value, which we get by evaluationg the fitted transformation function at the position of the observed value. 
 
@@ -77,9 +83,7 @@ therefore the get_latent function returns the according $u$ for continuous varia
  $h(k-1|pa(x))$ and
   $h(k|pa(x))$ .
 
-e.g. for the observation
 
-$x=0.2,y=1,z=-0.3$  ($y$ is ordinal and  $x,z$ continous). 
 
 we create the dataframe with just 1 observation `df_with_one_obs`
 ```
@@ -103,9 +107,9 @@ $h_{y}(0|x=0.2)$  < $u_{y}$ < $h_{y}(1|x=0.2)$
 $u_{z} = h_{z}(z=-0.3|x=0.2,y=1)$
 
 
-### Counterfactual
+### 2. Action
 
-ok now were set to ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
+Set $x$ = 0.5 because we ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
 
 Again we can follow the causal order by starting with the parents: leaves $x_{cf}$ ( $_{cf}$ = counter factual) to 0.5.
 
