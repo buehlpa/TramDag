@@ -111,7 +111,9 @@ $u_{z} = h_{z}(z=-0.3|x=0.2,y=1)$
 
 Set $x$ = 0.5 because we ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
 
-Again we can follow the causal order by starting with the parents: leaves $x_{cf}$ ( $_{cf}$ = counter factual) to 0.5.
+### 3. Prediction 
+We use the modified model with $x$=0.5 to determine the counterfactual as follows:
+Again we follow the causal order by starting with the parents: leaves $x_{cf}$ ( $_{cf}$ = counter factual) to 0.5.
 
  to find out what $y_{cf}$ would have been, we need to go backwards through the transformation function and first sample us $n$ latents from the range: 
 
