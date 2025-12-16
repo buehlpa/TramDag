@@ -49,7 +49,15 @@ $z = h_{z}^{-1}(u_{z}|x ,y)$
 
 
 Counterfactual queries become a bit more involved it tries to quantify the unknowable e.g. what had happened if the specific patient took medicine A instead of B.
-Sounds like magic if you ask me, but no one asks me. In this case we have to know for each observation their according latent state $u$ correspondig to the observed value, which we get by evaluationg the fitted transformation function at the position of the observed value. 
+Sounds like magic if you ask me, but no one asks me.
+This process involves 3 steps:
+
+1. Abduction: determining the $u$s
+2. Action: Adapting the SCM
+3. Prediciton: Getting the Counterfactual 
+
+### 1. Abduction
+In this case we have to know for each observation their according latent state $u$ correspondig to the observed value, which we get by evaluationg the fitted transformation function at the position of the observed value. 
 
 This can be done with the function:
 
