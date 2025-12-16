@@ -100,7 +100,7 @@ or load it from the existing json with:
 cfg=TramDagModel.load_json(CONF_DICT_PATH="experiment_1/configuration.json")
 ```
 
-Then load the model directly from the config file use the flag `set_initial_weights = True` and provide `initial_data = train_df` if you 
+Then create the untrained model directly from the config file use the flag `set_initial_weights = True` and provide `initial_data = train_df` if you 
 want to start an R subprocess for the weight initialization 
 
 ```
