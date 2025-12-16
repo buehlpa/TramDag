@@ -2,8 +2,8 @@
 
 we look at an example with 3 nodes $x,z$ continous and $y$ binary (modeled as ordinal).
 
-![tramdag](https://github.com/buehlpa/TramDag/blob/main/docs/images/Sampling_triangular_dag.png)
 
+<img src="https://github.com/buehlpa/TramDag/blob/main/docs/images/Sampling_triangular_dag.png" width="400">
 # Sampling
 
 Sampling can be done with the function:
