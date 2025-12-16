@@ -1,6 +1,7 @@
 # How to use tramdag.sample()
 
-we look at an example with 3 nodes $x,z$ continous and $y$ ordinal.
+we look at an example with 3 nodes $x,z$ continous and $y$ binary (modeled as ordinal).
+
 ![tramdag](https://github.com/buehlpa/TramDag/blob/main/docs/images/Sampling_triangular_dag.png)
 
 # Sampling
@@ -54,7 +55,7 @@ Counterfactual queries become a bit more involved it tries to quantify the unkno
 Sounds like magic if you ask me, but no one asks me.
 This process involves 3 steps:
 
-1. Abduction: determining the $u$s
+1. Abduction: determining the $u$ s
 2. Action: Adapting the SCM
 3. Prediciton: Getting the Counterfactual 
 
