@@ -52,14 +52,14 @@ The figure below shows an example where nodes `X1`–`X4` are **ordinal**, and `
 the example only shows the models for X4 and X5 , the others are omitted 
 
 - **Model X4**  
-  - Inputs:  
+  - Inputs (Predictors):  
     - `X2` is treated as continuous (40 classes).  
     - `X1` and `X3` are one-hot encoded automatically since Yo is set
   - Target:  
     - `X4` is ordinal → trained with an ordinal loss.  
 
 - **Model X5**  
-  - Input:  
+  - Input (Predictors):  
     - `X4` is treated as continuous.  
   - Target:  
     - `X5` is continuous → trained with a continuous loss.  
