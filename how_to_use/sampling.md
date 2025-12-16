@@ -109,6 +109,7 @@ $u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ )
 $u_{z} = h_{z}(z=-0.3|x=0.2,y=1)$
 
 
+
 ### 2. Action
 
 Set $x_{cf}$ = 0.5 because we ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
@@ -118,7 +119,7 @@ We use the modified model with $x$=0.5 to determine the counterfactual as follow
 Again we follow the causal order by starting with the source node:  $x_{cf}$ = 0.5.
 
 Since $y$ is ordinal the corresponding counterfactual $y_{cf}$ can in general not be determined unambigously. Instead we show how to determine the probability distribution of the possible counterfactual values.
-To do so we first update the transformatino function $h(y|x_{cf}$ and then sample $n$  $u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ ) from a truncated standard logistic distribution with these cutpoints $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$  from step 1 and determine the corresponding $n$ counterfactual values.
+To do so we first update the transformatino function $h(y|x_{cf}$ and then sample $n$,  $u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ ) from a truncated standard logistic distribution with these cutpoints $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$  from step 1 and determine the corresponding $n$ counterfactual values $y_{cf_{j}}$ , j $\in$ {1,n}.
 Now we can just count the frequencies of the determined counterfactuals and divide them by $n$  which leaves us with a probability distribution for $y_{cf}$
 
 
