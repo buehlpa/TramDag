@@ -3,7 +3,7 @@
 
 # Sampling
 
-Sampling, according to Pearls ladder of causality, can be done with the function:
+Sampling can be done with the function:
 
 ```
 samples,latents= model.sample()
