@@ -149,7 +149,7 @@ td_model.plot_simple_intercepts_history(ref_lines={'x3':[-1.998953,  0.426397,  
 ```
 
 
-- latents
+- plot the distribution of the latensts(u's) corresponding to the observations (should be standard logistic)
 
 ```
 td_model.plot_latents(train_df)
