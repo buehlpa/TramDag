@@ -54,7 +54,7 @@ the example only shows the models for X4 and X5 , the others are omitted
 - **Model X4**  
   - Inputs (Predictors):  
     - `X2` is treated as continuous (40 classes).  
-    - `X1` and `X3` are one-hot encoded automatically since Yo is set
+    - `X1` and `X3` are one-hot encoded automatically since Xn  is set for both.
   - Target:  
     - `X4` is ordinal → trained with an ordinal loss.  
 
