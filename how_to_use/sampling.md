@@ -60,7 +60,7 @@ This can be done with the function:
 
 for continuous variables this results in:
 
-$u=h^{-1}(x|pa(x)) $
+$u=h(x|pa(x)) $
 
 
 for ordinal modelled variables the according $u$ is not defined strictly anymore but is rather itself a random variable, a truncated standard logistic distribution  with the cutpoints $h(k-1|pa(x))$ and $h(k|pa(x))$
