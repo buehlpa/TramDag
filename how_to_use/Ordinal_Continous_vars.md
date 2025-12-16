@@ -35,10 +35,10 @@ The way a node is modelled depends on its data type:
 There are 4 ways to set the ordinal specifications :
 
 ````
-ordinal_Xn_Yo   
-ordinal_Xn_Yc
-ordinal_Xc_Yo
-ordinal_Xc_Yc  : this is the same as modelling the variable as continous
+ordinal_Xn_Yo   #Variable is treated as nominal when used as Predictor and ordinal as Target
+ordinal_Xn_Yc   #Variable is treated as nominal when used as Predictor and continous as Target
+ordinal_Xc_Yo   #Variable is treated as continous when used as Predictor and ordinal as Target
+ordinal_Xc_Yc   #This is the same as modelling the variable as continous
 ````
 
 
