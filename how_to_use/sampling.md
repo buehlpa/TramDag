@@ -23,10 +23,10 @@ $y = h_{y}^{-1}(u_{y}|x )$
 $z = h_{z}^{-1}(u_{z}|x ,y)$
 
 
-1. The $u_{x}$ is sampled from a standard logistic distribution and an according $x$ is produced
-2. with the sampled $x$ and a latent sample for $u_{y}$  a $y$ is produced
+1. The $u_{x}$ is sampled from a standard logistic distribution and the corresponding  $x$ sample is determined, by taking the inverse of the transformation function $h$.
+2. with the sampled $x$ and a latent sample for $u_{y}$  a $y$ is determined.
 
-3. with the sampled $y$ and $x$ and a latent sample for $u_{z}$ , a $z$ is produced.
+3. with the sampled $y$ and $x$ and a latent sample for $u_{z}$ , a $z$ is determined.
 
 4. redo steps 1-3 for any amount of samples, default is 10'000 controlled by the argument `model.sample(num_samples=100)`
 
