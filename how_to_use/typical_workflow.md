@@ -108,8 +108,7 @@ from tramdag import TramDagModel
 device='cpu'
 td_model = TramDagModel.from_config(cfg, set_initial_weights=False,verbose=True,debug=False,device=device,initial_data = train_df) 
 ```
-
-You can also load the model directly from a directory if you already trained a model
+If you have already a trained model, You can also load the model directly from a directory:
 
 ```
 from tramdag import TramDagModel
