@@ -1,5 +1,7 @@
 # How to use tramdag.sample()
 
+we look at an example with 3 nodes $x,z$ continous and $y$ ordinal.
+![tramdag](https://github.com/buehlpa/TramDag/blob/main/docs/images/Sampling_triangular_dag.png)
 
 # Sampling
 
