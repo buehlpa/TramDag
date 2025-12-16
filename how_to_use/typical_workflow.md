@@ -31,7 +31,7 @@ val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
 
 
 ### 2. Model Configuration
-Tramdag Configuration refers to configuring the DAG structure aswell as the neural network terms to be used to learn the strucutral functions
+Tramdag Configuration refers to configuring the DAG structure aswell as the neural network terms to be used to learn the parameters of the transformation functions.
 
 - experimentnames / paths
 
