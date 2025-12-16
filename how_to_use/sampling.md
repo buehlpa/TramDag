@@ -125,22 +125,22 @@ Now we can just count the frequencies of the determined counterfactuals and divi
 
 
 To propagate that further down to $z$ we have to proceed as follows:
-We first update the transformation function $ h_{z}^{-1}(u_{z}|x_{cf}=0.5 ,y_{cf})$, $y_{cf}$ could be different for each $y_{cf_{j}}$ and we use the latent value from step 1 $u_{z}$ to get $n$ according $z_{cf_{j}} =h_{z}^{-1}(u_{z}|x_{cf}=0.5 ,y_{cf_{j}})$ , which we can again count how many times certain values occured, leaving us with a distribution for $z_{cf}$ aswell.
+We first update the transformation function $h_{z}^{-1}(u_{z}|x_{cf}=0.5 ,y_{cf})$, $y_{cf}$ could be different for each $y_{cf_{j}}$ and we use the latent value from step 1 $u_{z}$ to get $n$ according $z_{cf_{j}} =h_{z}^{-1}(u_{z}|x_{cf}=0.5 ,y_{cf_{j}})$ , which we can again count how many times certain values occured, leaving us with a distribution for $z_{cf}$ aswell.
 
 Finally for the counterfactual question asked in this example tramdag returns :  (just some madeup numbers here, say $n$=1000 can be controlled via the argument `num_cf_latents` ):
 
 $x_{cf}$ = 0.5
 
-for ordinal variables with no continuous parents:
-probabilities for each class:
+for ordinal variables with only continuous parents:
+probabilities for each class (here binary):
 
 $y_{cf}$=(0.2,0.8)
 
-for variables with continuous parents we just return the values and how many times they were drawn. e.g. 7 times 0.5 and 3 times -0.4.
+For continous variables with at least one ordinal parent we just return the values and how many times they were drawn. e.g. 700 times 0.5 and 300 times -0.4.
 
 $z_{cf}$=(0.5:700,-0.4:300)
 
 
 
 ### Conclusion 
-To conclude if we have ordinal variables in the system and want to do counterfactual queries, all the descendant nodes have a probabilistic outcome for each observation.
+To conclude if we have ordinal variables in the system and want to do counterfactual queries, all the descendant nodes have a probability distribution for the counterfactual.
