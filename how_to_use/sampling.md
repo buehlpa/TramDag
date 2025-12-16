@@ -49,7 +49,7 @@ $z = h_{z}^{-1}(u_{z}|x ,y)$
 
 
 Counterfactual queries become a bit more involved it tries to quantify the unknowable e.g. what had happened if the specific patient took medicine A instead of B.
-Sounds like magic if you ask me, but no one asks me. In this case we have to know for each observation their according latent state $u$ it had in the fitted model. 
+Sounds like magic if you ask me, but no one asks me. In this case we have to know for each observation their according latent state $u$ correspondig to the observed value, which we get by evaluationg the fitted transformation function at the position of the observed value. 
 
 This can be done with the function:
 
