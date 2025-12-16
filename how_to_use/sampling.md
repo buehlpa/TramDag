@@ -63,8 +63,7 @@ for continuous variables this results in:
 $u=h(x|pa(x)) $
 
 
-for ordinal modelled variables the according $u$ is ambiguous and is itself a random variable, a truncated standard logistic distribution  with the cutpoints $h(k-1|pa(x))$ and $h(k|pa(x))$
-resulting in $u$ ~ $std log(0,1)$ truncated.
+for ordinal modelled variables the according $u$ is ambiguous and is itself a random variable, following a truncated standard logistic distribution  with the cutpoints $h(k-1|pa(x))$ and $h(k|pa(x))$.
 
 therefore the get_latent function returns the according $u$ for continuous variables but for ordinal variables it returns `u_lower` and `u_upper` mapping to 
  $h(k-1|pa(x))$ and
