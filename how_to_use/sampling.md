@@ -123,10 +123,10 @@ To do so we first update the transformatino function $h(y|x_{cf}$ and then sampl
 Now we can just count the frequencies of the determined counterfactuals and divide them by $n$  which leaves us with a probability distribution for $y_{cf}$
 
 
-To propagate that further down to $z$ we have the same issue:
-since in $z = h_{z}^{-1}(u_{z}|x ,y)$, $y$ is different for each $y_{cf_{j}}$ but $x$ is set to 0.5 and $u_{z}$ we already got, we now also get $n$ according $z_{cf_{j}}$ which we can again count how many times certain values occured, leaving us with a distribution for $z_{cf}$ aswell.
+To propagate that further down to $z$ we have to proceed as follows:
+We first update the transformation function $ h_{z}^{-1}(u_{z}|x_{cf}=0.5 ,y_{cf})$, $y_{cf}$ could be different for each $y_{cf_{j}}$ and we use the latent value from step 1 $u_{z}$ to get $n$ according $z_{cf_{j}} =h_{z}^{-1}(u_{z}|x_{cf}=0.5 ,y_{cf_{j}})$ , which we can again count how many times certain values occured, leaving us with a distribution for $z_{cf}$ aswell.
 
-finally for the counterfactual question asked in this example tramdag returns :  (just some madeup numbers here, say $n$=1000 can be controlled via the argument `num_cf_latents` ):
+Finally for the counterfactual question asked in this example tramdag returns :  (just some madeup numbers here, say $n$=1000 can be controlled via the argument `num_cf_latents` ):
 
 $x_{cf}$ = 0.5
 
