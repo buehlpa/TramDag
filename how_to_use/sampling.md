@@ -73,19 +73,18 @@ $u=h(x|pa(x)) $
 
 for ordinal modelled variables the according $u$ is ambiguous and is itself a random variable, following a truncated standard logistic distribution  with the cutpoints $h(k-1|pa(x))$ and $h(k|pa(x))$.
 
-therefore the get_latent function returns the according $u$ for continuous variables but for ordinal variables it returns `u_lower` and `u_upper` mapping to 
+therefore the get_latent function returns the according $u$ for continuous variables but for ordinal variables it returns `u_lower` and `u_upper` corresponding to 
  $h(k-1|pa(x))$ and
   $h(k|pa(x))$ .
 
 e.g. for the observation
 
-$x=0.2,y=1,z=-0.3$
+$x=0.2,y=1,z=-0.3$  ($y$ is ordinal and  $x,z$ continous). 
 
 we create the dataframe with just 1 observation `df_with_one_obs`
 ```
 u_df= model.get_latent(df_with_one_obs)
 ```
-e.g for  and $y \in  \mathbf{0,1}$ and $x,z \in \mathbf{R}$
 the u_df contains the columns:
 ```
 index,x,x_U,y,y_U_lower,y_U_upper,z,z_U
