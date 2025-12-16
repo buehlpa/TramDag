@@ -102,7 +102,7 @@ index,x,x_U,y,y_U_lower,y_U_upper,z,z_U
 $u_{x} = h_{x}(x=0.2)$
 
 
-$h_{y}(0|x=0.2)$  < $u_{y}$ < $h_{y}(1|x=0.2)$ 
+$u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ )
 
 
 
@@ -111,15 +111,14 @@ $u_{z} = h_{z}(z=-0.3|x=0.2,y=1)$
 
 ### 2. Action
 
-Set $x$ = 0.5 because we ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
+Set $x_{cf}$ = 0.5 because we ask the question what had happened to $z$ and $y$ if $x$ was 0.5 instead of the observed 0.2.
 
 ### 3. Prediction 
 We use the modified model with $x$=0.5 to determine the counterfactual as follows:
-Again we follow the causal order by starting with the parents: leaves $x_{cf}$ ( $_{cf}$ = counter factual) to 0.5.
+Again we follow the causal order by starting with the source node:  $x_{cf}$ = 0.5.
 
- to find out what $y_{cf}$ would have been, we need to go backwards through the transformation function and first sample us $n$ latents from the range: 
-
-$h_{y}(0|x=0.2)$  < $u_{y}$ < $h_{y}(1|x=0.2)$ 
+Since $y$ is ordinal the corresponding counterfactual $y_{cf}$ can in general not be determined unambigously. Instead we show how to determine the probability distribution of the possible counterfactual values.
+To do so we first update the transformatino function $h(y|x_{cf}$ and then sample  $u_{y}$ $\in$ [ $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$ ) from a truncated standard logistic distribution with these cutpoints $h_{y}(0|x=0.2)$ , $h_{y}(1|x=0.2)$  from step 1 to determine the corresponding counterfactuals along with their probability.
 
 so for each $u_{y_{j}}$ $j\in {1..n}$ we calculate the according 
 
