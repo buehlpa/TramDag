@@ -64,6 +64,10 @@ if you are using the notebook in colab install tramdag and the r packages with:
 pip install -i https://test.pypi.org/simple --extra-index-url https://pypi.org/simple tramdag
 !R -e "install.packages(c('tram','ordinal'),repos = c(ETH = 'https://stat.ethz.ch/CRAN',CRAN = 'https://cloud.r-project.org'))"
 ```
+### More examples 
+
+Examples with simulated data can be found in the repository:
+[github.com/buehlpa/causality_ukb](https://github.com/buehlpa/causality_ukb)
 
 ## Limitations
 
