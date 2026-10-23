@@ -195,3 +195,8 @@ data/prediction_results_CIBLSX_M6.csv
 /~/Documents/GitHub/TramDag/dev_experiment_logs
 
 archive/
+
+# JAX engine artifacts (parameters / samples of experiment runs)
+*.npz
+*.npy
+.ui_e2e/

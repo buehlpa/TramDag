@@ -174,6 +174,8 @@ class TramDagConfig:
         path = CONF_DICT_PATH or self.CONF_DICT_PATH
         if path is None:
             raise ValueError("No CONF_DICT_PATH provided to save config.")
+        if os.path.dirname(path):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
         write_configuration_dict(self.conf_dict, path)
 
     def _verify_completeness(self):
@@ -753,3 +755,161 @@ class TramDagConfig:
             self.CONF_DICT_PATH = CONF_DICT_PATH
 
 
+
+    # ======================================================================
+    # Easy construction / editing (new). These all go through tramdag.DagSpec,
+    # so the written configuration.json is identical in format to the one the
+    # interactive matrix widgets produce.
+    # ======================================================================
+
+    @classmethod
+    def from_dataframe(cls, df, edges=None, data_types=None, levels=None, experiment_dir=None,
+                       experiment_name=None, training=None, max_ordinal_levels=10, write=True, seed=None):
+        """Create a complete configuration in one call.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Training data. Every column becomes a node. Data types are inferred
+            (integer columns with values 0..K-1, K <= ``max_ordinal_levels``, booleans and
+            ordered categoricals -> ordinal; everything else -> continuous) and the number of
+            levels of ordinal variables is computed from the data.
+        edges : str
+            Graph in the edge mini-language, e.g. ``"x1 -> x2; x1 -> x3; x2 -> x3 [cs]"``,
+            ``"(x1, x2) -> x3 [cs]"`` for an interaction. See :mod:`tramdag.dag_spec`.
+        data_types, levels : dict, optional
+            Overrides, e.g. ``{"x3": "ordinal"}`` / ``{"x3": 4}``. ``"continuous"`` and
+            ``"ordinal"`` are accepted as short names.
+        experiment_dir : str, optional
+            Where ``configuration.json`` (and later the trained models) are stored.
+            Defaults to ``./<experiment_name>``.
+        training : dict, optional
+            Default training settings stored in the configuration, e.g.
+            ``{"epochs": 200, "learning_rate": 0.01, "batch_size": 1000}``.
+
+        Example
+        -------
+        >>> cfg = TramDagConfig.from_dataframe(train_df, "x1 -> x2; x1, x2 -> x3", experiment_dir="runs/exp1")
+        >>> cfg.describe()
+        """
+        from .dag_spec import DagSpec, apply_edge_text, infer_node
+
+        spec = DagSpec(training=dict(training or {}))
+        for col in df.columns:
+            dt, lv = infer_node(df[col], max_levels=max_ordinal_levels)
+            spec.add_node(str(col), dt, lv)
+        apply_edge_text(spec, edges, create_nodes=False)
+        for n, dt in (data_types or {}).items():
+            spec.set_node(n, data_type=dt)
+            if spec.node(n).levels is None and "ordinal" in spec.node(n).data_type:
+                spec.node(n).levels = int(np.nanmax(df[n].to_numpy())) + 1
+        for n, lv in (levels or {}).items():
+            spec.set_node(n, levels=lv)
+        spec.auto_layout()
+        return cls.from_spec(spec, experiment_dir=experiment_dir, experiment_name=experiment_name, write=write, seed=seed)
+
+    @classmethod
+    def from_edges(cls, edges, data_types=None, levels=None, experiment_dir=None, experiment_name=None,
+                   training=None, write=True, seed=None):
+        """Like :meth:`from_dataframe` but without data: node types come from ``data_types`` /
+        ``levels`` or from declarations such as ``"x3 : ordinal(4)"`` in ``edges``."""
+        from .dag_spec import DagSpec
+
+        spec = DagSpec.from_edges(edges, data_types=data_types, levels=levels)
+        spec.training = dict(training or {})
+        spec.auto_layout()
+        return cls.from_spec(spec, experiment_dir=experiment_dir, experiment_name=experiment_name, write=write, seed=seed)
+
+    @classmethod
+    def from_spec(cls, spec, experiment_dir=None, experiment_name=None, write=True, seed=None):
+        """Build (and by default write) a configuration from a :class:`tramdag.DagSpec`."""
+        experiment_name = experiment_name or (os.path.basename(os.path.normpath(experiment_dir)) if experiment_dir else "experiment_1")
+        experiment_dir = os.path.abspath(experiment_dir or os.path.join(os.getcwd(), experiment_name))
+        warnings = spec.check()
+        for w in warnings:
+            print(f"[WARNING] {w}")
+        conf = spec.to_conf_dict(experiment_name, experiment_dir, seed=seed)
+        path = os.path.join(experiment_dir, "configuration.json")
+        cfg = cls(conf, CONF_DICT_PATH=path)
+        if write:
+            os.makedirs(experiment_dir, exist_ok=True)
+            cfg.save()
+        return cfg
+
+    def to_spec(self):
+        """The graph of this configuration as an editable :class:`tramdag.DagSpec`."""
+        from .dag_spec import DagSpec
+
+        return DagSpec.from_conf_dict(self.conf_dict)
+
+    def apply_spec(self, spec, write=True):
+        """Replace graph, data types and training defaults by those of ``spec`` (keeps name and paths)."""
+        paths = self.conf_dict.get("PATHS") or {}
+        conf = spec.to_conf_dict(self.conf_dict.get("experiment_name"), paths.get("EXPERIMENT_DIR"),
+                                 data_path=paths.get("DATA_PATH"), seed=self.conf_dict.get("seed"))
+        conf["date_of_creation"] = self.conf_dict.get("date_of_creation") or conf["date_of_creation"]
+        self.conf_dict = conf
+        if write and self.CONF_DICT_PATH:
+            self.save()
+        return self
+
+    def add_edges(self, edges, write=True):
+        """Add / change edges with the edge mini-language, e.g. ``cfg.add_edges("x1 -> x3 [cs]")``."""
+        from .dag_spec import apply_edge_text
+
+        spec = self.to_spec()
+        apply_edge_text(spec, edges, create_nodes=False)
+        return self.apply_spec(spec, write=write)
+
+    def add_edge(self, source, target, term="ls", group=None, model=None, write=True):
+        spec = self.to_spec()
+        spec.add_edge(source, target, term=term, group=group, model=model)
+        return self.apply_spec(spec, write=write)
+
+    def remove_edge(self, source, target, write=True):
+        spec = self.to_spec()
+        spec.remove_edge(source, target)
+        return self.apply_spec(spec, write=write)
+
+    def set_node(self, node, data_type=None, levels=None, write=True):
+        """Change data type and/or number of levels of one node."""
+        spec = self.to_spec()
+        spec.set_node(node, data_type=data_type, levels=levels)
+        return self.apply_spec(spec, write=write)
+
+    def set_training(self, write=True, **settings):
+        """Store default training settings (``epochs``, ``learning_rate``, ``batch_size`` ...)."""
+        self.conf_dict.setdefault("training", {}).update(settings)
+        if write and self.CONF_DICT_PATH:
+            self.save()
+        return self
+
+    def edit(self, df=None, height=520):
+        """Open the visual DAG editor (Jupyter / VS Code / Colab notebooks).
+
+        Drag from the dot at the right side of a node onto another node to add an edge,
+        click an edge to choose linear shift / complex shift / complex intercept, interaction
+        group and network, click a node to set its data type. Changes are validated live
+        and written to ``configuration.json`` with *Save*.
+        """
+        from .ui.widget import DagEditor
+
+        return DagEditor(self, df=df, height=height)
+
+    def describe(self):
+        """Print nodes, data types and the transformation function of every node."""
+        spec = self.to_spec()
+        rows = []
+        for n in spec.nodes:
+            lv = n.levels if n.levels is not None else ""
+            rows.append((n.name, n.data_type, lv, spec.formula(n.name)))
+        w = max([len(r[0]) for r in rows] + [4])
+        print(f"{'node':<{w}}  {'data type':<15} {'levels':<7} transformation function")
+        print("-" * (w + 70))
+        for r in rows:
+            print(f"{r[0]:<{w}}  {r[1]:<15} {str(r[2]):<7} {r[3]}")
+        errors, warnings = spec.validate()
+        for e in errors:
+            print(f"[ERROR] {e}")
+        for wmsg in warnings:
+            print(f"[WARNING] {wmsg}")

@@ -37,7 +37,7 @@ from .utils.ordinal import transform_intercepts_ordinal
 
 from .models.tram_models import SimpleIntercept
 
-from .TramDagConfig import TramDagConfig
+from ..TramDagConfig import TramDagConfig
 from .TramDagDataset import TramDagDataset
 
 # testserver

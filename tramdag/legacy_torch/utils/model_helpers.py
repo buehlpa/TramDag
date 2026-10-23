@@ -29,8 +29,8 @@ from torch.utils.data import DataLoader
 from ..models.tram_models import *
 from .continous import contram_nll, inverse_transform_intercepts_continous,transform_intercepts_continous
 from .ordinal import   ontram_nll,  inverse_transform_intercepts_ordinal,transform_intercepts_ordinal
-from .configuration import *
-from .r_subprocess import fit_r_model_subprocess
+from ...utils.configuration import *
+from ...utils.r_subprocess import fit_r_model_subprocess
 
 
 

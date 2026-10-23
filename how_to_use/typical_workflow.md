@@ -1,6 +1,38 @@
 
 # Typical Workflow for a new tramdag experiment
 
+## Short version (JAX engine, since 0.2)
+
+```python
+from tramdag import TramDagConfig, TramDagModel
+
+cfg = TramDagConfig.from_dataframe(train_df, "x1 -> x2; x1, x2 -> x3 [cs]", experiment_dir="experiment_1")
+cfg.describe()      # data types, levels and h() of every node
+cfg.edit()          # optional visual editor (notebook) - or: python -m tramdag.ui experiment_1/configuration.json
+
+td_model = TramDagModel.from_config(cfg)
+td_model.fit(train_df, val_df, epochs=200, batch_size=1000, learning_rate=1e-2)
+
+td_model.plot_loss_history(); td_model.coefficients(); td_model.plot_latents(train_df)
+samples, latents = td_model.sample(do_interventions={"x1": 0.5})
+```
+
+- Data types are inferred: integer columns with values `0..K-1` (K <= 10), booleans and ordered categoricals become
+  `ordinal_Xn_Yo` with `levels=K`, everything else `continous`. Override with `data_types={"x3": "ordinal_Xc_Yo"}`.
+- Edge syntax: `a -> b` (linear shift), `a -> b [cs]` (complex shift), `a -> b [ci]` (complex intercept),
+  `(a, b) -> c [cs]` (interaction, one network for both inputs), `a -> b [cs, model=MLP(32,32,tanh)]`.
+- Variables can be given in any order; the configuration is written in causal (topological) order.
+- Training defaults can be stored in the configuration: `training={"epochs": 200}` or `cfg.set_training(epochs=200)`.
+- The model trains all nodes jointly on the GPU if JAX finds one (`device="cpu"` forces the CPU).
+  Old DataLoader arguments (`num_workers`, `prefetch_factor`, `train_mode`, ...) are accepted and ignored.
+- Trained parameters are stored per node as `best_params.npz` / `last_params.npz`; `TramDagModel.from_directory(EXPERIMENT_DIR)`
+  reloads them (legacy `best_model.pt` files are converted when torch is installed).
+
+The step-by-step workflow below still works unchanged and writes the same `configuration.json`.
+
+## Step-by-step workflow
+
+
 This can be used in a .ipynb notebook following the steps below
 
 If you already have a setup experiments and / or a trained model. you can proceed also just with the steps 4. and 5. 

@@ -1,12 +1,21 @@
-torch
-torchvision
+# core (JAX engine). For NVIDIA GPUs install jax with CUDA instead: pip install "jax[cuda12]"
+jax
+optax
 numpy
-matplotlib
-pandas
-seaborn
-ipywidgets
-tqdm
-statsmodels
 scipy
-pillow
+pandas
+matplotlib
+seaborn
+networkx
+statsmodels
+ipywidgets
 scikit-learn
+# visual editor in notebooks
+anywidget
+traitlets
+# optional: original PyTorch implementation (tramdag.legacy_torch) and parity tests
+# torch
+# torchvision
+# tqdm
+# pillow
+# joblib
